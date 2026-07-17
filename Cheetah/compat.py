@@ -53,7 +53,9 @@ else:
 
     def load_module_from_file(base_name, module_name, filename):
         specs = importlib.util.spec_from_file_location(module_name, filename)
-        return specs.loader.load_module()
+        module = importlib.util.module_from_spec(specs)
+        specs.loader.exec_module(module)
+        return module
 
     new_module = types.ModuleType
 
