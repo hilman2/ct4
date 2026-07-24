@@ -4,6 +4,8 @@ News
 Development (master)
 --------------------
 
+  - Dropped support for Python 3.4 and 3.5.
+
 3.4.0.post5 (2025-11-29)
 ------------------------
 

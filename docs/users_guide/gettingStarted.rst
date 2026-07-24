@@ -6,7 +6,7 @@ Requirements
 ------------
 
 
-Cheetah requires Python release 2.7 (there are plans to support 3.4+).
+Cheetah requires Python release 2.7 or 3.6+.
 It is known to run on Linux, Windows, FreeBSD and Solaris,
 and should run anywhere Python runs.
 

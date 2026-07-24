@@ -108,7 +108,7 @@ class ImportHooksTest(unittest.TestCase):
 
     try:
         ModuleNotFoundError
-    except NameError:  # Python 2.7, 3.4, 3.5
+    except NameError:  # Python 2.7
         pass
     else:
         def test_module_not_found(self):

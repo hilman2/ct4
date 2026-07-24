@@ -7,7 +7,7 @@ Cheetah.ImportHooks.install()
 
 import abc
 import importlib
-if sys.version_info > (3, 4):
+if sys.version_info > (3, 5):
     import importlib.abc
 if sys.version_info > (3, 11):
     import importlib.resources.abc

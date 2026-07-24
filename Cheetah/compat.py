@@ -14,12 +14,12 @@ else:
 
 try:
     ModuleNotFoundError = ModuleNotFoundError
-except NameError:  # Python 2.7, 3.4, 3.5
+except NameError:  # Python 2.7
     ModuleNotFoundError = ImportError
 
 try:
     RecursionError = RecursionError
-except NameError:  # Python 2.7, 3.4
+except NameError:  # Python 2.7
     RecursionError = RuntimeError
 
 if PY2:
