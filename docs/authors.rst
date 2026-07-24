@@ -42,4 +42,5 @@ Contributions have been made by:
 * Pierre Ossman <ossman at cendio.se>
 * Michael Gorny <mgorny at gentoo.org>
 * nate.k <nate.k at onetrueloan.com>
+* Steve Kowalik <steven at wedontsleep.org>
 * Oleg Broytman <phd@phdru.name>
