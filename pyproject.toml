@@ -69,18 +69,22 @@ weewx = "ct4.plugins.weewx_adapter"
 [tool.setuptools.dynamic]
 version = { attr = "Cheetah.Version.Version" }
 
-[tool.setuptools]
-packages = [
-    "Cheetah",
-    "Cheetah.Macros",
-    "Cheetah.Templates",
-    "Cheetah.Tests",
-    "Cheetah.Tools",
-    "Cheetah.Utils",
-]
+# Gesucht statt aufgezaehlt. Die Liste war von ct3 geerbt und kannte
+# ct4 nicht: das gebaute Wheel enthielt 72 Cheetah-Module und null
+# ct4-Module, waehrend [project.scripts] einen Befehl ct4 versprach und
+# der Eintragspunkt auf ct4.plugins.weewx_adapter zeigte. Beides waere
+# beim ersten Aufruf mit ModuleNotFoundError gestorben.
+#
+# Die Muster schliessen tests/ aus, weil es kein Paket ist und oben
+# auch nicht liegt.
+[tool.setuptools.packages.find]
+include = ["Cheetah*", "ct4*"]
 
 [tool.setuptools.package-data]
 Cheetah = ["*.tmpl", "*.txt"]
+# Die Deklarationen sind zur Laufzeit noetig, nicht nur beim Bauen:
+# ohne sie prueft "ct4 check" gegen nichts und meldet keinen Befund.
+ct4 = ["declarations/*.json"]
 
 [tool.pytest.ini_options]
 # Ein haengender Test soll fehlschlagen und sagen wo, statt den Lauf mit

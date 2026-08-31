@@ -18,7 +18,7 @@ set -eu
 
 cp -r /repo/Cheetah /repo/ct4 /repo/tests /repo/bin /repo/setup.py \
       /repo/pyproject.toml /repo/README.rst /repo/LICENSE \
-      /repo/declarations /work/
+      /work/
 cd /work
 
 python setup.py build_ext --inplace >/dev/null 2>&1

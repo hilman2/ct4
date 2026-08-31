@@ -20,8 +20,12 @@ from typing import Sequence
 from ct4 import diagnostics
 from ct4.declare import Declaration
 
-# Where declarations live when none is named.
-DECLARATIONS = Path(__file__).resolve().parent.parent / "declarations"
+# Where declarations live when none is named. Inside the package, not
+# beside it: pointed at the repository root, this resolved to
+# site-packages/declarations once installed, which does not exist. The
+# directory was then empty, "ct4 check" ran with no declarations at all
+# and reported no findings, which reads exactly like a clean template.
+DECLARATIONS = Path(__file__).resolve().parent / "declarations"
 
 
 def main(argv: Sequence[str] | None = None) -> int:

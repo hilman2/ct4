@@ -151,22 +151,39 @@ def _check_templates(paths: list[Path], expect: int) -> int:
     The guard against false findings. A declaration that reports too
     much is worse than none at all: it makes people switch the tool off.
     That is why the expected number is part of the run.
+
+    Exactly that many, not at most. Too few is its own failure and a
+    quieter one: it means a declaration stopped matching, and a checker
+    that finds nothing reads exactly like a clean set of templates. The
+    run used to allow it, and it would have waved through the day the
+    declarations stopped being packaged at all.
     """
     from ct4.check import check_source
-    from ct4.cli import load_declarations
+    from ct4.cli import DECLARATIONS, load_declarations
     from ct4.corpus import check as checker
 
     declarations = load_declarations([])
+    if not declarations:
+        print("No declarations were loaded from %s. Without them nothing "
+              "can be checked." % DECLARATIONS)
+        return 1
     found = []
     for case in checker.load(paths):
         found.extend(check_source(case.template, case.id, declarations))
-    print("%d templates checked, %d findings (expected: %d)"
-          % (len(checker.load(paths)), len(found), expect))
+    print("%d templates checked, %d findings (expected: %d), "
+          "%d declarations"
+          % (len(checker.load(paths)), len(found), expect,
+             len(declarations)))
     for finding in found:
         print("  %s" % finding)
     if len(found) > expect:
         print("\nMore findings than expected. Either the declaration is "
               "too strict or a template is newly broken.")
+        return 1
+    if len(found) < expect:
+        print("\nFewer findings than expected. Either a declaration "
+              "stopped matching or a template was fixed. Both need the "
+              "expected number here changed on purpose.")
         return 1
     return 0
 
