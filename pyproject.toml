@@ -3,7 +3,17 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ct4"
+# Der Distributionsname, nicht der Importname. Importiert wird weiter
+# "Cheetah", und das muss so bleiben: weewx schreibt
+# "from Cheetah.Template import Template", und daran haengt die ganze
+# Kompatibilitaetszusage. "ct4" ist auf PyPI vergeben, an ein fremdes
+# Projekt, und PyPI normalisiert Namen, also waere "CT4" derselbe.
+#
+# Achtung, gemessen: CT3 und diese Distribution beanspruchen beide das
+# Importpaket "Cheetah". Nebeneinander installiert ueberschreibt die
+# zuletzt installierte die Dateien der anderen, ohne dass pip etwas
+# sagt. ct4.engine prueft das zur Laufzeit.
+name = "Cheetah4"
 description = "Cheetah 4, a template engine and code generation tool"
 readme = { file = "README.rst", content-type = "text/x-rst" }
 # Lesser, weil Cheetah eine Bibliothek ist, die andere Programme in

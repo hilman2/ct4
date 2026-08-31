@@ -13,6 +13,44 @@ or later. The code inherited from Cheetah3 stays available under the
 MIT license from its own project; see LICENSE for both.
 
 
+Installing, and CT3
+===================
+
+The distribution is called ``Cheetah4``. The package you import is
+called ``Cheetah``, as it was before, because that is what every
+existing template stack expects::
+
+    pip install Cheetah4
+    python -c "import Cheetah; print(Cheetah.Version)"
+
+``ct3``, the distribution Cheetah3 is published under, installs a
+package called ``Cheetah`` as well. Only one of them can be on disk at
+a time, and pip does not warn about it. Three things follow, all of
+them measured rather than assumed:
+
+Installing Cheetah4 over ct3 works and gives you the Cheetah4 engine.
+Both distributions are then listed as installed, and both believe they
+own the ``Cheetah`` package.
+
+Uninstalling ct3 afterwards **breaks Cheetah4**. The file list ct3
+recorded still names ``Cheetah/``, so pip removes files that Cheetah4
+now owns, and leaves an installation it reports as intact. Reinstall
+with ``pip install --force-reinstall --no-deps Cheetah4``.
+
+Installing anything that depends on ct3 puts the older engine back,
+silently. weewx declares ``CT3>=3.1``, so installing or upgrading weewx
+does exactly this. Everything keeps working, on the engine Cheetah4
+forked away from.
+
+The ``ct4`` command refuses to run when it finds an engine older than
+4, and says what to do. weewx does not call it, so on a station the
+check is yours to make::
+
+    python -c "import Cheetah; print(Cheetah.Version)"
+
+A virtual environment for weewx that never sees ct3 avoids all of it.
+
+
 Where is CheetahTemplate3
 =========================
 

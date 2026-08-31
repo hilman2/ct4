@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from ct4 import diagnostics
+from ct4 import diagnostics, engine
 from ct4.declare import Declaration
 
 # Where declarations live when none is named. Inside the package, not
@@ -58,6 +58,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("mcp", help="speak as an MCP server over stdio")
 
     args = parser.parse_args(argv)
+    # After parsing, so that --help still answers on a broken install.
+    # Everything below this line renders or compiles, and doing that
+    # against a CT3 engine would look like it worked.
+    engine.require()
     if args.command == "check":
         return _check(args)
     if args.command == "context":
