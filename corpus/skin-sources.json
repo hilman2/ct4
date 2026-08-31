@@ -8,12 +8,19 @@
     "'license' ist Pflicht fuer jede Quelle. Der Korpus legt fremden",
     "Vorlagentext vollstaendig ab. Der gehoert nicht zur Bibliothek und",
     "faellt nicht unter deren LGPL-3.0-or-later, sondern bleibt unter",
-    "der Lizenz seines Projekts.",
+    "der Lizenz seines Projekts. Ein Repo ohne benannte Lizenz kommt",
+    "nicht hinein.",
     "",
     "'license_read_from' steht daneben, weil 'GPL-3.0-only' und",
     "'-or-later' sich unterscheiden und die GitHub-API fuer beide das",
     "mehrdeutige 'GPL-3.0' liefert. Wer die Angabe nachpruefen will,",
     "soll wissen, wo sie herkommt.",
+    "",
+    "Nicht nur weewx: Cobbler und SABnzbd benutzen Cheetah ganz anders.",
+    "Cobblers Kickstart-Dateien sind Dateien, in denen '#' auf den",
+    "meisten Zeilen ein Shell-Kommentar ist, mit Direktiven dazwischen.",
+    "SABnzbd wickelt seine Direktiven in HTML-Kommentare und schliesst",
+    "sie mit dem Ende-Token. Beides erzeugt kein weewx-Skin.",
     "",
     "Neu erheben:",
     "  git clone --depth 1 <repo> && git -C <dir> checkout <commit>",
@@ -35,7 +42,6 @@
       "license": "GPL-3.0-only",
       "license_read_from": "pyproject.toml: license = \"GPL-3.0-only\"",
       "commit": "4a74ad9a35523bc8ef5b9832938c90fb5e31c9a0",
-      "dated": "2026-08-28",
       "paths": {
         "weewx-seasons": "src/weewx_data/skins/Seasons",
         "weewx-smartphone": "src/weewx_data/skins/Smartphone",
@@ -53,7 +59,6 @@
       "license": "GPL-3.0-only",
       "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "6f441b34a7a9a79a9a2937552dc65f62e292cd45",
-      "dated": "2024-06-24",
       "paths": {
         "belchertown": "skins"
       }
@@ -66,7 +71,6 @@
       "license": "GPL-3.0-only",
       "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "a418d737cba217f732cdced1e28ddde1e262aa88",
-      "dated": "2026-06-03",
       "paths": {
         "belchertown-new": "skins"
       }
@@ -79,9 +83,116 @@
       "license": "GPL-3.0-only",
       "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "4634c248fefa6d68d90ccbb723a84a0ba24fa655",
-      "dated": "2026-01-25",
       "paths": {
         "wdc": "skins"
+      }
+    },
+    {
+      "names": [
+        "jas"
+      ],
+      "repo": "https://github.com/bellrichm/weewx-jas",
+      "license": "GPL-3.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
+      "commit": "9aafb65893c96f261d0857d0f7aa0630c1237d3c",
+      "paths": {
+        "jas": "skins/jas"
+      }
+    },
+    {
+      "names": [
+        "neowx-material"
+      ],
+      "repo": "https://github.com/neoground/neowx-material",
+      "license": "MIT",
+      "license_read_from": "LICENSE holds the MIT text",
+      "commit": "1a09af0052b25a1d4a8a0877b02b89868cd8a307",
+      "paths": {
+        "neowx-material": "src"
+      }
+    },
+    {
+      "names": [
+        "neowx"
+      ],
+      "repo": "https://github.com/neoground/neowx",
+      "license": "MIT",
+      "license_read_from": "LICENSE holds the MIT text",
+      "commit": "7ed26d37fd49aa1d2724ca55473756b2477de311",
+      "paths": {
+        "neowx": "dist_final/skins/neowx"
+      }
+    },
+    {
+      "names": [
+        "exfoliation"
+      ],
+      "repo": "https://github.com/matthewwall/weewx-exfoliation",
+      "license": "GPL-3.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only; the file is named 'license'",
+      "commit": "9f77f4dd2bbfa2747965524b6a81aa2993336d60",
+      "paths": {
+        "exfoliation": "skins/exfoliation"
+      }
+    },
+    {
+      "names": [
+        "sofaskin"
+      ],
+      "repo": "https://github.com/weatherstorm/Sofaskin-CW9009",
+      "license": "MIT",
+      "license_read_from": "LICENSE holds the MIT text",
+      "commit": "ff180460a4f0f647de81675a6e7bc50687b4e2bc",
+      "paths": {
+        "sofaskin": "."
+      }
+    },
+    {
+      "names": [
+        "niculskin"
+      ],
+      "repo": "https://github.com/ngulden/niculskin",
+      "license": "GPL-2.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-2.0 text and the project states no version policy of its own; read as -only",
+      "commit": "a0f3061bef3198848835959be460447b1e0c4765",
+      "paths": {
+        "niculskin": "skins/niculskin"
+      }
+    },
+    {
+      "names": [
+        "meteo"
+      ],
+      "repo": "https://github.com/bourquep/weewx-me.teo",
+      "license": "GPL-3.0-or-later",
+      "license_read_from": "install.py: 'either version 3 ... or (at your option) any later version'",
+      "commit": "5063aa253f578df54d9ac61fa7bd3a25a1706b1d",
+      "paths": {
+        "meteo": "weewx/skins/me.teo"
+      }
+    },
+    {
+      "names": [
+        "sabnzbd"
+      ],
+      "repo": "https://github.com/sabnzbd/sabnzbd",
+      "license": "GPL-2.0-or-later",
+      "license_read_from": "source headers: 'either version 2 ... or (at your option) any later version'",
+      "commit": "4fde6e490c9a61a1a6e3f44e75dcb70b9824849a",
+      "paths": {
+        "sabnzbd": "."
+      }
+    },
+    {
+      "names": [
+        "cobbler"
+      ],
+      "repo": "https://github.com/cobbler/cobbler",
+      "license": "GPL-2.0-or-later",
+      "license_read_from": "setup.py: license=\"GPLv2+\"",
+      "commit": "5f31b19aa0b9fd1b792ca974cf952a93215a521c",
+      "paths": {
+        "cobbler": "cobbler/data/templates/cheetah"
       }
     }
   ]

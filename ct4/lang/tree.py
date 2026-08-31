@@ -286,6 +286,15 @@ class _Builder:
         start = node.tokens[0].end
         match = lex.EOL.search(self.source, start)
         end = match.start() if match else len(self.source)
+        # And no further than the directive end token, where there is
+        # one. ct3 parses the expression and stops there, so what comes
+        # after is output and not argument. Without this a colon in an
+        # HTML attribute after "<!--#if $cur != 0#-->" reads as the
+        # short form, and a corpus template does exactly that.
+        for token in node.tokens:
+            if token.kind == lex.DIRECTIVE_END:
+                end = min(end, token.start)
+                break
         return self.source[start:end]
 
     def _is_short_form(self, line: str) -> bool:
@@ -318,7 +327,7 @@ class _Builder:
             raise StructureError(
                 "#end %s closes nothing" % closes, token.line, token.column)
         open_block = stack[-1]
-        if closes and closes != open_block.name:
+        if closes and not closes.startswith(open_block.name):
             raise StructureError(
                 "#end %s closes #%s" % (closes, open_block.name),
                 token.line, token.column)
@@ -380,7 +389,14 @@ def _top_level_colon(text: str) -> int:
 
 
 def _end_target(node: Node) -> str:
-    """Which block an ``#end`` names, as a bare word."""
+    """Which block an ``#end`` names, as a bare word.
+
+    Compared against the open block by prefix, not by equality, and
+    that is ct3 rather than sloppiness. eatEndDirective walks the keys
+    of its end-directive table and takes the first one the text starts
+    with, so "#end forecast" finds the key "for" and closes a #for. A
+    corpus template does exactly that.
+    """
     for token in node.tokens[1:]:
         if token.kind != lex.TEXT:
             continue

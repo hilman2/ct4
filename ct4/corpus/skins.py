@@ -19,8 +19,11 @@ from typing import Iterator
 from ct4.corpus.case import COMPILE, Case
 
 # weewx skins store templates under both suffixes: .tmpl for a page,
-# .inc for a building block that a page pulls in via #include.
-SUFFIXES = (".tmpl", ".inc")
+# .inc for a building block that a page pulls in via #include. Cobbler
+# writes .template, and its kickstart and preseed files are the most
+# unlike a weewx skin anything in the corpus gets: files where a hash
+# is a shell comment on most lines, with directives in between.
+SUFFIXES = (".tmpl", ".inc", ".template")
 
 
 def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
