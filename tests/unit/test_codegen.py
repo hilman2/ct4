@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 731
+FLOOR = 823
 
 
 def render_cases():
@@ -173,6 +173,30 @@ def test_repeat_counts():
     assert out("#repeat 3\nx\n#end repeat\n", [{}]) == "x\nx\nx\n"
 
 
+def test_import_is_hoisted_and_usable():
+    # It lands at module level, where ct3 puts it, rather than running
+    # on every render. Joining the tokens once put the hash in front of
+    # it and Python read the whole line as a comment, so the statement
+    # parsed to nothing at all.
+    source = "#import os\n$os.sep\n"
+    assert out(source, [{}]).strip() in ("/", "\\")
+
+
+def test_the_colon_short_form_runs():
+    # The line ending belongs to the body: ct3 parses it with
+    # breakPoint=findEOL(gobble=True), which is past the ending.
+    assert out("#if $a: yes\nafter\n", [{"a": 1}]) == "yes\nafter\n"
+    assert out("#if $a: yes\nafter\n", [{"a": 0}]) == "after\n"
+
+
+def test_a_chained_short_form_is_refused():
+    # "#if 0: a" then "#else: b" chains in the code ct3 generates,
+    # because its dedent puts the else back at the same level. Read as
+    # a stray directive the body would simply vanish, so it is turned
+    # away instead.
+    assert not codegen.supports("#if 0: a\n#else: b\n")
+
+
 def test_none_writes_nothing():
     # The guard ct3 writes: a placeholder that resolves to None puts
     # nothing in the output, and the filter never sees it.
@@ -198,7 +222,7 @@ def test_the_generated_code_is_python():
 @pytest.mark.parametrize("source", [
     "#set global $a = 1\n$a\n",              # writes into the instance
     "#def show\nx\n#end def\n",              # a method, not a statement
-    "#import os\n$a\n",                      # hoisted out of the body
+    "#if 0: a\n#else: b\n",                  # the chained short form
     "$getVar('x')\n",                        # needs a Template object
     "$self.foo\n",                           # needs a Template object
     "$!a\n",                                 # no silence token yet

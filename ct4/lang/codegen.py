@@ -15,13 +15,14 @@ has to be re-escaped by hand.
 What it can do today: text, comments, escapes, placeholders with their
 call and subscript chains, and #for, #if, #while, #unless, #repeat,
 #try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
-and #from. That is 731 of the 1636 render cases.
+and #from, in their block form and in the colon short form. That is
+823 of the 1636 render cases.
 
 What it turns away, in the order the corpus says it costs most: #def
-and #block, which are methods rather than statements; the colon short
-form of any block, whose body sits on the directive's own line where
-this layer does not look; the cache token; PSP; #include and #extends,
-which need a template to include into.
+and #block, which are methods rather than statements; the cache token;
+PSP; #include and #extends, which need a template to include into; and
+the chained short form, where an #else on the next line joins an #if
+that has already closed.
 """
 
 from __future__ import annotations
@@ -357,8 +358,16 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             _eat_directive_line(node, source, out)
             out.append((STMT_PIECE, _block(node, source, hoisted)))
         elif node.kind == lex.DIRECTIVE:
-            if node.name in BRANCHES or node.name == "end":
-                # Handled by the block they belong to.
+            if node.name in BRANCHES:
+                # A branch that reached here belongs to no block this
+                # layer built. It is the chained colon short form,
+                # "#if 0: a" then "#else: b", which ct3 joins in the
+                # generated Python because its dedent puts them back at
+                # the same level. Read as a stray directive its body
+                # would simply vanish.
+                raise Unsupported("#%s outside a block" % node.name)
+            if node.name == "end":
+                # Handled by the block it closes.
                 _eat_directive_line(node, source, out)
             elif node.name == "slurp":
                 # It exists to swallow the line ending after it, and
@@ -439,8 +448,12 @@ def _import_statement(node: tree.Node) -> ast.stmt:
     No placeholders are resolved: an import names modules, and a dollar
     in one would be a mistake rather than a lookup.
     """
-    text = "".join(t.text for t in node.tokens).strip()
-    made = _framed_statement(text)
+    # The name comes from the node and the rest from its arguments.
+    # Joining the tokens would put the hash in front of it, and Python
+    # would read the whole line as a comment: the statement then parses
+    # to nothing at all, which is how this went unnoticed.
+    arguments = "".join(t.text for t in node.tokens[1:])
+    made = _framed_statement("%s %s" % (node.name, arguments.strip()))
     if not isinstance(made, (ast.Import, ast.ImportFrom)):
         raise Unsupported("#%s that is not an import" % node.name)
     return made

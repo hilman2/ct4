@@ -131,6 +131,10 @@ class Node:
 
 TEMPLATE = "template"
 BLOCK = "block"
+# How a block directive ends. "block" is the ordinary form closed by an
+# #end, "short" is the colon form closed by its line ending.
+OPEN_BLOCK = "block"
+OPEN_SHORT = "short"
 
 
 def parse(source: str) -> Node:
@@ -156,12 +160,25 @@ class _Builder:
         self.starts = lex.line_starts(source)
         self.closing = closing_names()
         self.required = must_close()
+        # Short forms waiting for their line to end, innermost last,
+        # each with the offset it closes at.
+        self.short: list[tuple[Node, int]] = []
+        # Where every directive end token stands. Collected once from
+        # the stream, because the question "where do this directive's
+        # arguments stop" is asked before its tokens have been taken.
+        self.ends = sorted(token.start for token in self.tokens
+                           if token.kind == lex.DIRECTIVE_END)
 
     def run(self) -> Node:
         root = Node(TEMPLATE)
         stack = [root]
         index = 0
         while index < len(self.tokens):
+            # Any short form whose line has ended closes before the
+            # token that ended it is looked at.
+            index = self._close_short(stack, index)
+            if index >= len(self.tokens):
+                break
             token = self.tokens[index]
             if token.kind != lex.DIRECTIVE:
                 stack[-1].children.append(
@@ -177,14 +194,26 @@ class _Builder:
             index += 1
             node = Node(BLOCK if name in self.closing else lex.DIRECTIVE,
                         [token], name=name)
-            # Everything up to the end of the line belongs to the
-            # directive: its arguments. Where it opens a block, the
-            # body follows and the arguments stop at the line ending.
-            index = self._take_arguments(node, index)
+            mode = self._open_mode(node) if node.kind == BLOCK else None
+            stop = None
+            if mode == OPEN_SHORT:
+                # The arguments end at the colon; the rest of the line
+                # is the body and becomes children.
+                stop = self._colon_end(node)
+            # Otherwise everything up to the end of the line belongs to
+            # the directive: its arguments.
+            index = self._take_arguments(node, index, stop)
             stack[-1].children.append(node)
-            if node.kind == BLOCK and self._opens(node) \
-                    and self._is_closed(node, index):
+            if mode == OPEN_BLOCK and self._is_closed(node, index):
                 stack.append(node)
+            elif mode == OPEN_SHORT:
+                stack.append(node)
+                self.short.append((node, self._line_end(node)))
+        while self.short:
+            # A short form at the end of the source has no token after
+            # it to close against.
+            self.short.pop()
+            stack.pop()
         if len(stack) > 1:
             open_block = stack[-1]
             raise StructureError(
@@ -211,7 +240,59 @@ class _Builder:
                     return True
         return False
 
-    def _take_arguments(self, node: Node, index: int) -> int:
+    def _close_short(self, stack: list[Node], index: int) -> int:
+        """Closes every short form whose line has ended here.
+
+        The line ending goes into the block as a child of its own, so
+        that the tree still writes back to the source and the layer
+        above knows the block ate it.
+        """
+        while self.short:
+            node, at = self.short[-1]
+            if index >= len(self.tokens):
+                return index
+            token = self.tokens[index]
+            if token.end <= at:
+                return index
+            if token.start < at:
+                # The body and what follows arrive as one run of text:
+                # the lexer has no reason to cut there. Everything up
+                # to the offset is body and goes into the block, the
+                # line ending included.
+                head, rest = lex.split(token, at, self.starts)
+                stack[-1].children.append(Node(head.kind, [head]))
+                self.tokens[index] = rest
+                continue
+            self.short.pop()
+            stack.pop()
+        return index
+
+    def _colon_end(self, node: Node) -> int:
+        """Just past the colon that opens a short form's body.
+
+        And past one space after it, because ct3 does
+        getWhiteSpace(max=1) there. Exactly one: the second belongs to
+        the body and gets written.
+        """
+        start = node.tokens[0].end
+        line = self._rest_of_line(node)
+        at = start + _top_level_colon(line) + 1
+        if self.source[at:at + 1] in (" ", "\t"):
+            at += 1
+        return at
+
+    def _line_end(self, node: Node) -> int:
+        """Just past the end of the line the directive stands on.
+
+        Past it, not at it: ct3 parses a short form's body with
+        breakPoint=findEOL(gobble=True), so the line ending is inside
+        the body and gets written from there.
+        """
+        match = lex.EOL.search(self.source, node.tokens[0].end)
+        return match.end() if match else len(self.source)
+
+    def _take_arguments(self, node: Node, index: int,
+                        stop: int | None = None) -> int:
         """Takes the tokens up to the end of the directive's line.
 
         A directive ends at its line ending or at the directive end
@@ -221,6 +302,13 @@ class _Builder:
         """
         while index < len(self.tokens):
             token = self.tokens[index]
+            if stop is not None and token.start >= stop:
+                return index
+            if stop is not None and token.end > stop:
+                head, rest = lex.split(token, stop, self.starts)
+                node.tokens.append(head)
+                self.tokens[index] = rest
+                return index
             if token.kind == lex.DIRECTIVE_END:
                 node.tokens.append(token)
                 return index + 1
@@ -246,8 +334,8 @@ class _Builder:
             index += 1
         return index
 
-    def _opens(self, node: Node) -> bool:
-        """Whether this directive really leaves a block open.
+    def _open_mode(self, node: Node) -> str | None:
+        """How this block directive ends, or None where it opens nothing.
 
         Three ways it does not.
 
@@ -267,12 +355,14 @@ class _Builder:
         line = self._rest_of_line(node)
         if node.name == "compiler-settings":
             if line.split()[:1] == ["reset"]:
-                return False
+                return None
         if node.name == "if":
             words = set(_bare_words(line))
             if "then" in words and "else" in words:
-                return False
-        return not self._is_short_form(line)
+                return None
+        if self._is_short_form(line):
+            return OPEN_SHORT
+        return OPEN_BLOCK
 
     def _rest_of_line(self, node: Node) -> str:
         """The source from just after the directive name to the line end.
@@ -287,14 +377,16 @@ class _Builder:
         match = lex.EOL.search(self.source, start)
         end = match.start() if match else len(self.source)
         # And no further than the directive end token, where there is
-        # one. ct3 parses the expression and stops there, so what comes
-        # after is output and not argument. Without this a colon in an
-        # HTML attribute after "<!--#if $cur != 0#-->" reads as the
-        # short form, and a corpus template does exactly that.
-        for token in node.tokens:
-            if token.kind == lex.DIRECTIVE_END:
-                end = min(end, token.start)
-                break
+        # one on this line. ct3 parses the expression and stops there,
+        # so what comes after is output and not argument. Without this
+        # a colon in an HTML attribute after "<!--#if $cur != 0#-->"
+        # reads as the short form, and a corpus template does exactly
+        # that.
+        import bisect
+
+        at = bisect.bisect_left(self.ends, start)
+        if at < len(self.ends) and self.ends[at] < end:
+            end = self.ends[at]
         return self.source[start:end]
 
     def _is_short_form(self, line: str) -> bool:

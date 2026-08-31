@@ -66,11 +66,26 @@ def test_the_arguments_belong_to_the_directive():
     assert "body" not in own
 
 
-def test_the_short_form_closes_with_its_line():
+def test_the_short_form_has_a_body_in_the_tree():
+    # Its body is on the directive's own line, and it used to be
+    # swallowed by the arguments where no layer above could see it.
     root = tree.parse("#if $x: yes\nafter\n")
-    # It opens no block that anything else falls into.
-    assert tree.depth_of(root) in ({}, {(1, 1): 0})
+    block = list(tree.blocks(root))[0]
+    assert "yes" in block.text()
+    # Nothing after the line ending belongs to it.
+    assert "after" not in block.text()
     assert "after" in root.text()
+
+
+def test_the_short_form_eats_one_space_after_its_colon():
+    # ct3 does getWhiteSpace(max=1) there. The second space is body.
+    block = list(tree.blocks(tree.parse("#if $x:  yes\n")))[0]
+    assert block.children[0].text().startswith(" yes")
+
+
+def test_a_short_form_at_the_end_of_the_source_is_closed():
+    # It has no token after it to close against.
+    tree.parse("#if $x: yes")
 
 
 # -- Losslessness ----------------------------------------------------
