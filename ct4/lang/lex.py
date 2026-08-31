@@ -136,6 +136,48 @@ def joined(items: Sequence[Token]) -> str:
     return "".join(token.text for token in leaves(items))
 
 
+def line_starts(source: str) -> list[int]:
+    """Offset of the first character of every line.
+
+    Public because the layer above splits tokens at line endings and
+    has to give the halves the right position. Computing that from a
+    count of newlines is the mistake this file already made once: a
+    template with old Mac line endings holds none at all.
+    """
+    starts = [0]
+    for match in EOL.finditer(source):
+        starts.append(match.end())
+    return starts
+
+
+def where(starts: Sequence[int], offset: int) -> tuple[int, int]:
+    """Line and column of an offset, both counting from one."""
+    line = bisect.bisect_right(starts, offset)
+    return line, offset - starts[line - 1] + 1
+
+
+def split(token: Token, at: int, starts: Sequence[int]) -> tuple[Token,
+                                                                Token]:
+    """Cuts a leaf token in two at an offset inside it.
+
+    Called as ``split(token, offset, starts)`` where ``offset`` counts
+    from the start of the source, not of the token. Returns the part
+    before and the part from there on; either can be empty of content
+    only if the caller asked for that.
+
+    Only for leaves. A token with children owns no text of its own to
+    cut.
+    """
+    if token.children:
+        raise ValueError("cannot split a token that has children")
+    cut = at - token.start
+    line, column = where(starts, at)
+    first = Token(token.kind, token.text[:cut], token.start,
+                  token.line, token.column)
+    second = Token(token.kind, token.text[cut:], at, line, column)
+    return first, second
+
+
 def path_of(token: Token) -> str:
     """The dotted name a placeholder token reads.
 
@@ -293,7 +335,15 @@ class _Lexer:
         is in a CSS file and in a colour literal.
         """
         source = self.source
-        if source.startswith("##", index) and not inside_directive:
+        if source.startswith("##", index):
+            # Inside a directive's arguments a double hash is two
+            # different things, and what follows decides which. In
+            # "#if 1##for i in [1]#" the first hash closes the if and
+            # the second opens a for. In "#def name: ## comment" it is
+            # a comment, because "# comment" begins no directive.
+            if inside_directive and _directive_name(source, index + 2,
+                                                    self.names):
+                return DIRECTIVE_END, index + 1, ""
             match = EOL.search(source, index)
             end = len(source) if match is None else match.end()
             return COMMENT, end, "##"
