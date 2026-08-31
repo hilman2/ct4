@@ -1,6 +1,8 @@
 # Der Container fuehrt die Skripte aus dem eingehaengten Repo aus. Mit
 # CRLF findet /bin/sh den Interpreter nicht.
 *.sh text eol=lf
+# Die Skripte in bin/ tragen kein Suffix, haben aber eine Shebang-Zeile.
+bin/* text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

@@ -20,13 +20,9 @@ This is a hacked/documented version of Gordon McMillan's iu.py. I have:
 import marshal
 import py_compile
 import sys
-from .compat import PY2, string_type, new_module, get_suffixes, \
-    load_module_from_file, cache_from_source, \
-    ModuleNotFoundError, RecursionError
-if PY2:
-    import imp
-else:
-    import importlib.machinery
+from .compat import new_module, get_suffixes
+from .compat import load_module_from_file, cache_from_source
+import importlib.machinery
 
 _installed = False
 
@@ -241,14 +237,11 @@ class DirOwner(Owner):
                 try:
                     # Different Python versions
                     # change marshalled byte-code format
-                    if PY2:
-                        offset = 8
+                    sv = sys.version_info[:2]
+                    if sv >= (3, 7):
+                        offset = 16
                     else:
-                        sv = sys.version_info[:2]
-                        if sv >= (3, 7):
-                            offset = 16
-                        else:
-                            offset = 12
+                        offset = 12
                     co = loadco(stuff[offset:])
                     __file__ = pyc[0]
                     break
@@ -298,12 +291,8 @@ class FrozenImportDirector(ImportDirector):
 
     def getmod(self, nm):
         mod = None
-        if PY2:
-            if imp.is_frozen(nm):
-                mod = imp.load_module(nm, None, nm, ('', '', imp.PY_FROZEN))
-        else:
-            if importlib.machinery.FrozenImporter.find_spec(nm):
-                mod = importlib.machinery.FrozenImporter.load_module(nm)
+        if importlib.machinery.FrozenImporter.find_spec(nm):
+            mod = importlib.machinery.FrozenImporter.load_module(nm)
         if mod and hasattr(mod, '__path__'):
             mod.__importsub__ = \
                 lambda name, pname=nm, owner=self: \
@@ -377,7 +366,7 @@ class PathImportDirector(ImportDirector):
     def getmod(self, nm):
         mod = None
         for thing in self.path:
-            if isinstance(thing, string_type):
+            if isinstance(thing, str):
                 owner = self._shadowPath.get(thing, -1)
                 if owner == -1:
                     owner = self._shadowPath[thing] = self._makeOwner(thing)
@@ -436,10 +425,7 @@ class ImportManager:
             self._get_ident = thread.get_ident
 
     def install(self):
-        try:
-            import builtins as builtin
-        except ImportError:  # PY2
-            import __builtin__ as builtin
+        import builtins as builtin
         builtin.__import__ = self.importHook
         builtin.reload = self.reloadHook
 
@@ -454,7 +440,7 @@ class ImportManager:
         # first see if we could be importing a relative name
         _sys_modules_get = sys.modules.get
         contexts = [None]
-        if (PY2 or not name or level > 0) and globals:
+        if (not name or level > 0) and globals:
             importernm = globals.get('__name__', '')
             if importernm:
                 if hasattr(_sys_modules_get(importernm), '__path__'):

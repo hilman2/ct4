@@ -18,7 +18,6 @@ from .Compiler import DEFAULT_COMPILER_SETTINGS
 from .Template import Template
 from .Utils.Misc import mkdirsWithPyInitFiles
 from .Version import Version
-from .compat import PY2
 
 optionDashesRE = re.compile(R"^-{1,2}")
 moduleNameRE = re.compile(R"^[a-zA-Z_][a-zA-Z_0-9]*$")
@@ -593,7 +592,7 @@ you do have write permission to and re-run the tests.""")
             pysrc = TemplateClass.compile(file=sys.stdin,
                                           compilerSettings=compilerSettings,
                                           returnAClass=False)
-            output = pysrc if PY2 else pysrc.decode()
+            output = pysrc.decode()
         else:
             output = str(TemplateClass(file=sys.stdin,
                                        compilerSettings=compilerSettings))
@@ -641,10 +640,9 @@ be named according to the same rules as Python modules.""" % tup)
             else:
                 os.makedirs(dstDir)
         if self.opts.stdout:
-            if not PY2:
-                encoding = self.opts.encoding
-                if encoding and isinstance(output, bytes):
-                    output = output.decode(encoding)
+            encoding = self.opts.encoding
+            if encoding and isinstance(output, bytes):
+                output = output.decode(encoding)
             sys.stdout.write(output)
         else:
             encoding = self.opts.encoding
@@ -653,7 +651,7 @@ be named according to the same rules as Python modules.""" % tup)
                     output = output.decode(encoding)
                 f = codecs.open(dst, 'w', encoding=encoding)
             else:
-                if not PY2 and isinstance(output, bytes):
+                if isinstance(output, bytes):
                     output = output.decode()
                 f = open(dst, 'w')
             f.write(output)

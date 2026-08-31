@@ -11,7 +11,6 @@ import time
 
 import Cheetah.NameMapper
 import Cheetah.Template
-from Cheetah.compat import unicode
 
 # This can be turned on with the `--debug` flag when running the test
 # and will cause the tests to all just dump out how long they took
@@ -163,7 +162,7 @@ class DynamicSimpleCompilationTest(PerformanceTest):
         template = Cheetah.Template.Template.compile(
             template, keepRefToGeneratedCode=False)
         template = template()
-        template = unicode(template)
+        template = str(template)
 
 
 class FilterTest(PerformanceTest):
@@ -183,7 +182,7 @@ class FilterTest(PerformanceTest):
         self.template = template()
 
     def performanceSample(self):
-        value = unicode(self.template)  # noqa: F841
+        value = str(self.template)  # noqa: F841
 
 
 class LongCompileTest(PerformanceTest):

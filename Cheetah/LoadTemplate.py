@@ -1,7 +1,6 @@
 import os
 import sys
 from .ImportHooks import CheetahDirOwner
-from .compat import ModuleNotFoundError
 
 
 def loadTemplateModule(templatePath, debuglevel=0):

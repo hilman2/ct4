@@ -6,7 +6,6 @@ import tempfile
 import unittest
 
 from Cheetah.Template import Template
-from Cheetah.compat import unicode
 
 
 class TemplateTest(unittest.TestCase):
@@ -354,4 +353,4 @@ class SubclassSearchListTest(TemplateTest):
         class Sub(Template):
             greeting = 'Hola'
         tmpl = Sub('''When we meet, I say "${greeting}"''')
-        self.assertEqual(unicode(tmpl), 'When we meet, I say "Hola"')
+        self.assertEqual(str(tmpl), 'When we meet, I say "Hola"')

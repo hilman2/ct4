@@ -15,17 +15,13 @@ import sys
 import os.path
 import py_compile
 import types
-try:
-    import builtins as builtin
-except ImportError:  # PY2
-    import __builtin__ as builtin
+import builtins as builtin
 from threading import RLock
 import traceback
 
 from . import ImportManager
 from .ImportManager import DirOwner
 from .Compiler import Compiler
-from .compat import ModuleNotFoundError
 from .convertTmplPathToModuleName import convertTmplPathToModuleName
 
 _installed = False

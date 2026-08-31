@@ -26,7 +26,6 @@ from . import NameMapper
 from .Parser import Parser, ParseError, specialVarRE, \
     STATIC_CACHE, REFRESH_CACHE, SET_GLOBAL, SET_MODULE, \
     unicodeDirectiveRE, encodingDirectiveRE, escapedNewlineRE
-from .compat import PY2, string_type, unicode
 
 from .NameMapper import valueForName, valueFromSearchList, \
     valueFromFrameOrSearchList
@@ -1160,7 +1159,7 @@ class AutoMethodCompiler(MethodCompiler):
                 self.addChunk('SL = [KWS]')
         if self.setting('useFilters'):
             if self.isClassMethod() or self.isStaticMethod():
-                self.addChunk('_filter = lambda x, **kwargs: unicode(x)')
+                self.addChunk('_filter = lambda x, **kwargs: str(x)')
             else:
                 self.addChunk('_filter = self._CHEETAH__currentFilter')
         self.addChunk('')
@@ -1595,7 +1594,7 @@ class ClassCompiler(GenUtils):
             attribs = [self.setting('indentationStep') + str(attrib)
                        for attrib in self._generatedAttribs]
         except UnicodeEncodeError:
-            attribs = [self.setting('indentationStep') + unicode(attrib)
+            attribs = [self.setting('indentationStep') + str(attrib)
                        for attrib in self._generatedAttribs]
         return '\n\n'.join(attribs)
 
@@ -1652,7 +1651,7 @@ class ModuleCompiler(SettingsManager, GenUtils):
 
         if source and file:
             raise TypeError("Cannot compile from a source string AND file.")
-        elif isinstance(file, string_type):  # it's a filename.
+        elif isinstance(file, str):  # it's a filename.
             encoding = self.settings().get('encoding')
             if encoding:
                 f = codecs.open(file, 'r', encoding=encoding)
@@ -1677,10 +1676,10 @@ class ModuleCompiler(SettingsManager, GenUtils):
             self._fileBaseNameRoot, self._fileBaseNameExt = \
                 os.path.splitext(self._fileBaseName)
 
-        if not isinstance(source, string_type):
+        if not isinstance(source, str):
             # By converting to unicode here we allow objects
             # such as other Templates to be passed in
-            source = unicode(source)
+            source = str(source)
 
         # Handle the #indent directive by converting it to other directives.
         # (Over the long term we'll make it a real directive.)
@@ -1710,7 +1709,7 @@ class ModuleCompiler(SettingsManager, GenUtils):
                             repr(source).encode("ascii", "backslashreplace")
                             .decode(encoding))
             else:
-                source = unicode(source)
+                source = str(source)
 
         if source.find('#indent') != -1:  # @@TR: undocumented hack
             source = indentize(source)
@@ -2051,12 +2050,8 @@ class ModuleCompiler(SettingsManager, GenUtils):
             return code.decode(self.getModuleEncoding())
         return code
 
-    if PY2:
-        __str__ = __to_bytes
-        __unicode__ = __to_unicode
-    else:
-        __bytes__ = __to_bytes
-        __str__ = __to_unicode
+    __bytes__ = __to_bytes
+    __str__ = __to_unicode
 
     def wrapModuleDef(self):
         self.addSpecialVar('CHEETAH_docstring', self.setting('defDocStrMsg'))

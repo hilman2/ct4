@@ -44,7 +44,6 @@ from .Utils.WebInputMixin import _Converter, _lookup, \
 from .Version import MinCompatibleVersion
 from .Version import convertVersionStringToTuple, \
     MinCompatibleVersionTuple
-from .compat import PY2, string_type, unicode
 from .convertTmplPathToModuleName import convertTmplPathToModuleName
 
 try:
@@ -57,16 +56,11 @@ except ImportError:
         def release(self):
             pass
 
-if PY2:
-    filetype = file  # noqa: F821 undefined name
+filetype = io.IOBase
 
-    def createMethod(func, cls):
-        return types.MethodType(func, None, cls)
-else:
-    filetype = io.IOBase
 
-    def createMethod(func, cls):
-        return func
+def createMethod(func, cls):
+    return func
 
 
 NoneType = type(None)
@@ -160,7 +154,7 @@ class TemplatePreprocessor(object):
         """
         settings = self._settings
         if not source:  # @@TR: this needs improving
-            if isinstance(file, (str, unicode)):  # it's a filename.
+            if isinstance(file, str):  # it's a filename.
                 f = open(file)
                 source = f.read()
                 f.close()
@@ -621,10 +615,10 @@ class Template(Servlet):
         """  # noqa: E501
         errmsg = "arg '%s' must be %s"
 
-        if not isinstance(source, (NoneType, string_type)):
+        if not isinstance(source, (NoneType, str)):
             raise TypeError(errmsg % ('source', 'string or None'))
 
-        if not isinstance(file, (NoneType, string_type, filetype)):
+        if not isinstance(file, (NoneType, str, filetype)):
             raise TypeError(errmsg %
                             ('file', 'string, file-like object, or None'))
 
@@ -633,7 +627,7 @@ class Template(Servlet):
         if isinstance(baseclass, Template):
             baseclass = baseclass.__class__
 
-        if not isinstance(baseclass, (NoneType, string_type, type)):
+        if not isinstance(baseclass, (NoneType, str, type)):
             raise TypeError(errmsg % ('baseclass', 'string, class or None'))
 
         if cacheCompilationResults is Unspecified:
@@ -664,11 +658,11 @@ class Template(Servlet):
         if not isinstance(keepRefToGeneratedCode, (int, bool)):
             raise TypeError(errmsg % ('keepReftoGeneratedCode', 'boolean'))
 
-        if not isinstance(moduleName, (NoneType, string_type)):
+        if not isinstance(moduleName, (NoneType, str)):
             raise TypeError(errmsg % ('moduleName', 'string or None'))
         __orig_file__ = None
         if not moduleName:
-            if file and isinstance(file, string_type):
+            if file and isinstance(file, str):
                 moduleName = convertTmplPathToModuleName(file)
                 __orig_file__ = file
             else:
@@ -677,14 +671,14 @@ class Template(Servlet):
         if className is Unspecified:
             className = klass._CHEETAH_defaultClassNameForTemplates
 
-        if not isinstance(className, (NoneType, string_type)):
+        if not isinstance(className, (NoneType, str)):
             raise TypeError(errmsg % ('className', 'string or None'))
         className = re.sub(r'^_+([^0-9])', r'\1', className or moduleName)
 
         if mainMethodName is Unspecified:
             mainMethodName = klass._CHEETAH_defaultMainMethodNameForTemplates
 
-        if not isinstance(mainMethodName, (NoneType, string_type)):
+        if not isinstance(mainMethodName, (NoneType, str)):
             raise TypeError(errmsg % ('mainMethodName', 'string or None'))
 
         if moduleGlobals is Unspecified:
@@ -701,7 +695,7 @@ class Template(Servlet):
         if cacheDirForModuleFiles is Unspecified:
             cacheDirForModuleFiles = klass._CHEETAH_cacheDirForModuleFiles
 
-        if not isinstance(cacheDirForModuleFiles, (NoneType, string_type)):
+        if not isinstance(cacheDirForModuleFiles, (NoneType, str)):
             raise TypeError(errmsg %
                             ('cacheDirForModuleFiles', 'string or None'))
 
@@ -715,7 +709,7 @@ class Template(Servlet):
         baseclassValue = None
         baseclassName = None
         if baseclass:
-            if isinstance(baseclass, string_type):
+            if isinstance(baseclass, str):
                 baseclassName = baseclass
             elif isinstance(baseclass, type):
                 # @@TR: should soft-code this
@@ -726,7 +720,7 @@ class Template(Servlet):
 
         cacheHash = None
         cacheItem = None
-        if source or isinstance(file, string_type):
+        if source or isinstance(file, str):
             compilerSettingsHash = None
             if compilerSettings:
                 compilerSettingsHash = hashDict(compilerSettings)
@@ -969,7 +963,7 @@ class Template(Servlet):
             normalizeSearchList(settings.templateInitArgs['searchList']))
 
         if not hasattr(settings, 'outputTransformer'):
-            settings.outputTransformer = unicode
+            settings.outputTransformer = str
 
         if not hasattr(settings, 'templateAPIClass'):
             class PreprocessTemplateAPIClass(klass):
@@ -1045,43 +1039,13 @@ class Template(Servlet):
             mainMethName = getattr(concreteTemplateClass,
                                    mainMethNameAttr, None)
             if mainMethName:
-                def __str__(self):
-                    rc = getattr(self, mainMethName)()
-                    if PY2 and isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    if not PY2 and isinstance(rc, bytes):
-                        return rc.decode('utf-8')
-                    return rc
-
                 def __unicode__(self):
                     return getattr(self, mainMethName)()
             elif (hasattr(concreteTemplateClass, 'respond')
                   and concreteTemplateClass.respond != Servlet.respond):
-                def __str__(self):
-                    rc = self.respond()
-                    if PY2 and isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    if not PY2 and isinstance(rc, bytes):
-                        return rc.decode('utf-8')
-                    return rc
-
                 def __unicode__(self):
                     return self.respond()
             else:
-                def __str__(self):
-                    rc = None
-                    if hasattr(self, mainMethNameAttr):
-                        rc = getattr(self, mainMethNameAttr)()
-                    elif hasattr(self, 'respond'):
-                        rc = self.respond()
-                    else:
-                        rc = super(self.__class__, self).__str__()
-                    if PY2 and isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    if not PY2 and isinstance(rc, bytes):
-                        return rc.decode('utf-8')
-                    return rc
-
                 def __unicode__(self):
                     if hasattr(self, mainMethNameAttr):
                         return getattr(self, mainMethNameAttr)()
@@ -1090,8 +1054,9 @@ class Template(Servlet):
                     else:
                         return super(self.__class__, self).__unicode__()
 
-            if not PY2:
-                __str__ = __unicode__  # noqa: F811
+            # Unter Python 2 gab es hier zwei Fassungen, eine fuer
+            # Bytes und eine fuer Text. Uebrig bleibt die Textfassung.
+            __str__ = __unicode__
             __str__ = createMethod(__str__, concreteTemplateClass)
             __unicode__ = createMethod(__unicode__, concreteTemplateClass)
             setattr(concreteTemplateClass, '__str__', __str__)
@@ -1232,21 +1197,21 @@ class Template(Servlet):
         errmsg = "arg '%s' must be %s"
         errmsgextra = errmsg + "\n%s"
 
-        if not isinstance(source, (NoneType, string_type)):
+        if not isinstance(source, (NoneType, str)):
             raise TypeError(errmsg % ('source', 'string or None'))
 
-        if not isinstance(file, (NoneType, string_type, filetype)):
+        if not isinstance(file, (NoneType, str, filetype)):
             raise TypeError(errmsg %
                             ('file', 'string, file open for reading, or None'))
 
-        if not isinstance(filter, (string_type, type)) \
+        if not isinstance(filter, (str, type)) \
                 and not (isinstance(filter, type)
                          and issubclass(filter, Filters.Filter)):
             raise TypeError(errmsgextra %
                             ('filter', 'string or class',
                              '(if class, must be subclass '
                              'of Cheetah.Filters.Filter)'))
-        if not isinstance(filtersLib, (string_type, types.ModuleType)):
+        if not isinstance(filtersLib, (str, types.ModuleType)):
             raise TypeError(errmsgextra %
                             ('filtersLib', 'string or module',
                              '(if module, must contain subclasses '
@@ -1254,7 +1219,7 @@ class Template(Servlet):
 
         if errorCatcher is not None:
             err = True
-            if isinstance(errorCatcher, (string_type, type)):
+            if isinstance(errorCatcher, (str, type)):
                 err = False
             if isinstance(errorCatcher, type) and \
                     issubclass(errorCatcher, ErrorCatchers.ErrorCatcher):
@@ -1582,7 +1547,7 @@ class Template(Servlet):
         # @@TR: consider allowing simple callables as the filter argument
         self._CHEETAH__filtersLib = filtersLib
         self._CHEETAH__filters = {}
-        if isinstance(filter, string_type):
+        if isinstance(filter, str):
             filterName = filter
             klass = getattr(self._CHEETAH__filtersLib, filterName)
         else:
@@ -1594,7 +1559,7 @@ class Template(Servlet):
 
         self._CHEETAH__errorCatchers = {}
         if errorCatcher:
-            if isinstance(errorCatcher, string_type):
+            if isinstance(errorCatcher, str):
                 errorCatcherClass = getattr(ErrorCatchers, errorCatcher)
             elif isinstance(errorCatcher, type):
                 errorCatcherClass = errorCatcher
@@ -1630,7 +1595,7 @@ class Template(Servlet):
         self._fileMtime = None
         self._fileDirName = None
         self._fileBaseName = None
-        if file and isinstance(file, string_type):
+        if file and isinstance(file, str):
             file = self.serverSidePath(file)
             self._fileMtime = os.path.getmtime(file)
             self._fileDirName, self._fileBaseName = os.path.split(file)
@@ -1670,7 +1635,7 @@ class Template(Servlet):
             if not raw:
                 if includeFrom == 'file':
                     source = None
-                    if isinstance(srcArg, string_type):
+                    if isinstance(srcArg, str):
                         if hasattr(self, 'serverSidePath'):
                             file = path = self.serverSidePath(srcArg)
                         else:
@@ -1982,7 +1947,7 @@ Template.Reserved_SearchList = set(dir(Template))
 def genParserErrorFromPythonException(source, file,
                                       generatedPyCode, exception):
 
-    filename = isinstance(file, (str, unicode)) and file or None
+    filename = isinstance(file, str) and file or None
 
     sio = StringIO()
     traceback.print_exc(1, sio)

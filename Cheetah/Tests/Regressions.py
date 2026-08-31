@@ -6,7 +6,6 @@ except ImportError:  # Python 3.8+
 import unittest
 import Cheetah.NameMapper
 import Cheetah.Template
-from Cheetah.compat import unicode  # noqa
 
 
 class GetAttrException(Exception):
@@ -223,7 +222,7 @@ class Mantis_Issue_22_Regression_Test(unittest.TestCase):
             _dummyTrans = True
             write = trans.response().write
             SL = [KWS]
-            _filter = lambda x, **kwargs: unicode(x)
+            _filter = lambda x, **kwargs: str(x)
 
             ########################################
             ## START - generated method body

@@ -144,13 +144,9 @@ from pprint import pformat
 import inspect
 import sys
 
-from .compat import PY2
-if PY2:
-    from collections import Mapping
-else:
-    from collections.abc import Mapping
-    if sys.version_info[:2] >= (3, 13):
-        from collections.abc import MutableMapping
+from collections.abc import Mapping
+if sys.version_info[:2] >= (3, 13):
+    from collections.abc import MutableMapping
 
 _INCLUDE_NAMESPACE_REPR_IN_NOTFOUND_EXCEPTIONS = False
 _ALLOW_WRAPPING_OF_NOTFOUND_EXCEPTIONS = True
@@ -162,11 +158,6 @@ __all__ = ['NotFound',
            'valueFromFrameOrSearchList',
            'valueFromFrame',
            ]
-
-if PY2 and not hasattr(inspect.imp, 'get_suffixes'):
-    # This is to fix broken behavior of the inspect module under the
-    # Google App Engine
-    setattr(inspect.imp, 'get_suffixes', lambda: [('.py', 'U', 1)])
 
 # N.B. An attempt is made at the end of this module to import C versions of
 # these functions.  If _namemapper.c has been compiled succesfully and the

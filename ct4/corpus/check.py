@@ -106,7 +106,7 @@ def render(case: Case) -> str:
     kwargs = {"filter": filter_class} if filter_class else {}
     template = template_class(searchList=namespaces.build(case), **kwargs)
     try:
-        return template.respond()
+        return str(template.respond())
     finally:
         template.shutdown()
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-import os
+"""Nur noch fuer die C-Erweiterung da.
 
-try:
-    os.remove('MANIFEST')  # to avoid those bloody out-of-date manifests!!
-except Exception:
-    pass
+Alles Uebrige steht in pyproject.toml. setuptools kann Erweiterungen
+bisher nicht rein deklarativ beschreiben, deshalb bleibt diese Datei.
+"""
 
-import SetupTools
-import SetupConfig
-configurations = (SetupConfig,)
-SetupTools.run_setup(configurations)
+from setuptools import Extension, setup
+
+setup(
+    ext_modules=[
+        Extension("Cheetah._namemapper", ["Cheetah/c/_namemapper.c"]),
+    ],
+)

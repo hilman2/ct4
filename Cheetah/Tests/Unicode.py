@@ -7,7 +7,7 @@ import unittest
 from Cheetah.Compiler import Compiler
 from Cheetah.Template import Template
 from Cheetah import CheetahWrapper
-from Cheetah.compat import PY2, unicode, load_module_from_file
+from Cheetah.compat import load_module_from_file
 
 
 class CommandLineTest(unittest.TestCase):
@@ -16,10 +16,7 @@ class CommandLineTest(unittest.TestCase):
         try:
             sourcefile = os.path.join(tmpDir, "source")
 
-            if PY2:
-                fd = open('%s.tmpl' % sourcefile, 'w')
-            else:
-                fd = open('%s.tmpl' % sourcefile, 'w', encoding='utf-8')
+            fd = open('%s.tmpl' % sourcefile, 'w', encoding='utf-8')
             fd.write(source)
             fd.close()
 
@@ -49,7 +46,7 @@ class JBQ_UTF8_Test1(unittest.TestCase):
         t.v = u'Unicode String'
         t.other.v = u'Unicode String'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test2(unittest.TestCase):
@@ -65,7 +62,7 @@ class JBQ_UTF8_Test2(unittest.TestCase):
         t.v = u'Unicode String with eacute é'
         t.other.v = u'Unicode String'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test3(unittest.TestCase):
@@ -81,7 +78,7 @@ class JBQ_UTF8_Test3(unittest.TestCase):
         t.v = u'Unicode String with eacute é'
         t.other.v = u'Unicode String and an eacute é'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test4(unittest.TestCase):
@@ -91,7 +88,7 @@ class JBQ_UTF8_Test4(unittest.TestCase):
 
         t.v = 'Unicode String'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test5(unittest.TestCase):
@@ -101,7 +98,7 @@ class JBQ_UTF8_Test5(unittest.TestCase):
 
         t.v = u'Unicode String'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test6(unittest.TestCase):
@@ -113,7 +110,7 @@ class JBQ_UTF8_Test6(unittest.TestCase):
 
         t.v = u'Unicode String'
 
-        assert unicode(t())
+        assert str(t())
 
 
 class JBQ_UTF8_Test7(CommandLineTest):
@@ -125,7 +122,7 @@ class JBQ_UTF8_Test7(CommandLineTest):
         template = self.createAndCompile(source)
         template.v = u'Unicode String'
 
-        assert unicode(template())
+        assert str(template())
 
 
 class JBQ_UTF8_Test8(CommandLineTest):
@@ -136,9 +133,7 @@ $someUnicodeString"""
 
         template = self.createAndCompile(source)()
 
-        a = unicode(template)
-        if PY2:
-            a = a.encode("utf-8")
+        a = str(template)
         self.assertEqual("Bébé", a)
 
     def testDynamicCompile(self):
@@ -148,9 +143,7 @@ $someUnicodeString"""
 
         template = Template(source=source)
 
-        a = unicode(template)
-        if PY2:
-            a = a.encode("utf-8")
+        a = str(template)
         self.assertEqual("Bébé", a)
 
 
@@ -164,8 +157,8 @@ class EncodeUnicodeCompatTest(unittest.TestCase):
         t.var = u"Text with some non-ascii characters: åäö"
 
         rc = t.respond()
-        assert isinstance(rc, unicode), \
-            ('Template.respond() should return unicode', rc)
+        assert isinstance(rc, str), \
+            ('Template.respond() should return str', rc)
 
         rc = str(t)
         assert isinstance(rc, str), \
@@ -230,15 +223,6 @@ class InlineSpanishTest(unittest.TestCase):
 </html>
         '''  # noqa
 
-    if PY2:  # In PY3 templates are already unicode
-        def test_failure(self):
-            """ Test a template lacking a proper #encoding tag """
-            self.assertRaises(UnicodeDecodeError, Template, self.template,
-                              searchList=[{'header': '',
-                                           'nombre': '',
-                                           'numpedidos_bodega': '',
-                                           'numpedidos_noconf': ''}])
-
     def test_success(self):
         """ Test a template with a proper #encoding tag """
         template = '#encoding utf-8\n%s' % self.template
@@ -246,7 +230,7 @@ class InlineSpanishTest(unittest.TestCase):
                                                    'nombre': '',
                                                    'numpedidos_bodega': '',
                                                    'numpedidos_noconf': ''}])
-        self.assertTrue(unicode(template))
+        self.assertTrue(str(template))
 
 
 class CompilerTest(unittest.TestCase):

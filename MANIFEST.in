@@ -1,8 +1,4 @@
-global-include *.py *.rst *.txt
 recursive-include Cheetah *.tmpl *.h *.c
-recursive-include bin *
-recursive-include docs *.css *.html *.js *.gif *.png
-include BUGS LICENSE MANIFEST.in TODO buildandrun tox.ini
-include docs/genapidocs docs/Makefile docs/make.bat docs/rebuild
+include BUGS LICENSE MANIFEST.in TODO.old tox.ini
 recursive-exclude devscripts *
 recursive-exclude docs/_build *

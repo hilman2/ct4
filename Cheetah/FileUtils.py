@@ -4,7 +4,6 @@ import os
 import os.path
 import re
 from tempfile import NamedTemporaryFile
-from .compat import string_type
 
 
 def _escapeRegexChars(
@@ -229,11 +228,11 @@ class FindAndReplace:
     def __init__(self, files, patternOrRE, replacement,
                  recordResults=True):
 
-        if isinstance(patternOrRE, string_type):
+        if isinstance(patternOrRE, str):
             self._regex = re.compile(patternOrRE)
         else:
             self._regex = patternOrRE
-        if isinstance(replacement, string_type):
+        if isinstance(replacement, str):
             self._subber = _GenSubberFunc(replacement).subberFunc()
         else:
             self._subber = replacement
@@ -272,7 +271,10 @@ class FindAndReplace:
             self._currFile = file
             found = False
             if 'orig' in locals():
-                del orig
+                # 'orig' entsteht erst weiter unten, je nach Zweig. Der
+                # Namensraum wird deshalb zur Laufzeit befragt, und
+                # statisch ist der Name an dieser Stelle unbekannt.
+                del orig  # noqa: F821
             if self._usePgrep:
                 if os.popen('pgrep "' + pattern + '" ' + file).read():
                     found = True

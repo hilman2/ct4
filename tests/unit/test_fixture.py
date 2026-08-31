@@ -134,3 +134,16 @@ def test_gebundene_methode_wird_weiter_aufgerufen():
     lebendig = rendern(Recorder(MitMethode(), baum))
     assert lebendig == "2.0"
     assert rendern(replay(json.loads(json.dumps(baum)))) == lebendig
+
+
+def test_fehlender_schluessel_meldet_keyerror():
+    # Cheetah prueft Namensraeume mit einem Schluesselzugriff. Ein
+    # AttributeError an dieser Stelle laesst CPython eine ignorierte
+    # Ausnahme melden, und der Lauf rauscht zu.
+    baum = {}
+    _rendern(Recorder(Tag(), baum))
+    knoten = replay(baum)
+    with pytest.raises(KeyError):
+        knoten["gibtsnicht"]
+    with pytest.raises(AttributeError):
+        knoten.gibtsnicht

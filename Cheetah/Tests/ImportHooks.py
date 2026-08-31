@@ -4,7 +4,7 @@ import shutil
 import sys
 import unittest
 import Cheetah.ImportHooks
-from Cheetah.compat import PY2, cache_from_source
+from Cheetah.compat import cache_from_source
 
 
 ImportHooksTemplatesDir = os.path.join(
@@ -69,9 +69,8 @@ class ImportHooksTest(unittest.TestCase):
         cdo.getmod('layout')  # Compiled to layout.py and .pyc
         files = os.listdir(ImportHooksTemplatesDir)
         self.assertIn('layout.py', files)
-        if not PY2:
-            files = os.listdir(
-                os.path.join(ImportHooksTemplatesDir, '__pycache__'))
+        files = os.listdir(
+            os.path.join(ImportHooksTemplatesDir, '__pycache__'))
         self.assertIn(os.path.basename(cache_from_source('layout.py')), files)
 
     def test_ImportHooks(self):
@@ -83,9 +82,8 @@ class ImportHooksTest(unittest.TestCase):
         files = os.listdir(ImportHooksTemplatesDir)
         self.assertIn('index.py', files)
         self.assertIn('layout.py', files)
-        if not PY2:
-            files = os.listdir(
-                os.path.join(ImportHooksTemplatesDir, '__pycache__'))
+        files = os.listdir(
+            os.path.join(ImportHooksTemplatesDir, '__pycache__'))
         self.assertIn(os.path.basename(cache_from_source('index.py')), files)
         self.assertIn(os.path.basename(cache_from_source('layout.py')), files)
 
@@ -99,7 +97,7 @@ class ImportHooksTest(unittest.TestCase):
 
     # _bootlocale was removed in Python 3.10:
     # https://bugs.python.org/issue42208
-    if not PY2 and sys.version_info < (3, 10):
+    if sys.version_info < (3, 10):
         def test_import_bootlocale(self):
             if '_bootlocale' in sys.modules:
                 del sys.modules['_bootlocale']

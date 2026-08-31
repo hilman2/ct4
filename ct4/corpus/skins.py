@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from typing import Iterator
 
 from ct4.corpus.case import COMPILE, Case
 
@@ -22,7 +23,7 @@ from ct4.corpus.case import COMPILE, Case
 SUFFIXES = (".tmpl", ".inc")
 
 
-def harvest(root: Path, name: str) -> tuple[list[Case], Counter]:
+def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
     """Uebersetzt jede Vorlage unter ``root`` und legt sie als Fall ab.
 
     ``name`` wird der Namensraum der Fall-Kennungen, damit sich ein Skin
@@ -59,6 +60,6 @@ def harvest(root: Path, name: str) -> tuple[list[Case], Counter]:
     return cases, skipped
 
 
-def _templates(root: Path):
+def _templates(root: Path) -> Iterator[Path]:
     for suffix in SUFFIXES:
         yield from root.rglob("*" + suffix)

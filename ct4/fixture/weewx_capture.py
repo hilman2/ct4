@@ -65,7 +65,7 @@ def install() -> None:
     original_prep = CheetahGenerator._prepGen
     original_list = CheetahGenerator._getSearchList
 
-    def _prepGen(self, report_dict):
+    def _prepGen(self: Any, report_dict: Any) -> tuple[Any, ...]:
         template, destination, encoding, binding = original_prep(
             self, report_dict)
         # Beide Angaben braucht erst _getSearchList, das sie nicht
@@ -81,8 +81,9 @@ def install() -> None:
         # verlangte vom Pruefstand, weewx' Kodierer nachzubauen.
         return template, destination, "utf8", binding
 
-    def _getSearchList(self, encoding, timespan, default_binding,
-                       section_name, file_name):
+    def _getSearchList(self: Any, encoding: Any, timespan: Any,
+                       default_binding: Any, section_name: Any,
+                       file_name: str) -> list[Any]:
         search_list = original_list(self, encoding, timespan,
                                     default_binding, section_name, file_name)
         trees: list[dict[str, Any]] = []

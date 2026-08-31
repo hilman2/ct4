@@ -137,10 +137,11 @@ def harvest() -> Report:
     baseline_environ = dict(os.environ)
     empty_dir = tempfile.mkdtemp(prefix="ct4-corpus-")
 
-    def recording_verify(self, input, expectedOutput,      # noqa: A002
-                         inputEncoding=None,
-                         outputEncoding=None,
-                         convertEOLs=syntax.Unspecified):
+    def recording_verify(self: Any, input: str,            # noqa: A002
+                         expectedOutput: str,
+                         inputEncoding: Any = None,
+                         outputEncoding: Any = None,
+                         convertEOLs: Any = syntax.Unspecified) -> None:
         original(self, input, expectedOutput, inputEncoding,
                  outputEncoding, convertEOLs)
         _record(self, input, expectedOutput, convertEOLs,
@@ -160,7 +161,7 @@ def harvest() -> Report:
 
 
 def _record(test: Any, source: str, expected: str, convert: Any,
-            syntax: Any, report: Report, seen: Counter,
+            syntax: Any, report: Report, seen: Counter[str],
             baseline_environ: dict[str, str], empty_dir: str) -> None:
     """Legt einen durchgelaufenen Vergleich als Korpusfall ab."""
     settings = encode(test._getCompilerSettings())

@@ -11,7 +11,6 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
-from .compat import PY2
 
 
 numberRE = re.compile(Number)
@@ -150,10 +149,7 @@ class _SettingsCollector(object):
         """
 
         p = self._ConfigParserClass()
-        if PY2:
-            p.readfp(inFile)
-        else:
-            p.read_file(inFile)
+        p.read_file(inFile)
         sects = p.sections()
         newSettings = {}
 

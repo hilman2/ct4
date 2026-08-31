@@ -745,6 +745,31 @@ Abschnitt 14.
 **Fertig, wenn:** Korpus weiter bei 100 Prozent, Wheels für alle Zielplattformen,
 weewx läuft unverändert gegen ct4.
 
+Stand 31-Aug-2026:
+
+| | |
+|---|---|
+| Korpus | 1.772 Fälle, beide Seiten 100 Prozent |
+| ct3-Testsuite gegen den Fork | 2.186 Tests, alle grün |
+| weewx gegen ct3 und gegen ct4 | 80 erzeugte Seiten, byte-identisch |
+| ruff, mypy strict auf `ct4` | ohne Befund |
+
+Der Umbau des Build-Systems hat nebenbei einen Fehler gefunden: `SetupTools.py`
+importierte `distutils` direkt, das es seit Python 3.12 nicht mehr gibt. Das ging
+nur, weil setuptools einen Ersatz einhängt. Beide Dateien sind weg, alles steht
+in `pyproject.toml`.
+
+Von ruffs Vorgabe sind bewusst nur `E`, `W` und `F` aktiv, also das, was das
+Projekt mit flake8 hatte. Die übrigen Familien meldeten 785 Stellen in fremdem
+Code, darunter 273 Aufrufe von `%`-Formatierung. Das ist eine eigene
+Entscheidung und gehört nicht in einen Umbau des Build-Systems.
+
+Zwei Dinge, die P1 nicht erledigt hat: die Testsuite von ct3 läuft weiter über
+ihren eigenen Runner, weil ihre Klassen nicht nach pytest-Muster heissen und
+`install_eols()` die Zeilenende-Varianten erst zur Laufzeit erzeugt. Und
+`py.typed` fehlt, weil `Cheetah` keine Annotationen hat; die Marke käme sonst
+einer Zusage gleich, die niemand einlöst.
+
 ### P2 — JSON-Modus
 
 Der Schwerpunkt, und er kommt früh, weil sein Parser klein ist und nicht auf den

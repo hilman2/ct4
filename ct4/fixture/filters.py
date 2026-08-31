@@ -24,7 +24,7 @@ from Cheetah.Filters import Filter
 NAMES: dict[str, type] = {}
 
 
-class WeewxAssureUnicode(Filter):
+class WeewxAssureUnicode(Filter):  # type: ignore[misc]
     """Nachbildung von ``weewx.cheetahgenerator.AssureUnicode``."""
 
     def filter(self, val: Any, **kwargs: Any) -> str:
@@ -37,7 +37,7 @@ class WeewxAssureUnicode(Filter):
         try:
             return str(val)
         except AttributeError as exc:
-            return kwargs.get("rawExpr", str(exc) + "?")
+            return str(kwargs.get("rawExpr", str(exc) + "?"))
 
 
 NAMES["weewx.AssureUnicode"] = WeewxAssureUnicode

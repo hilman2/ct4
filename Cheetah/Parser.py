@@ -16,13 +16,9 @@ import inspect
 from .SourceReader import SourceReader
 from .Unspecified import Unspecified
 from .Macros.I18n import I18n
-from .compat import PY2, string_type, unicode
-if PY2:
-    from tokenize import pseudoprog
-else:
-    from tokenize import _compile, PseudoToken
-    pseudoprog = _compile(PseudoToken)
-    del _compile, PseudoToken
+from tokenize import _compile, PseudoToken
+pseudoprog = _compile(PseudoToken)
+del _compile, PseudoToken
 
 # re tools
 _regexCache = {}
@@ -378,14 +374,11 @@ class ArgList(object):
         self.defaults[count] += token
 
     def merge(self):
-        defaults = (isinstance(d, string_type) and d.strip() or None
+        defaults = (isinstance(d, str) and d.strip() or None
                     for d in self.defaults)
         arguments = (a.strip() for a in self.arguments)
-        if PY2:
-            return list(map(None, arguments, defaults))
-        else:
-            from itertools import zip_longest
-            return list(zip_longest(arguments, defaults))
+        from itertools import zip_longest
+        return list(zip_longest(arguments, defaults))
 
     def __str__(self):
         return str(self.merge())
@@ -656,7 +649,7 @@ class _LowLevelParser(SourceReader):
         pieces = []
         nameChunks = []
 
-        if not self.peek() in identchars:
+        if self.peek() not in identchars:
             raise ParseError(self)
 
         while self.pos() < srcLen:
@@ -687,7 +680,7 @@ class _LowLevelParser(SourceReader):
         srcLen = len(self)
         nameChunks = []
 
-        if not self.peek() in identchars:
+        if self.peek() not in identchars:
             raise ParseError(self)
 
         while self.pos() < srcLen:
@@ -940,7 +933,7 @@ class _LowLevelParser(SourceReader):
         while self.pos() < len(self):
             rest = ''
             autoCall = True
-            if not self.peek() in identchars + '.':
+            if self.peek() not in identchars + '.':
                 break
             elif self.peek() == '.':
 
@@ -1424,7 +1417,7 @@ class _HighLevelParser(_LowLevelParser):
 
     def _initDirectives(self):
         def normalizeParserVal(val):
-            if isinstance(val, (str, unicode)):
+            if isinstance(val, str):
                 handler = getattr(self, val)
             elif isinstance(val, type):
                 handler = val(self)

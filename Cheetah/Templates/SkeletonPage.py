@@ -25,7 +25,6 @@ from Cheetah.NameMapper import NotFound, valueForName, valueFromSearchList, valu
 from Cheetah.CacheRegion import CacheRegion
 import Cheetah.Filters as Filters
 import Cheetah.ErrorCatchers as ErrorCatchers
-from Cheetah.compat import unicode
 from Cheetah.Templates._SkeletonPage import _SkeletonPage
 
 ##################################################

@@ -9,7 +9,6 @@ specific DummyTransaction or DummyResponse behavior
 '''
 
 import logging
-from .compat import unicode
 
 
 class DummyResponseFailure(Exception):
@@ -33,7 +32,7 @@ class DummyResponse(object):
         # I've found to ensure I get a legit unicode object
         if not chunk:
             return u''
-        if isinstance(chunk, unicode):
+        if isinstance(chunk, str):
             return chunk
         try:
             return chunk.decode('utf-8', 'strict')
@@ -43,7 +42,7 @@ class DummyResponse(object):
             except UnicodeDecodeError:
                 return chunk.decode('ascii', 'ignore')
         except AttributeError:
-            return unicode(chunk, errors='ignore')
+            return str(chunk, errors='ignore')
         return chunk
 
     def write(self, value):

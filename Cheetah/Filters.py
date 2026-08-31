@@ -6,7 +6,6 @@
     #filter results in output filters Cheetah's $placeholders .
     #transform results in a filter on the entirety of the output
 '''
-from .compat import unicode
 
 # Additional entities WebSafe knows how to transform.  No need to include
 # '<', '>' or '&' since those will have been done already.
@@ -32,12 +31,12 @@ class Filter(object):
         '''
         if val is None:
             return u''
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             # ignore the encoding and return the unicode object
             return val
         else:
             try:
-                return unicode(val)
+                return str(val)
             except UnicodeDecodeError:
                 # we could put more fallbacks here, but we'll just pass the str
                 # on and let DummyTransaction worry about it

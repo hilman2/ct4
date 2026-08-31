@@ -29,7 +29,7 @@ falsche gruene Pruefung.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 # Werte, die ohne Umweg als JSON liegen koennen. Alles andere wird ueber
 # str() und seine Attribute beschrieben.
@@ -140,6 +140,11 @@ class Recorder:
 
 
 class _Subscriptable:
+    _target: Any
+    _path: str
+    tree: dict[str, Any]
+    _child: Callable[..., Any]
+
     def __getitem__(self, key: Any) -> Any:
         if not isinstance(key, str):
             # Ein Index in eine Liste fuehrt ueber items, nicht ueber
@@ -153,6 +158,11 @@ class _Subscriptable:
 
 
 class _Iterable:
+    _target: Any
+    _path: str
+    tree: dict[str, Any]
+    _child: Callable[..., Any]
+
     def __iter__(self) -> Iterator[Any]:
         items = self.tree.setdefault(ITEMS, {})
         for index, element in enumerate(self._target):
@@ -161,11 +171,21 @@ class _Iterable:
 
 
 class _Sized:
+    _target: Any
+    _path: str
+    tree: dict[str, Any]
+    _child: Callable[..., Any]
+
     def __len__(self) -> int:
         return len(self._target)
 
 
 class _Callable:
+    _target: Any
+    _path: str
+    tree: dict[str, Any]
+    _child: Callable[..., Any]
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # Ohne Trennzeichen: ein Aufruf haengt direkt am Namen, und der
         # Pfad muss dem entsprechen, den CallableReplay bildet. Sonst
@@ -196,7 +216,7 @@ def _recorder_class(target: Any) -> type:
     return _CLASSES[caps]
 
 
-def _signature(args: tuple, kwargs: dict) -> str:
+def _signature(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
     """Ein stabiler Schluessel fuer einen Aufruf.
 
     ``repr`` reicht fuer Zahlen und Zeichenketten (``$span(day_delta=1)``).
@@ -259,7 +279,14 @@ class Replay:
         if not isinstance(key, str):
             items = self._tree.get(ITEMS, {})
             return replay(items[str(key)], "%s[%s]" % (self._path, key))
-        return self._lookup(key)
+        try:
+            return self._lookup(key)
+        except Missing as exc:
+            # Ein Schluesselzugriff, der ins Leere geht, meldet KeyError.
+            # Missing ist ein AttributeError, und den erwartet
+            # PyMapping_HasKeyString nicht: es meldet ihn als ignorierte
+            # Ausnahme, und der Lauf rauscht zu.
+            raise KeyError(str(exc)) from None
 
     def __contains__(self, key: Any) -> bool:
         return str(key) in self._tree.get(ATTRS, {})
@@ -278,7 +305,7 @@ class Replay:
         if TEXT not in self._tree:
             raise Missing(
                 "%s wurde beim Aufzeichnen nie ausgegeben" % self._path)
-        return self._tree[TEXT]
+        return str(self._tree[TEXT])
 
     def _lookup(self, name: str) -> Any:
         try:
@@ -308,7 +335,7 @@ class CallableReplay(Replay):
         return replay(child, "%s%s" % (self._path, key))
 
 
-def _rebuild(recorded: list) -> Exception:
+def _rebuild(recorded: list[str]) -> Exception:
     """Baut eine aufgezeichnete Ausnahme nach.
 
     Der Typ zaehlt, nicht nur die Meldung: weewx' Ausgabefilter faengt
@@ -319,7 +346,7 @@ def _rebuild(recorded: list) -> Exception:
 
     name, message = recorded
     kind = getattr(builtins, name, None)
-    if not (isinstance(kind, type) and issubclass(kind, BaseException)):
+    if not (isinstance(kind, type) and issubclass(kind, Exception)):
         kind = RuntimeError
         message = "%s: %s" % (name, message)
     return kind(message)

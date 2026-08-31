@@ -258,7 +258,7 @@ class SourceReader(object):
         return self.src()[start:self.pos()]
 
     def matchNonWhiteSpace(self, WSchars=' \f\t\n\r'):
-        return self.atEnd() or not self.peek() in WSchars
+        return self.atEnd() or self.peek() not in WSchars
 
     def getNonWhiteSpace(self, WSchars=' \f\t\n\r'):
         if not self.matchNonWhiteSpace(WSchars):

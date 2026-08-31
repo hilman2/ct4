@@ -14,7 +14,7 @@ from pathlib import Path
 from ct4.corpus.case import FIXTURE, RENDER, Case
 
 
-def harvest(root: Path, name: str) -> tuple[list[Case], Counter]:
+def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
     """Liest die Aufzeichnungen unter ``root`` und macht Faelle daraus."""
     cases: list[Case] = []
     skipped: Counter[str] = Counter()

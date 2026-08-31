@@ -503,7 +503,7 @@ class VFF(VFN):
         self.check('None')
         self.check('False')
         assert self.get('eval', False) == eval
-        assert self.get('range', False) == range
+        assert self.get('range', False) is range
 
 
 class VFFSL(VFS):

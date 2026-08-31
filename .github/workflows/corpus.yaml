@@ -1,27 +1,16 @@
 name: Korpus
 
-# Prueft, ob ct4 dieselbe Ausgabe liefert wie das ausgelieferte ct3.
-# Gelaufen wird ueber dieselbe Compose-Datei wie lokal, damit die
-# Umgebung an genau einer Stelle beschrieben ist.
+# Prueft, ob ct4 dieselbe Ausgabe liefert wie das ausgelieferte ct3, und
+# laesst Linter, Typpruefung und beide Testsuiten laufen. Gelaufen wird
+# ueber dieselbe Compose-Datei wie lokal, damit die Umgebung an genau
+# einer Stelle beschrieben ist.
 
 on: [push, pull_request]
 
 jobs:
-  corpus:
-    name: ct4 gegen ct3
-    runs-on: ubuntu-latest
+  alles:
+    name: Lint, Tests, Korpus
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - name: Pruefstand laufen lassen
-        run: docker compose -f tests/docker/compose.yml run --rm tests
-
-  lint:
-    name: flake8 ueber ct4
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install flake8
-      - run: flake8 ct4/
+      - run: docker compose -f tests/docker/compose.yml run --rm tests
