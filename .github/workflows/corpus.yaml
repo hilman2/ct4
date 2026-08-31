@@ -8,7 +8,7 @@ name: Corpus
 on: [push, pull_request]
 
 jobs:
-  alles:
+  all:
     name: Lint, tests, corpus
     runs-on: ubuntu-24.04
     steps:
