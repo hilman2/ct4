@@ -80,7 +80,7 @@ run_bench() {
     python tests/bench/render.py --json > /tmp/reference.json
     PYTHONPATH=/work python tests/bench/render.py --json > /tmp/fork.json
     PYTHONPATH=/work python tests/bench/compare.py \
-        /tmp/reference.json /tmp/fork.json
+        /tmp/reference.json /tmp/fork.json --check
 }
 
 # A year of archive records at five-minute intervals, ten values each.
@@ -111,6 +111,7 @@ case "$WHAT" in
     bench)   run_bench ;;
     large)   run_large ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
-             run_check; echo; run_evals; echo; run_corpus ;;
+             run_check; echo; run_evals; echo; run_bench; echo
+             run_corpus ;;
     *)       echo "Unknown: $WHAT" >&2; exit 2 ;;
 esac
