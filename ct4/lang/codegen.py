@@ -15,14 +15,19 @@ has to be re-escaped by hand.
 What it can do today: text, comments, escapes, placeholders with their
 call and subscript chains, and #for, #if, #while, #unless, #repeat,
 #try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
-and #from, in their block form and in the colon short form. That is
-823 of the 1636 render cases.
+#from, #def and #block, in their block form and in the colon short
+form. That is 883 of the 1636 render cases.
 
-What it turns away, in the order the corpus says it costs most: #def
-and #block, which are methods rather than statements; the cache token;
-PSP; #include and #extends, which need a template to include into; and
-the chained short form, where an #else on the next line joins an #if
-that has already closed.
+What it generates is a subclass of ct3's Template, not a plain
+function. A #def has to be a method, and $self and $getVar have to
+resolve, and both need the instance that ct3 puts in the template's
+own search list.
+
+What it turns away, in the order the corpus says it costs most: the
+cache token; PSP; #include and #extends, which need a template to
+include into; #filter and #call, which change how the output is
+written; and the chained short form, where an #else on the next line
+joins an #if that has already closed.
 """
 
 from __future__ import annotations
@@ -41,7 +46,8 @@ SEARCH_LIST = "SL"
 FILTER = "_filter"
 VALUE = "_v"
 WRITE = "write"
-FUNCTION = "_ct4_render"
+CLASS = "_Ct4Template"
+MAIN = "respond"
 
 # A placeholder this layer understands: a dollar, then a dotted name,
 # optionally wrapped in one of the three enclosures. ct3 generates the
@@ -74,30 +80,6 @@ def _plain_path(text: str) -> str | None:
 
 # What a placeholder starts with and this layer does not read yet.
 MODIFIERS = re.compile(r"^\$[!*]")
-
-_template_names: frozenset[str] | None = None
-
-
-def template_names() -> frozenset[str]:
-    """Names a template gets from the Template object it runs inside.
-
-    ct3 renders a template as a method, so its own search list holds
-    the instance: $getVar('x') and $self.foo resolve against it. What
-    this layer generates is a plain function with no instance anywhere,
-    so those names cannot resolve and the template has to be refused
-    rather than rendered wrong.
-
-    Read off the class rather than listed here, so a name added to
-    Template does not quietly become a wrong answer.
-    """
-    global _template_names
-
-    if _template_names is None:
-        from Cheetah.Template import Template
-
-        _template_names = frozenset(dir(Template)) | {"self", "trans"}
-    return _template_names
-
 
 @dataclass(frozen=True)
 class Chunk:
@@ -167,11 +149,7 @@ def chunks_of(text: str) -> list[Chunk] | None:
         return None
     if names:
         found.append(Chunk(".".join(names), True, ""))
-    if not found:
-        return None
-    if found[0].name.split(".")[0] in template_names():
-        return None
-    return found
+    return found or None
 
 
 def _brackets(text: str, index: int) -> tuple[str | None, int]:
@@ -189,14 +167,58 @@ SILENT_KINDS = frozenset({lex.COMMENT, lex.BLOCK_COMMENT})
 
 # The frame the generated body is put into. Parsed, not assembled, so
 # that whichever Python runs this fills in its own fields.
+#
+# A class and not a function, because #def has to become a method and
+# because $self and $getVar resolve against the instance, which ct3
+# puts in the template's own search list.
 SKELETON = """\
+from Cheetah.DummyTransaction import DummyTransaction
 from Cheetah.NameMapper import valueForName as VFN
 from Cheetah.NameMapper import valueFromFrameOrSearchList as VFFSL
+from Cheetah.Template import Template
 
 
-def %s(%s, %s):
+class %s(Template):
     pass
-""" % (FUNCTION, SEARCH_LIST, FILTER)
+""" % CLASS
+
+# What every generated method opens with, ct3's prologue word for word.
+# The transaction is its own because a method can be called on its own,
+# and then it collects into a throwaway response and returns the text.
+PROLOGUE = """\
+def %%s(self, %%s**KWS):
+    trans = KWS.get("trans")
+    if (not trans and not self._CHEETAH__isBuffering
+            and not callable(self.transaction)):
+        trans = self.transaction
+    if not trans:
+        trans = DummyTransaction()
+        _dummyTrans = True
+    else:
+        _dummyTrans = False
+    write = trans.response().write
+    %s = self._CHEETAH__searchList
+    %s = self._CHEETAH__currentFilter
+    pass
+    return _dummyTrans and trans.response().getvalue() or ""
+""" % (SEARCH_LIST, FILTER)
+
+
+def _method(name: str, arguments: str,
+            body: list[ast.stmt]) -> ast.stmt:
+    """One generated method, with the body in ct3's frame."""
+    try:
+        made = ast.parse(PROLOGUE % (name, arguments)).body[0]
+    except SyntaxError as error:
+        # A parameter list this layer cannot read must be refused, not
+        # let out as a SyntaxError: a caller falls back on Unsupported
+        # and crashes on anything else.
+        raise Unsupported("cannot read the arguments of #def %s: %s"
+                          % (name, error)) from None
+    assert isinstance(made, ast.FunctionDef)
+    # The lone "pass" between the prologue and the return.
+    made.body[-2:-1] = body
+    return made
 
 
 class Unsupported(Exception):
@@ -216,10 +238,10 @@ class Generated:
     module: ast.Module
 
     def compile(self) -> Any:
-        """The callable, ready to be handed a search list and a filter."""
+        """The template class, ready to be given a search list."""
         namespace: dict[str, Any] = {}
         exec(compile(self.module, "<ct4>", "exec"), namespace)
-        return namespace[FUNCTION]
+        return namespace[CLASS]
 
 
 def supports(source: str) -> bool:
@@ -242,26 +264,15 @@ def generate(source: str) -> Generated:
     _refuse_preprocessed(source)
     root = tree.parse(source)
     hoisted: list[ast.stmt] = []
-    body: list[ast.stmt] = [
-        _assign("_out", ast.List(elts=[], ctx=ast.Load())),
-        _assign(WRITE, _attribute("_out", "append")),
-    ]
-    body.extend(_statements(_pieces(root, source, hoisted)))
-    body.append(ast.Return(
-        value=ast.Call(func=_attribute_of(ast.Constant(""), "join"),
-                       args=[ast.Name(id="_out", ctx=ast.Load())],
-                       keywords=[])))
-    # The frame is parsed rather than assembled. ast.FunctionDef has
-    # gained fields between Python versions, type_params in 3.12 among
-    # them, and this project runs from 3.10. Parsing a skeleton gets
-    # every field right for whichever version is running it.
+    methods: list[ast.stmt] = []
+    body = _statements(_pieces(root, source, hoisted, methods))
     module = ast.parse(SKELETON)
-    # Before the function, the way ct3 puts them at module level. An
-    # import inside the body would run on every render.
+    # Before the class, the way ct3 puts them at module level. An
+    # import inside a method would run on every render.
     module.body[-1:-1] = hoisted
-    function = module.body[-1]
-    assert isinstance(function, ast.FunctionDef)
-    function.body = body
+    made = module.body[-1]
+    assert isinstance(made, ast.ClassDef)
+    made.body = methods + [_method(MAIN, "", body)]
     ast.fix_missing_locations(module)
     return Generated(ast.unparse(module), module)
 
@@ -269,11 +280,13 @@ def generate(source: str) -> Generated:
 def render(source: str, search_list: Sequence[Any],
            output_filter: Any = None) -> str:
     """Generates, runs, and returns what the template produces."""
-    if output_filter is None:
-        from Cheetah.Filters import Filter
-
-        output_filter = Filter().filter
-    text: str = generate(source).compile()(list(search_list), output_filter)
+    klass = generate(source).compile()
+    keywords = {"filter": output_filter} if output_filter else {}
+    template = klass(searchList=list(search_list), **keywords)
+    try:
+        text: str = str(template.respond())
+    finally:
+        template.shutdown()
     return text
 
 
@@ -316,12 +329,14 @@ BRANCHES = ("else", "elif")
 
 
 def _pieces(root: tree.Node, source: str,
-            hoisted: list[ast.stmt]) -> list[tuple[str, Any]]:
-    return _pieces_of(root.children, source, hoisted)
+            hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> list[tuple[str, Any]]:
+    return _pieces_of(root.children, source, hoisted, methods)
 
 
 def _pieces_of(nodes: Sequence[tree.Node], source: str,
-               hoisted: list[ast.stmt]) -> list[tuple[str, Any]]:
+               hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> list[tuple[str, Any]]:
     """The output of a template, as text and values in order.
 
     A comment writes nothing, but it decides what happens to the
@@ -349,6 +364,12 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
         elif node.kind == lex.BLOCK_COMMENT:
             pending = _block_comment(node, source, out)
         elif node.kind == tree.BLOCK:
+            if node.name in ("def", "block"):
+                _eat_directive_line(node, source, out)
+                call = _definition(node, source, hoisted, methods)
+                if call is not None:
+                    out.append((STMT_PIECE, call))
+                continue
             if node.name == "raw":
                 # More shapes than this layer reads: a colon short
                 # form, a line ending that belongs to the directive
@@ -356,7 +377,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # reaches back past the start of the line.
                 raise Unsupported("#raw")
             _eat_directive_line(node, source, out)
-            out.append((STMT_PIECE, _block(node, source, hoisted)))
+            out.append((STMT_PIECE, _block(node, source, hoisted, methods)))
         elif node.kind == lex.DIRECTIVE:
             if node.name in BRANCHES:
                 # A branch that reached here belongs to no block this
@@ -459,12 +480,97 @@ def _import_statement(node: tree.Node) -> ast.stmt:
     return made
 
 
+# A definition's header: a name, and optionally a parameter list.
+DEFINITION = re.compile(
+    r"^(?P<name>[A-Za-z_][A-Za-z_0-9]*)\s*(?:\((?P<params>.*)\))?\s*$",
+    re.S)
+
+# A dollar in front of a parameter name. ct3 writes "def show(self, x,
+# y=1, **KWS)" for "#def show($x, $y=1)".
+PARAM_DOLLAR = re.compile(r"\$(?=[A-Za-z_])")
+
+
+def _parameters(text: str | None) -> str:
+    """A definition's parameter list as Python, ready for the frame.
+
+    ct3 writes "def show(self, x, y=1, **KWS)" for "#def show($x,
+    $y=1)": the dollar goes and the name stays. A default value with a
+    placeholder in it is turned away rather than stripped the same
+    way, because a bare name there would resolve against whatever
+    happened to be in scope.
+    """
+    if not text or not text.strip():
+        return ""
+    out = []
+    for part in _split_arguments(text):
+        name, _, default = part.partition("=")
+        name = PARAM_DOLLAR.sub("", name.strip())
+        if "$" in default:
+            raise Unsupported("a placeholder in a default value")
+        out.append(name if not default else "%s=%s" % (name, default))
+    return ", ".join(out) + ", "
+
+
+def _split_arguments(text: str) -> list[str]:
+    """Splits on the commas that are not inside brackets or strings."""
+    parts = []
+    depth = 0
+    start = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char in "\"'":
+            index = lex._end_of_string(text, index)
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index])
+            start = index + 1
+        index += 1
+    parts.append(text[start:])
+    return [part for part in parts if part.strip()]
+
+
+def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
+                methods: list[ast.stmt]) -> ast.stmt | None:
+    """``#def`` and ``#block`` as methods on the generated class.
+
+    Returns the call a block makes where it stands, or None for a def,
+    which is only called by name from somewhere else. ct3 writes
+    ``self.mid(trans=trans)`` for a block and nothing at all for a def.
+
+    The method resolves like any other name because the instance is in
+    the template's own search list, and autocalling reaches it.
+    """
+    # The raw text, not the resolved one: a dollar in a definition's
+    # header names a parameter and is not a lookup. Running it through
+    # _token_source would turn "#def show($x)" into a call to VFFSL.
+    header = "".join(t.text for t in node.tokens[1:]).strip()
+    match = DEFINITION.match(header)
+    if match is None:
+        raise Unsupported("#%s %r" % (node.name, header[:40]))
+    params = _parameters(match.group("params"))
+    name = match.group("name")
+    body = _statements(_pieces_of(node.children, source, hoisted, methods))
+    methods.append(_method(name, params, body or [ast.Pass()]))
+    if node.name == "def":
+        return None
+    return ast.Expr(value=ast.Call(
+        func=_attribute("self", name), args=[],
+        keywords=[ast.keyword(arg="trans",
+                              value=ast.Name(id="trans", ctx=ast.Load()))]))
+
+
 def _try_block(node: tree.Node, source: str,
-               hoisted: list[ast.stmt]) -> ast.stmt:
+               hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> ast.stmt:
     """``#try`` with its ``#except`` and ``#finally`` arms."""
     statement = ast.Try(body=[], handlers=[], orelse=[], finalbody=[])
     for directive, children in _branches(node, ("except", "finally")):
-        made = _statements(_pieces_of(children, source, hoisted)) \
+        made = _statements(_pieces_of(children, source, hoisted, methods)) \
             or [ast.Pass()]
         if directive is node:
             statement.body = made
@@ -484,7 +590,8 @@ def _try_block(node: tree.Node, source: str,
 
 
 def _block(node: tree.Node, source: str,
-           hoisted: list[ast.stmt]) -> ast.stmt:
+           hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> ast.stmt:
     """The statement a block directive becomes.
 
     A block with no children at all never opened: it is the colon short
@@ -495,31 +602,32 @@ def _block(node: tree.Node, source: str,
     if not node.children:
         raise Unsupported("the one-line form of #%s" % node.name)
     if node.name == "for":
-        return _for_block(node, source, hoisted)
+        return _for_block(node, source, hoisted, methods)
     if node.name == "if":
-        return _if_block(node, source, hoisted)
+        return _if_block(node, source, hoisted, methods)
     if node.name == "try":
-        return _try_block(node, source, hoisted)
+        return _try_block(node, source, hoisted, methods)
     if node.name == "while":
-        return _headed_block("while %s:", node, source, hoisted)
+        return _headed_block("while %s:", node, source, hoisted, methods)
     if node.name == "unless":
         # ct3 writes the parentheses, and they matter: without them
         # "#unless $a or $b" would negate only the first.
-        return _headed_block("if not (%s):", node, source, hoisted)
+        return _headed_block("if not (%s):", node, source, hoisted, methods)
     if node.name == "repeat":
         # A counter nobody can collide with, named after where the
         # directive stands so that two runs give the same code.
         name = "__ct4_repeat_%d_%d" % (node.line, node.column)
         return _headed_block("for " + name + " in range(%s):", node,
-                             source, hoisted)
+                             source, hoisted, methods)
     raise Unsupported("#%s" % node.name)
 
 
 def _headed_block(shape: str, node: tree.Node, source: str,
-                  hoisted: list[ast.stmt]) -> ast.stmt:
+                  hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> ast.stmt:
     """A block whose header is the shape with its argument in it."""
     statement = _framed(shape % _argument(node, node))
-    statement.body = _body(node, source, hoisted)       # type: ignore[attr-defined]
+    statement.body = _body(node, source, hoisted, methods)       # type: ignore[attr-defined]
     return statement
 
 
@@ -589,7 +697,8 @@ def _parsed(source: str) -> ast.expr:
 
 
 def _for_block(node: tree.Node, source: str,
-               hoisted: list[ast.stmt]) -> ast.stmt:
+               hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> ast.stmt:
     """``#for $r in $rows`` as a Python for statement.
 
     The targets lose their dollar and become plain names, which is what
@@ -598,12 +707,13 @@ def _for_block(node: tree.Node, source: str,
     """
     statement = _framed("for %s:" % _for_argument(node))
     assert isinstance(statement, ast.For)
-    statement.body = _body(node, source, hoisted)
+    statement.body = _body(node, source, hoisted, methods)
     return statement
 
 
 def _if_block(node: tree.Node, source: str,
-              hoisted: list[ast.stmt]) -> ast.stmt:
+              hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> ast.stmt:
     """``#if`` with its ``#elif`` and ``#else`` branches.
 
     The branches are children of the if in the tree, not blocks of
@@ -615,9 +725,9 @@ def _if_block(node: tree.Node, source: str,
     assert isinstance(statement, ast.If)
     current = statement
     statement.body = _statements(
-        _pieces_of(branches[0][1], source, hoisted))
+        _pieces_of(branches[0][1], source, hoisted, methods))
     for directive, children in branches[1:]:
-        body = _statements(_pieces_of(children, source, hoisted))
+        body = _statements(_pieces_of(children, source, hoisted, methods))
         condition = _branch_condition(directive)
         if condition is None:
             current.orelse = body
@@ -660,13 +770,14 @@ def _branches(node: tree.Node,
 
 
 def _body(node: tree.Node, source: str,
-          hoisted: list[ast.stmt]) -> list[ast.stmt]:
+          hoisted: list[ast.stmt],
+               methods: list[ast.stmt]) -> list[ast.stmt]:
     """The statements of a block's body, never empty.
 
     Python needs something between the colon and the next line, and a
     template may well have a loop that writes nothing.
     """
-    made = _statements(_pieces_of(node.children, source, hoisted))
+    made = _statements(_pieces_of(node.children, source, hoisted, methods))
     return made or [ast.Pass()]
 
 

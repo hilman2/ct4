@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 823
+FLOOR = 883
 
 
 def render_cases():
@@ -182,6 +182,26 @@ def test_import_is_hoisted_and_usable():
     assert out(source, [{}]).strip() in ("/", "\\")
 
 
+def test_a_def_becomes_a_method_and_resolves_by_name():
+    # The instance sits in the template's own search list, so $show
+    # finds the method and autocalling calls it.
+    assert out("#def show\nhi\n#end def\n$show\n", [{}]) == "hi\n\n"
+
+
+def test_a_def_takes_arguments():
+    source = "#def show($x, $y=1)\n$x-$y\n#end def\n$show(2)\n"
+    assert out(source, [{}]) == "2-1\n\n"
+
+
+def test_a_block_is_a_method_and_a_call_where_it_stands():
+    assert out("a\n#block mid\nhi\n#end block\nb\n", [{}]) == "a\nhi\nb\n"
+
+
+def test_the_template_object_is_reachable():
+    # $getVar and $self need an instance, and there is one now.
+    assert out("$getVar('name')\n", [{"name": "Ada"}]) == "Ada\n"
+
+
 def test_the_colon_short_form_runs():
     # The line ending belongs to the body: ct3 parses it with
     # breakPoint=findEOL(gobble=True), which is past the ending.
@@ -221,10 +241,10 @@ def test_the_generated_code_is_python():
 
 @pytest.mark.parametrize("source", [
     "#set global $a = 1\n$a\n",              # writes into the instance
-    "#def show\nx\n#end def\n",              # a method, not a statement
+    "#filter WebSafe\nx\n#end filter\n",     # changes the output filter
     "#if 0: a\n#else: b\n",                  # the chained short form
-    "$getVar('x')\n",                        # needs a Template object
-    "$self.foo\n",                           # needs a Template object
+    "#include 'other.tmpl'\n",               # needs a template to include
+    "#extends Base\n",                       # needs a base class
     "$!a\n",                                 # no silence token yet
     "#unicode utf-8\n1234",                  # rewritten before parsing
     "#encoding utf-8\n1234",                 # decoded before parsing
@@ -240,7 +260,7 @@ def test_refusing_is_not_the_same_as_failing():
     # An unsupported template must raise Unsupported and nothing else,
     # so a caller can fall back rather than crash.
     with pytest.raises(codegen.Unsupported):
-        codegen.generate("#block b\nx\n#end block\n")
+        codegen.generate("#filter WebSafe\nx\n#end filter\n")
 
 
 # -- Against the corpus ----------------------------------------------
