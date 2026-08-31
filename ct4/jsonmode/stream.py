@@ -154,17 +154,28 @@ class StreamBuilder(Builder):
         gaps = options["gaps"]
         records = options["layout"] == "records"
 
-        self.out.write("[")
+        # Split once, as in Builder.series: everything in this loop is
+        # paid for per element of the series.
+        paths = [name.split(".") for name in fields]
+        omit_gaps = gaps == OMIT
+        convert = self.convert
+        field_at = self.field_at
+        write = self.out.write
+
+        write("[")
         first = True
         for element in source:
-            values = [self.field_of(element, name) for name in fields]
-            if gaps == OMIT and any(value is None for value in values):
+            values = [field_at(element, path) for path in paths]
+            if omit_gaps and any(value is None for value in values):
                 continue
-            values = [self.convert(round_to(value, precision))
-                      for value in values]
+            if precision is None:
+                values = [convert(value) for value in values]
+            else:
+                values = [convert(round_to(value, precision))
+                          for value in values]
             if not first:
-                self.out.write(COMMA)
+                write(COMMA)
             first = False
-            self.out.write(encode(dict(zip(fields, values)) if records
-                                  else values))
-        self.out.write("]")
+            write(encode(dict(zip(fields, values)) if records
+                         else values))
+        write("]")

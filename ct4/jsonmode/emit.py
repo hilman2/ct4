@@ -49,7 +49,15 @@ class Emitter:
         # #silent evaluates the expression and writes nothing. That is
         # exactly what should happen: the output of the definition is
         # its return value, not its text.
-        self.add("#silent $B.%s" % text, origin)
+        #
+        # B without a dollar, deliberately. It is the parameter of the
+        # definition written just above, so it is a Python local and
+        # needs no lookup. Written as $B, Cheetah generates
+        # VFN(VFFSL(SL,"B",True),"item",False) for every call: two
+        # lookups per builder call, and a loop makes four of those per
+        # element. The placeholders of the template keep their dollar,
+        # because those really do come from the context.
+        self.add("#silent B.%s" % text, origin)
 
 
 def emit(document: Document) -> tuple[str, list[Any], list[Any]]:
@@ -70,7 +78,7 @@ def emit_with_origins(
     out = Emitter()
     out.add("#def %s($B)" % METHOD_NAME)
     _value(out, document.root, holder=None)
-    out.add("#return $B.result")
+    out.add("#return B.result")
     out.add("#end def")
     return ("\n".join(out.lines) + "\n", out.names, out.consts, out.origins)
 
@@ -107,7 +115,7 @@ def _value(out: Emitter, node: Any, holder: str | None,
         out.call("open('arr')")
         out.call("item(%s%s)" % (text, suffix))
         out.call("end()")
-        out.add("#silent $B.take_first()")
+        out.add("#silent B.take_first()")
         return
     out.call(holder % text if "%s" in holder else holder)
 
@@ -215,7 +223,7 @@ def _item(out: Emitter, node: Any) -> None:
 def _expression(out: Emitter, node: Any) -> str:
     """The Cheetah expression that yields this node."""
     if isinstance(node, Lit):
-        return "$B.lit(%d)" % out.const_index(node.value)
+        return "B.lit(%d)" % out.const_index(node.value)
     if isinstance(node, Expr):
         return node.text
     if isinstance(node, Str):
@@ -227,11 +235,11 @@ def _expression(out: Emitter, node: Any) -> str:
             else:
                 arguments.append(part.text)
                 chunks.append("")
-        return "$B.cat(%d%s)" % (
+        return "B.cat(%d%s)" % (
             out.const_index(chunks),
             "".join(", " + argument for argument in arguments))
     if isinstance(node, Series):
-        return "$B.series(%s, %d)" % (node.expr,
+        return "B.series(%s, %d)" % (node.expr,
                                       out.const_index(_series_options(node)))
     raise TypeError("unknown node: %s" % type(node).__name__)
 

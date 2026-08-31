@@ -149,6 +149,26 @@ class Builder:
     def prepare(self, value: Any, precision: int | None,
                 name: str | None) -> Any:
         """Turns a value that was read into what stands in the JSON."""
+        # What a series is actually made of, taken first. A builtin
+        # scalar can carry neither hook and describes no precision of
+        # its own, so everything below it reduces to the rounding rule.
+        # The general path costs two failing getattr calls, a Ct4Value
+        # and four method calls per value, and a series of ten thousand
+        # readings cannot afford that. The type is compared exactly:
+        # a subclass, numpy.float64 among them, may well define the
+        # hooks and has to take the long way.
+        kind = type(value)
+        if kind is float or kind is int or kind is str or kind is bool:
+            if precision is None:
+                precisions = self.precisions
+                if name is not None and name in precisions:
+                    precision = precisions[name]
+                else:
+                    precision = precisions.get("default")
+            if precision is None:
+                return value
+            return round_to(value, precision)
+
         hook = getattr(value, "__ct4_json__", None)
         if hook is not None:
             return hook()
@@ -201,13 +221,25 @@ class Builder:
         fields = options["fields"]
         precision = options["precision"]
         gaps = options["gaps"]
+        # The paths are split once, not once per element. Ten thousand
+        # readings would otherwise split the same two strings twenty
+        # thousand times.
+        paths = [name.split(".") for name in fields]
+        omit_gaps = gaps == OMIT
+        convert = self.convert
+        field_at = self.field_at
         rows = []
         for element in source:
-            values = [self.field_of(element, name) for name in fields]
-            if gaps == OMIT and any(v is None for v in values):
+            values = [field_at(element, path) for path in paths]
+            if omit_gaps and any(v is None for v in values):
                 continue
-            rows.append([self.convert(round_to(v, precision))
-                         for v in values])
+            if precision is None:
+                # round_to is the identity without a precision, and a
+                # series without one is the common case.
+                rows.append([convert(v) for v in values])
+            else:
+                rows.append([convert(round_to(v, precision))
+                             for v in values])
 
         if layout == "records":
             return [dict(zip(fields, row)) for row in rows]
@@ -221,10 +253,26 @@ class Builder:
 
         Dot and key are the same thing, as everywhere in Cheetah.
         """
+        return self.field_at(element, name.split("."))
+
+    def field_at(self, element: Any, path: Sequence[str]) -> Any:
+        """Like ``field_of``, with the path already split.
+
+        Called as ``field_at(element, ["outTemp", "raw"])``. A series
+        walks the same path for every one of its elements, and
+        splitting the name there again each time is the one thing that
+        grows with the length of the series without any reason to.
+        """
         current = element
-        for part in name.split("."):
+        for part in path:
             try:
                 current = getattr(current, part)
             except AttributeError:
                 current = current[part]
+        # Same reasoning as in prepare: a builtin scalar carries no
+        # __ct4_value__, so as_value would only wrap and unwrap it.
+        kind = type(current)
+        if (kind is float or kind is int or kind is str
+                or kind is bool or current is None):
+            return current
         return as_value(current).value
