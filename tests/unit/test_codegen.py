@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 883
+FLOOR = 943
 
 
 def render_cases():
@@ -202,6 +202,27 @@ def test_the_template_object_is_reachable():
     assert out("$getVar('name')\n", [{"name": "Ada"}]) == "Ada\n"
 
 
+def test_set_global_outlives_its_method():
+    # ct3 writes it into the instance, so a later lookup finds it.
+    source = "#def put\n#set global $a = 7\n#end def\n$put$a\n"
+    assert out(source, [{}]) == "7\n"
+
+
+def test_attr_becomes_a_class_variable():
+    assert out("#attr $x = 1\n$x\n", [{}]) == "1\n"
+
+
+def test_raise_raises():
+    with pytest.raises(ValueError):
+        out("#raise ValueError('x')\n", [{}])
+
+
+def test_unicode_is_cut_out_before_parsing():
+    # It is no directive at all: ct3 finds the line with a regular
+    # expression and removes it. Left in, it would be written as text.
+    assert out("#unicode utf-8\n1234\n", [{}]) == "1234\n"
+
+
 def test_the_colon_short_form_runs():
     # The line ending belongs to the body: ct3 parses it with
     # breakPoint=findEOL(gobble=True), which is past the ending.
@@ -240,13 +261,12 @@ def test_the_generated_code_is_python():
 # -- What it refuses -------------------------------------------------
 
 @pytest.mark.parametrize("source", [
-    "#set global $a = 1\n$a\n",              # writes into the instance
     "#filter WebSafe\nx\n#end filter\n",     # changes the output filter
     "#if 0: a\n#else: b\n",                  # the chained short form
     "#include 'other.tmpl'\n",               # needs a template to include
     "#extends Base\n",                       # needs a base class
     "$!a\n",                                 # no silence token yet
-    "#unicode utf-8\n1234",                  # rewritten before parsing
+    "$*a\n",                                 # nor the cache token
     "#encoding utf-8\n1234",                 # decoded before parsing
     "<% print('x') %>\n",                    # no PSP
 ])

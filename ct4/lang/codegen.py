@@ -16,7 +16,8 @@ What it can do today: text, comments, escapes, placeholders with their
 call and subscript chains, and #for, #if, #while, #unless, #repeat,
 #try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
 #from, #def and #block, in their block form and in the colon short
-form. That is 883 of the 1636 render cases.
+form, plus #attr, #raise, #set global and the #unicode line ct3
+cuts out before it parses. That is 943 of the 1636 render cases.
 
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
@@ -261,7 +262,7 @@ def generate(source: str) -> Generated:
             not understand yet.
         tree.StructureError: where the template is not well formed.
     """
-    _refuse_preprocessed(source)
+    source = _preprocess(source)
     root = tree.parse(source)
     hoisted: list[ast.stmt] = []
     methods: list[ast.stmt] = []
@@ -290,25 +291,30 @@ def render(source: str, search_list: Sequence[Any],
     return text
 
 
-def _refuse_preprocessed(source: str) -> None:
-    """Turns away templates ct3 rewrites before it parses them.
+def _preprocess(source: str) -> str:
+    """What ct3 does to a template before it parses it.
 
     ``#unicode`` is no directive at all: ct3 finds the line with a
-    regular expression, cuts it out of the source and decodes the rest
-    with what it named. ``#encoding`` decodes too. Neither reaches the
-    parser as itself, so a layer that starts at the parser would write
-    the line out as text and be quietly wrong. ct3's own patterns are
-    used here, so the two cannot disagree about what counts.
+    regular expression and cuts it out. The same pattern is used here,
+    so the two cannot disagree about what counts as one.
+
+    ``#encoding`` is still turned away. With a str source ct3 puts it
+    back through repr, encodes it with backslashreplace and decodes it
+    again, and that can change what gets parsed.
 
     Raises:
-        Unsupported: where either appears.
+        Unsupported: where #encoding appears.
     """
     from Cheetah.Parser import encodingDirectiveRE, unicodeDirectiveRE
 
-    for pattern, name in ((unicodeDirectiveRE, "#unicode"),
-                          (encodingDirectiveRE, "#encoding")):
-        if pattern.search(source):
-            raise Unsupported("%s is applied before parsing" % name)
+    if unicodeDirectiveRE.search(source):
+        if encodingDirectiveRE.search(source):
+            raise Unsupported("#encoding and #unicode together")
+        without: str = unicodeDirectiveRE.sub("", source)
+        return without
+    if encodingDirectiveRE.search(source):
+        raise Unsupported("#encoding is applied before parsing")
+    return source
 
 
 # -- What the template writes ----------------------------------------
@@ -399,6 +405,9 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # other directives carry: a slurp always ends its line.
                 if _line_is_clear(source, node.tokens[0].start):
                     _drop_indent(out)
+            elif node.name == "attr":
+                _eat_directive_line(node, source, out)
+                methods.append(_attr_statement(node))
             elif node.name in ("import", "from"):
                 _eat_directive_line(node, source, out)
                 hoisted.append(_import_statement(node))
@@ -647,10 +656,45 @@ def _simple_directive(node: tree.Node) -> list[ast.stmt]:
         return _placeholder_value(_parsed(_argument(node, node)))
     if node.name == "set":
         return [_set_statement(node)]
+    if node.name == "raise":
+        return [_framed_statement("raise %s" % _argument(node, node))]
     raise Unsupported("#%s" % node.name)
 
 
-def _set_statement(node: tree.Node) -> ast.stmt:
+def _attr_statement(node: tree.Node) -> ast.stmt:
+    """``#attr $x = 1`` as a class variable.
+
+    ct3 puts it on the class rather than in a method, so it is there
+    before any render and every instance shares it.
+    """
+    made = _set_statement(node, allow_global=False)
+    if not isinstance(made, ast.Assign):
+        raise Unsupported("#attr that is not an assignment")
+    return made
+
+
+NAME_ONLY = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
+
+
+def _global_set(node: tree.Node) -> ast.stmt:
+    """``#set global $a = 1`` writes into the template instance.
+
+    ct3 generates self._CHEETAH__globalSetVars["a"] = 1, so the value
+    outlives the method it was set in and every later lookup finds it.
+    """
+    raw = "".join(t.text for t in node.tokens[1:])
+    raw = re.sub(r"^\s*global\b", "", raw, count=1)
+    name, sign, _ = raw.partition("=")
+    name = name.strip().lstrip("$")
+    if not sign or not NAME_ONLY.match(name):
+        raise Unsupported("#set global %r" % raw.strip()[:40])
+    resolved = "".join(_token_source(t) for t in node.tokens[1:])
+    _, _, value = resolved.partition("=")
+    return _framed_statement(
+        'self._CHEETAH__globalSetVars["%s"] =%s' % (name, value))
+
+
+def _set_statement(node: tree.Node, allow_global: bool = True) -> ast.stmt:
     """``#set $a = 1`` as ``a = 1``.
 
     The target loses its dollar and becomes a plain name; only the
@@ -669,7 +713,9 @@ def _set_statement(node: tree.Node) -> ast.stmt:
             continue
         if target and token.kind == lex.TEXT and \
                 re.match(r"\s*global\b", token.text):
-            raise Unsupported("#set global needs a template instance")
+            if not allow_global:
+                raise Unsupported("#attr global")
+            return _global_set(node)
         parts.append(_token_source(token))
         if target and token.kind == lex.TEXT and "=" in token.text:
             target = False
