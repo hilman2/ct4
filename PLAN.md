@@ -1139,9 +1139,17 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 **Fertig, wenn:** Korpus byte-identisch mit dem neuen Backend, Tracebacks zeigen
 in die Vorlage.
 
-Stand 31-Aug-2026: **teilweise.** Die drei Schichten des Kerns stehen und
-tragen 1.317 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
-hängen weiter daran.
+Stand 01-Sep-2026: **teilweise.** Die drei Schichten des Kerns stehen und
+tragen 1.320 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
+hängen weiter daran, und der Kern hat noch keinen Aufrufer: gerendert wird
+weiter über ct3s alten Compiler.
+
+**Der Korpus ist nicht das einzige Maß.** Von den 390 echten Skin-Vorlagen im
+Korpus nimmt der Generator 311, also 79,7 Prozent. Diese Zahl und die 1.320
+laufen auseinander, und das ist lehrreich: `#errorCatcher` bewegt drei
+Korpusfälle und 83 Skins. ct3s eigene Testsuite hat keine Verwendung für eine
+Direktive, mit der jede weewx-Skin anfängt. Wer nur die Korpuszahl liest,
+baut die falschen Dinge zuerst.
 
 | | |
 |---|---|
@@ -1149,7 +1157,7 @@ hängen weiter daran.
 | Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
 | Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
-| Lexer, CST, AST, Codegen über `ast` | **1.317 von 1.636**, siehe unten |
+| Lexer, CST, AST, Codegen über `ast` | **1.320 von 1.636**, 311 von 390 Skins |
 | Direktiven-Plugins auf AST-Ebene | hängt daran |
 
 **Die drei Schichten.** `ct4/lang/lex.py` zerlegt eine Vorlage verlustfrei in
@@ -1176,10 +1184,10 @@ die 42 Fälle, die das kostet, sind der Preis für die Regel.
 **Was noch fehlt, nach Kosten geordnet und gezählt.** Der Kopf von `#def` und
 `#block`, 64 Fälle, wo hinter dem Namen ein Kommentar oder eine Parameterliste
 steht, die die Schicht nicht liest. ct3s Ausdrucks-Platzhalter `$(...)` und
-`$[...]`, 46 Fälle, für den der Lexer keine Regel hat. Die
+`$[...]`, 46 Fälle, für den der Lexer keine Regel hat — und **drei echte
+weewx-Skins**, weshalb er in der Skin-Rechnung vorn steht. Die
 Compiler-Einstellungen, 52. Danach `c'...'`-Zeichenketten, die Einzeiler-Form
-mit Doppelpunkt und ein gutes Dutzend Direktiven mit je zwölf Fällen oder
-weniger.
+von `#if` und ein gutes Dutzend Direktiven mit je zwölf Fällen oder weniger.
 
 **Was der Korpus nicht zeigt, und was daraus wurde.** Der Korpus besteht aus
 2.026 echten Vorlagen, und jede einzelne schreibt ihre Direktiven auf eigene
@@ -1262,10 +1270,15 @@ Drittel der verbleibenden Zeit. Um da heranzukommen, bräuchte es eine Stelle
 zum Einhängen, die ct3 nicht hat. Das ist einer der Gründe für den eigenen
 Compiler.
 
-**Was nicht angefangen ist und warum.** Ein verlustfreies CST plus Codegen über
-das `ast`-Modul, das 1.772 Korpusfälle byte-identisch reproduziert, ist ein
-Vorhaben für sich und nicht der nächste sinnvolle Schritt, solange der
-Schwerpunkt JSON heisst. Der JSON-Modus übersetzt heute über eine
+**Was der Kern noch nicht ist.** Er hat keinen Aufrufer. Gerendert wird weiter
+über ct3s alten Compiler, und `ct4/lang` wird von nichts außerhalb seiner
+selbst importiert. Die nächste Entscheidung ist deshalb keine Fleißarbeit,
+sondern eine Entwurfsfrage: Wann übernimmt er? Naheliegend ist ein
+Rückfallpfad — `supports()` fragen, sonst ct3 —, eingehängt an derselben
+Stelle wie der Compile-Cache. Erst wenn er echte Skins rendert, weiß man, ob
+die 80 Prozent die richtigen 80 Prozent sind.
+
+Der JSON-Modus bleibt davon zunächst unberührt. Er übersetzt heute über eine
 Cheetah-`#def`; ihn auf eigenen Codegen umzustellen hiesse, einen zweiten
 Ausdrucksparser zu bauen, und genau das verbietet der Entwurf aus gutem Grund.
 Der Umbau lohnt erst, wenn er beiden Modi dient.

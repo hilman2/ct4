@@ -23,9 +23,16 @@ their block form and in the colon short form, plus #attr, #raise,
 out with nothing done to it, #include, #extends and #implements, the
 three regions that redirect the output, #filter, #call and #cache, the
 #encoding line, which writes nothing and is a no-op before parsing for
-every codec that reads ASCII the way ASCII does, and PSP, the second
-block structure, whose body is spliced as the raw Python it is.
-That is 1317 of the 1636 render cases.
+every codec that reads ASCII the way ASCII does, PSP, the second block
+structure, whose body is spliced as the raw Python it is, and
+#errorCatcher, which sends every placeholder after it through a wrapper
+that hands a NotFound to the catcher.
+
+That is 1320 of the 1636 render cases. The corpus is not the only ruler
+worth reading: of the 390 real skin templates in it, 311. The gap
+between those two numbers is what #errorCatcher closed, 3 corpus cases
+against 83 skins, because ct3's own test suite has no use for a
+directive that every weewx skin opens with.
 
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
@@ -42,10 +49,10 @@ counted rather than estimated: the head of a #def or #block, 64 cases,
 where the name is followed by a comment or by a parameter list this
 layer cannot read; ct3's expression placeholder, 46; any template that
 sets a compiler setting, 52, on which see below; the c'...' string, 20;
-the one-line form that puts a directive's body behind a colon, 20, for
-#if and #errorCatcher; and then #compiler-settings, #breakpoint,
-#compiler, #@, #i18n, #return, #assert, an #elif whose #if closed on
-the line before, and a #stop inside a block, 12 or fewer each.
+the one-line form that puts an #if body behind a colon, 16; and then
+#compiler-settings, #breakpoint, #compiler, #@, #i18n, #return,
+#assert, an #elif whose #if closed on the line before, and a #stop
+inside a block, 12 or fewer each.
 
 A compiler setting is refused rather than ignored. This layer reads
 none of them, and two of them change what ct3 renders: with
@@ -78,6 +85,7 @@ from __future__ import annotations
 
 import ast
 import re
+import threading
 from dataclasses import dataclass
 from tokenize import PseudoToken
 from typing import Any, Sequence
@@ -166,7 +174,7 @@ OPENING = {")": "(", "]": "[", "}": "{"}
 PREAMBLE = frozenset((
     "CacheRegion", "DummyResponse", "DummyResponseFailure",
     "DynamicallyCompiledCheetahTemplate",
-    "ErrorCatchers", "Filters", "RequiredCheetahVersion",
+    "Filters", "RequiredCheetahVersion",
     "RequiredCheetahVersionTuple", "TransformerResponse",
     "TransformerTransaction", "VFSL", "builtin", "exists", "getmtime",
     "logging", "os", "sys", "templateAPIClass", "time", "types",
@@ -183,6 +191,64 @@ PREAMBLE = frozenset((
 # which is the same defect with the engines swapped. Today that is the
 # class the skeleton declares: "$_Ct4Template" would write a class.
 OURS_ONLY = frozenset((CLASS,))
+
+
+# -- #errorCatcher ---------------------------------------------------
+#
+# The one piece of state that spans the whole module being generated.
+# ct3 keeps it on the compiler instance: #errorCatcher turns it on and
+# every placeholder written after that, in any method, is replaced by a
+# call to a wrapper that evaluates the lookup and hands a NotFound to
+# the catcher. #end errorCatcher turns it off again.
+#
+# This generator is a tree of functions and has no instance to hang it
+# on. Threading it through the twenty signatures between generate() and
+# _placeholder would say nothing except "still on", so it lives here,
+# per thread and for the length of one generate() call. Per thread
+# because a compile cache may well call generate() from more than one.
+
+
+class Catcher:
+    """The error catcher in force, and the wrappers written for it.
+
+    Args:
+        methods (list[ast.stmt]): The class body being built. Wrappers
+            are appended to it, the way ct3 spawns them into the class
+            compiler rather than into the method that needs them.
+    """
+
+    def __init__(self, methods: list[ast.stmt]) -> None:
+        self.name: str | None = None
+        self.methods = methods
+        # Raw placeholder text to the wrapper already written for it.
+        # ct3 keeps the same map and for the same reason: a page that
+        # writes $current.outTemp forty times gets one wrapper.
+        self.seen: dict[str, str] = {}
+
+
+_ACTIVE = threading.local()
+
+
+def _catcher() -> Catcher | None:
+    """The catcher of the generate() call this is running inside."""
+    return getattr(_ACTIVE, "catcher", None)
+
+
+@dataclass(frozen=True)
+class Written:
+    """A placeholder, as much of it as the error catcher needs.
+
+    ``code`` is the Python the lookup became and is what a wrapper
+    evaluates. ``raw`` is the template's own text for it, which is what
+    ErrorCatchers.Echo writes in its place, and what the wrappers are
+    keyed on. The position goes to ErrorCatchers.ListErrors, which
+    records where each failure stood.
+    """
+
+    code: str
+    raw: str
+    line: int
+    column: int
 
 
 @dataclass(frozen=True)
@@ -619,6 +685,7 @@ SILENT_KINDS = frozenset({lex.COMMENT, lex.BLOCK_COMMENT})
 # puts in the template's own search list.
 SKELETON = """\
 from time import time as currentTime
+from Cheetah import ErrorCatchers
 from Cheetah.DummyTransaction import DummyTransaction
 from Cheetah.NameMapper import NotFound
 from Cheetah.NameMapper import valueForName as VFN
@@ -740,7 +807,14 @@ def generate(source: str, settings: Any = None) -> Generated:
     # The imports #extends synthesises stand with the template's own.
     hoisted: list[ast.stmt] = list(shape.imports)
     methods: list[ast.stmt] = []
-    body = _statements(_pieces(root, source, hoisted, methods))
+    # Torn down whatever happens: a refusal halfway through must not
+    # leave a catcher standing for the next template on this thread.
+    previous = _catcher()
+    _ACTIVE.catcher = Catcher(methods)
+    try:
+        body = _statements(_pieces(root, source, hoisted, methods))
+    finally:
+        _ACTIVE.catcher = previous
     module = ast.parse(SKELETON)
     # Before the class, the way ct3 puts them at module level. An
     # import inside a method would run on every render.
@@ -1014,6 +1088,9 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # directive included, so its children are not walked.
                 _raw_block(node, source, out)
                 continue
+            if node.name == "errorCatcher":
+                _error_catcher(node, source, hoisted, methods, out)
+                continue
             if node.name in ("filter", "call", "cache"):
                 # Several statements around the body rather than one
                 # block, and the tags decide about their lines before
@@ -1144,9 +1221,21 @@ def _piece(node: tree.Node, source: str,
         marked = lex.START.match(token.text)
         if marked is not None and (marked.group("silent")
                                    or marked.group("cache")):
-            _modified_placeholder(token, marked, out)
+            _modified_placeholder(node, token, marked, out)
             return
-        out.append((VALUE_PIECE, placeholder_source(token.text)))
+        written = Written(placeholder_source(token.text), token.text,
+                          node.line, node.column)
+        catcher = _catcher()
+        if catcher is not None and catcher.name is not None:
+            # Turned into statements here and not in _statements. The
+            # catcher is switched on and off as the walk passes the
+            # directives, and _statements runs over the whole top level
+            # afterwards, by which time an #end errorCatcher has
+            # already switched it back off.
+            for statement in _placeholder(written):
+                out.append((STMT_PIECE, statement))
+            return
+        out.append((VALUE_PIECE, written))
         return
     raise Unsupported("no code for a %s node" % node.kind)
 
@@ -1175,7 +1264,8 @@ def _refuse_a_short_token(token: lex.Token, source: str) -> None:
                           % (token.text, following))
 
 
-def _modified_placeholder(token: lex.Token, marked: re.Match[str],
+def _modified_placeholder(node: tree.Node, token: lex.Token,
+                          marked: re.Match[str],
                           out: list[tuple[str, Any]]) -> None:
     """A placeholder carrying a silence token, a cache token, or both.
 
@@ -1196,8 +1286,9 @@ def _modified_placeholder(token: lex.Token, marked: re.Match[str],
     # Only the two tokens come off. marked.end() would be past the
     # enclosure and the blanks behind it, and "$*( aStr   )" would be
     # rebuilt as "$aStr   )", which costs 32 corpus cases.
-    body = _placeholder(
-        placeholder_source("$" + token.text[marked.end("cache"):]))
+    body = _placeholder(Written(
+        placeholder_source("$" + token.text[marked.end("cache"):]),
+        token.text, node.line, node.column))
     if marked.group("silent"):
         body = [_silenced(body)]
     if marked.group("cache"):
@@ -2442,16 +2533,31 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
         raise Unsupported("#%s %r" % (node.name, header[:40]))
     params = _parameters(match.group("params"))
     name = match.group("name")
-    pieces = _pieces_of(node.children, source, hoisted, methods,
-                        escaped=escaped)
-    if leading:
-        pieces.insert(0, (TEXT_PIECE, leading))
-    # Only the short form. The long one is closed by an #end, and its
-    # body keeps every line ending it holds.
-    short = not any(child.kind == lex.DIRECTIVE and child.name == "end"
-                    for child in node.children)
-    trailing = _take_trailing_eol(pieces) if short else ""
-    body = _statements(pieces)
+    # An error catcher does not reach into a method. ct3 keeps the flag
+    # on the method compiler, and #def spawns a fresh one, so a
+    # placeholder in this body is written plain even where the catcher
+    # is on outside. It comes back on when the method is done.
+    catcher = _catcher()
+    was = catcher.name if catcher is not None else None
+    if catcher is not None:
+        catcher.name = None
+    try:
+        pieces = _pieces_of(node.children, source, hoisted, methods,
+                            escaped=escaped)
+        if leading:
+            pieces.insert(0, (TEXT_PIECE, leading))
+        # Only the short form. The long one is closed by an #end, and
+        # its body keeps every line ending it holds.
+        short = not any(child.kind == lex.DIRECTIVE and child.name == "end"
+                        for child in node.children)
+        trailing = _take_trailing_eol(pieces) if short else ""
+        # Inside the try as well: _statements is where a placeholder
+        # piece decides whether it goes through a wrapper, so it has to
+        # run while the catcher is still off.
+        body = _statements(pieces)
+    finally:
+        if catcher is not None:
+            catcher.name = was
     methods.append(_method(name, params, body or [ast.Pass()]))
     if trailing and escaped is not None \
             and not _line_is_clear(source, node.tokens[0].start):
@@ -2690,6 +2796,107 @@ def _eat_region_line(node: tree.Node, source: str,
             _drop_indent(out)
         return ""
     return ending
+
+
+CATCHER_NAME = re.compile(r"[ \t\f]*([A-Za-z_][A-Za-z_0-9]*)[ \t\f]*$")
+
+# What ct3's setErrorCatcher writes: the catcher is built once per
+# template object and kept, so two #errorCatcher lines naming the same
+# class share the instance. %s is the class name in ErrorCatchers.
+INSTALL = """\
+if "%s" in self._CHEETAH__errorCatchers:
+    self._CHEETAH__errorCatcher = self._CHEETAH__errorCatchers["%s"]
+else:
+    self._CHEETAH__errorCatcher = self._CHEETAH__errorCatchers["%s"] \
+= ErrorCatchers.%s(self)
+"""
+
+# The wrapper ct3 spawns per distinct placeholder. eval and not the
+# expression itself, because that is what ct3 writes and the difference
+# shows: the lookup runs against the caller's locals, handed in, rather
+# than against this method's.
+WRAPPER = """\
+def %s(self, localsDict={}):
+    try:
+        return eval(%s, globals(), localsDict)
+    except self._CHEETAH__errorCatcher.exceptions() as e:
+        return self._CHEETAH__errorCatcher.warn(
+            exc_val=e, code=%s, rawCode=%s, lineCol=%s)
+"""
+
+
+def _error_catcher(node: tree.Node, source: str, hoisted: list[ast.stmt],
+                   methods: list[ast.stmt],
+                   out: list[tuple[str, Any]]) -> None:
+    """``#errorCatcher Echo``, and what it does to every placeholder after.
+
+    Not a block in ct3's sense: errorCatcher is not in
+    _closeableDirectives, so the form every weewx skin opens with, one
+    line and no #end, is the ordinary one. The tree still builds a node
+    for it, because #end errorCatcher exists and turns the catcher off
+    again, and that form has children.
+
+    ct3 eats the rest of the tag's line before it writes the install
+    code, so a line ending left over on a dirty line is written after
+    the install and not before it.
+    """
+    leading = _eat_region_line(node, source, out)
+    text = "".join(_token_source(t) for t in node.tokens[1:])
+    match = CATCHER_NAME.match(text)
+    if match is None:
+        raise Unsupported("#errorCatcher %r" % text.strip()[:40])
+    from Cheetah import ErrorCatchers
+
+    name = match.group(1)
+    if not hasattr(ErrorCatchers, name):
+        # ct3 writes ErrorCatchers.<name>(self) and lets it fail at
+        # import time. Saying so here beats an AttributeError out of a
+        # generated module.
+        raise Unsupported("no error catcher named %r" % name)
+    for statement in ast.parse(INSTALL % (name, name, name, name)).body:
+        out.append((STMT_PIECE, statement))
+    if leading:
+        out.append((TEXT_PIECE, leading))
+    catcher = _catcher()
+    assert catcher is not None
+    catcher.name = name
+    if not node.children:
+        return
+    after: list[str] = []
+    out.extend(_pieces_of(node.children, source, hoisted, methods,
+                          escaped=after))
+    # turnErrorCatcherOff, which switches off rather than restoring
+    # whatever was on before. Two nested #errorCatcher tags leave the
+    # inner #end with nothing on.
+    catcher.name = None
+    for ending in after:
+        out.append((TEXT_PIECE, ending))
+
+
+def _caught(written: Written) -> ast.expr:
+    """The call that replaces a placeholder while a catcher is on.
+
+    One wrapper method per distinct placeholder text, appended to the
+    class body. The name is not a dunder on purpose: Python mangles
+    those inside a class, and ct3's __errorCatcher1 only survives that
+    because the call it writes sits in the same class.
+    """
+    catcher = _catcher()
+    assert catcher is not None and catcher.name is not None
+    name = catcher.seen.get(written.raw)
+    if name is None:
+        name = "_ct4_caught_%d" % (len(catcher.seen) + 1)
+        catcher.seen[written.raw] = name
+        made = ast.parse(WRAPPER % (name, repr(written.code),
+                                    repr(written.code), repr(written.raw),
+                                    repr((written.line, written.column))))
+        catcher.methods.append(made.body[0])
+    return ast.Call(func=_attribute("self", name), args=[],
+                    keywords=[ast.keyword(
+                        arg="localsDict",
+                        value=ast.Call(func=ast.Name(id="locals",
+                                                     ctx=ast.Load()),
+                                       args=[], keywords=[]))])
 
 
 def _region_argument(node: tree.Node) -> str:
@@ -3441,7 +3648,7 @@ def _plain_expression(chunks: list[Chunk]) -> str:
     return ".".join(chunk.name + chunk.remainder for chunk in chunks)
 
 
-def _placeholder(expression: str) -> list[ast.stmt]:
+def _placeholder(written: Written) -> list[ast.stmt]:
     """The two statements ct3 writes for a placeholder.
 
     Through _parsed, because ct3 does emit Python that does not
@@ -3449,8 +3656,14 @@ def _placeholder(expression: str) -> list[ast.stmt]:
     a)" becomes VFFSL(SL,"not",True) a. Where ct3 does not compile
     there is nothing to be faithful to, and a SyntaxError out of this
     layer would crash a caller that only expects Unsupported.
+
+    While an error catcher is on the lookup is not written here at all.
+    It goes into a wrapper method and what stands here is the call.
     """
-    return _placeholder_value(_parsed(expression))
+    catcher = _catcher()
+    if catcher is not None and catcher.name is not None:
+        return _placeholder_value(_caught(written))
+    return _placeholder_value(_parsed(written.code))
 
 
 def _placeholder_value(lookup: ast.expr) -> list[ast.stmt]:

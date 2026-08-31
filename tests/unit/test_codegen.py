@@ -35,7 +35,10 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # generator read none of ct3's compiler settings and took the templates
 # anyway. Refusing them costs 42 cases and buys back the invariant that
 # every accepted case is right.
-FLOOR = 1317
+#
+# The corpus is the wrong ruler for #errorCatcher: it moves 3 cases
+# here and 83 of the 390 real skin templates.
+FLOOR = 1320
 
 
 def render_cases():
@@ -1208,6 +1211,69 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     # ct3 renders nothing at all here. Reproducing that needs ct3's
     # chunk boundaries, so the template is refused instead.
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
+
+
+# -- #errorCatcher ---------------------------------------------------
+#
+# The line every weewx skin opens with, and 103 of the 390 skin
+# templates in the corpus stop at it. What it does is replace every
+# placeholder after it with a wrapper that hands a NotFound to the
+# catcher, and the two things that are easy to get wrong are where it
+# stops: at an #end errorCatcher, and at the edge of a method, because
+# ct3 keeps the flag on the method compiler and #def spawns a new one.
+
+ERROR_CATCHER_SHAPES = [
+    "#errorCatcher Echo\n$missing\n",
+    "#errorCatcher Echo\n$a.b.c\n",
+    "#errorCatcher Echo\n$known\n",
+    "#errorCatcher BigEcho\n$missing\n",
+    "#errorCatcher ListErrors\n$missing\n",
+    # The same placeholder twice shares one wrapper.
+    "#errorCatcher Echo\n$missing$missing\n",
+    "#errorCatcher Echo\n#for $i in range(2)\n$missing\n#end for\n",
+    # Off again, and the catcher stops there.
+    "#errorCatcher Echo\n$missing\n#end errorCatcher\n$known\n",
+    # A method is its own compiler in ct3, so its body is written
+    # plain and the NotFound comes out at the call.
+    "#errorCatcher Echo\n#def g\n$missing\n#end def\n$g\n",
+    "#errorCatcher Echo\n#block b\n$missing\n#end block\n",
+    "#errorCatcher Echo\n#def g\n$known\n#end def\n$g$missing\n",
+    # And the other way round: on inside the method only.
+    "#def g\n#errorCatcher Echo\n$missing\n#end def\n$g\n",
+    # The silence and cache tokens wrap around it.
+    "#errorCatcher Echo\n$!missing\n",
+    "#errorCatcher Echo\n$*missing\n",
+    # A region is not a method, so the catcher reaches into it.
+    "#errorCatcher Echo\n#filter None\n$missing\n#end filter\n",
+    "#errorCatcher Echo\n#call str\n$missing\n#end call\n",
+    # And the tag decides about its own line like any other directive.
+    "L#errorCatcher Echo\nT\n",
+    "  #errorCatcher Echo\nT\n",
+]
+
+
+@pytest.mark.parametrize("source", ERROR_CATCHER_SHAPES)
+def test_the_error_catcher_matches_ct3(source):
+    context = {"known": "K"}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    try:
+        want = str(theirs(searchList=[dict(context)]).respond())
+    except Exception as error:                                 # noqa: BLE001
+        want = "!!%s" % type(error).__name__
+    assert codegen.supports(source), "refused: %r" % source
+    try:
+        got = codegen.render(source, [dict(context)])
+    except Exception as error:                                 # noqa: BLE001
+        got = "!!%s" % type(error).__name__
+    assert got == want
+
+
+def test_it_refuses_a_catcher_that_does_not_exist():
+    # ct3 writes ErrorCatchers.Nope(self) and lets it fail at render.
+    # Saying so at generate time beats an AttributeError out of a
+    # module nobody wrote by hand.
+    assert not codegen.supports("#errorCatcher Nope\n$missing\n")
 
 
 def test_it_reads_past_a_stop():
