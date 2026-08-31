@@ -1140,16 +1140,32 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 in die Vorlage.
 
 Stand 01-Sep-2026: **teilweise.** Die drei Schichten des Kerns stehen und
-tragen 1.320 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
+tragen 1.335 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
 hängen weiter daran, und der Kern hat noch keinen Aufrufer: gerendert wird
 weiter über ct3s alten Compiler.
 
 **Der Korpus ist nicht das einzige Maß.** Von den 390 echten Skin-Vorlagen im
-Korpus nimmt der Generator 311, also 79,7 Prozent. Diese Zahl und die 1.320
-laufen auseinander, und das ist lehrreich: `#errorCatcher` bewegt drei
-Korpusfälle und 83 Skins. ct3s eigene Testsuite hat keine Verwendung für eine
-Direktive, mit der jede weewx-Skin anfängt. Wer nur die Korpuszahl liest,
-baut die falschen Dinge zuerst.
+Korpus nimmt der Generator 336, also 86,2 Prozent. Die beiden Zahlen bewegen
+sich unterschiedlich schnell, und darin steckt die Lehre:
+
+| | Korpusfälle | Skins |
+|---|---|---|
+| `#errorCatcher` | +3 | +83 |
+| Ausdrucks-Platzhalter `$(...)` | +15 | +25 |
+
+ct3s eigene Testsuite hat keine Verwendung für eine Direktive, mit der jede
+weewx-Skin anfängt. Wer nur die Korpuszahl liest, baut die falschen Dinge
+zuerst.
+
+**Zwei Fehler, die beide Messlatten verfehlt haben.** Der Einzug vor `#else`,
+`#elif`, `#except` und `#finally` wurde nie entfernt: der Korpus schreibt
+keinen Text auf die Zeile eines Branch-Tags, und der Fuzzer setzt sein
+`#except` auf Spalte null, wo es nichts zu entfernen gibt. Und ct3 gibt dem
+Ausgabefilter bei jedem Platzhalter dessen Quelltext als `rawExpr` mit; der
+Standardfilter ignoriert ihn, weewx' `AssureUnicode` nicht — dort steht
+`rawExpr`, wo `str(wert)` fehlschlägt. Deshalb zeigt eine weewx-Seite
+`$day.foobar.min` und nicht `foobar?`. Beides fiel erst auf, als eine echte
+Skin durch den Generator lief.
 
 | | |
 |---|---|
@@ -1157,7 +1173,7 @@ baut die falschen Dinge zuerst.
 | Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
 | Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
-| Lexer, CST, AST, Codegen über `ast` | **1.320 von 1.636**, 311 von 390 Skins |
+| Lexer, CST, AST, Codegen über `ast` | **1.335 von 1.636**, 336 von 390 Skins |
 | Direktiven-Plugins auf AST-Ebene | hängt daran |
 
 **Die drei Schichten.** `ct4/lang/lex.py` zerlegt eine Vorlage verlustfrei in
@@ -1183,9 +1199,7 @@ die 42 Fälle, die das kostet, sind der Preis für die Regel.
 
 **Was noch fehlt, nach Kosten geordnet und gezählt.** Der Kopf von `#def` und
 `#block`, 64 Fälle, wo hinter dem Namen ein Kommentar oder eine Parameterliste
-steht, die die Schicht nicht liest. ct3s Ausdrucks-Platzhalter `$(...)` und
-`$[...]`, 46 Fälle, für den der Lexer keine Regel hat — und **drei echte
-weewx-Skins**, weshalb er in der Skin-Rechnung vorn steht. Die
+steht, die die Schicht nicht liest. Die
 Compiler-Einstellungen, 52. Danach `c'...'`-Zeichenketten, die Einzeiler-Form
 von `#if` und ein gutes Dutzend Direktiven mit je zwölf Fällen oder weniger.
 

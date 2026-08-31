@@ -76,7 +76,39 @@ START = re.compile(
     r"(?P<enclosure>[{(\[][ \t\f]*|)"
     r"(?=[A-Za-z_])")
 
+# ct3's second placeholder start, expressionPlaceholderStartRE: no
+# silence token, an optional cache token, one of the three enclosures,
+# blanks, and then anything that is not a closer. What the enclosure
+# holds is an expression instead of a name, which is the only
+# difference from START. "$(6)" and "$('#id')" are placeholders; the
+# second is why a jQuery call in a page comes out as "#id".
+#
+# ct3 tries this one only where it is scanning text. Inside an
+# expression it looks for a bare name and nothing else, so "#if $(6)"
+# leaves the dollar as a character. This lexer has no way to know which
+# it is in, because a directive's arguments stay in the stream as
+# ordinary tokens. So it lexes both alike and the layer that does know
+# turns the second away.
+EXPRESSION_START = re.compile(
+    r"(?<!\\)\$"
+    r"(?P<silent>)"
+    r"(?P<cache>\*(?:[0-9.]+[smhdw]?\*)?|)"
+    r"(?P<enclosure>[{(\[][ \t\f]*)"
+    r"(?=[^)}\]])")
+
 CLOSING = {"{": "}", "(": ")", "[": "]"}
+
+
+def start_of(text: str) -> re.Match[str] | None:
+    """The placeholder start at the beginning of text, either form.
+
+    Called as ``start_of(token.text)``. The groups are the same in both
+    patterns, so a caller reading ``cache`` or ``enclosure`` needs to
+    know which one matched only where it cares about the difference,
+    and the only one that does is the layer that turns the expression
+    form away inside a directive argument.
+    """
+    return START.match(text) or EXPRESSION_START.match(text)
 
 
 def directive_names() -> frozenset[str]:
@@ -381,7 +413,8 @@ class _Lexer:
         which is what a price in a text and a jQuery call both are.
         """
         source = self.source
-        match = START.match(source, index)
+        match = START.match(source, index) or EXPRESSION_START.match(source,
+                                                                    index)
         if match is None:
             return None
         opener = match.group("enclosure")[:1]

@@ -28,11 +28,17 @@ structure, whose body is spliced as the raw Python it is, and
 #errorCatcher, which sends every placeholder after it through a wrapper
 that hands a NotFound to the catcher.
 
-That is 1320 of the 1636 render cases. The corpus is not the only ruler
-worth reading: of the 390 real skin templates in it, 311. The gap
-between those two numbers is what #errorCatcher closed, 3 corpus cases
-against 83 skins, because ct3's own test suite has no use for a
-directive that every weewx skin opens with.
+Placeholders come in ct3's two forms: the name-led one and the one
+whose enclosure holds an expression, "$(6)" and "$('#id')", which is
+how a jQuery call in a page comes out as "#id".
+
+That is 1335 of the 1636 render cases. The corpus is not the only ruler
+worth reading: of the 390 real skin templates in it, 336. The two
+numbers move at different rates, and the difference is the point.
+#errorCatcher moved 3 corpus cases and 83 skins; the expression
+placeholder moved 15 and 25. ct3's own test suite has no use for a
+directive every weewx skin opens with, so a plan read off the corpus
+alone builds the wrong things first.
 
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
@@ -47,12 +53,11 @@ filter across.
 What it turns away, in the order the corpus says it costs most, and
 counted rather than estimated: the head of a #def or #block, 64 cases,
 where the name is followed by a comment or by a parameter list this
-layer cannot read; ct3's expression placeholder, 46; any template that
-sets a compiler setting, 52, on which see below; the c'...' string, 20;
-the one-line form that puts an #if body behind a colon, 16; and then
-#compiler-settings, #breakpoint, #compiler, #@, #i18n, #return,
-#assert, an #elif whose #if closed on the line before, and a #stop
-inside a block, 12 or fewer each.
+layer cannot read; any template that sets a compiler setting, 52, on
+which see below; the c'...' string, 20; the one-line form that puts an
+#if body behind a colon, 16; and then #compiler-settings, #breakpoint,
+#compiler, #@, #i18n, #return, #assert, an #elif whose #if closed on
+the line before, and a #stop inside a block, 12 or fewer each.
 
 A compiler setting is refused rather than ignored. This layer reads
 none of them, and two of them change what ct3 renders: with
@@ -62,13 +67,16 @@ whitespace behind, and with allowWhitespaceAfterDirectiveStartToken on
 taking such a template is guessing, and guessing was what it did: for a
 while it took 24 of them and rendered them differently from ct3.
 
-Two of its refusals are there because the lexer and ct3 disagree about
+One of its refusals is there because the lexer and ct3 disagree about
 how much source a placeholder covers, rather than because a rule is
-missing. ct3's expression placeholder, "$(6)" and "$[1,2]" and "$*{1}",
-where the enclosure holds an expression instead of a name, has no rule
-in the lexer at all and would come out as literal text; and a token
-that stops short of what ct3 read, "$a[\n1]" and "$f(1)upper", is
-turned away rather than read half. Both are refusals and not guesses.
+missing: a token that stops short of what ct3 read, "$a[\n1]" and
+"$f(1)upper", is turned away rather than read half.
+
+The expression placeholder is a refusal in the other direction. The
+lexer knows the form now, and it has to lex it wherever it stands,
+because a directive's arguments are ordinary tokens to it. ct3 looks
+for that form only while it is scanning text, so "#if $(6)" is a
+ParseError there. Such a template is refused rather than resolved.
 
 The whitespace around a directive is decided here from the source and
 in ct3 from a buffer of text not yet written, and the two answers part
@@ -588,11 +596,17 @@ class _Reader:
             self.at += 1
             self.whitespace()
         if self.peek() not in lex.IDENT_START:
-            # ct3's other placeholder start, the one whose enclosure
-            # holds an expression instead of a name. The lexer has no
-            # rule for it, and _refuse_expression_placeholders turns
-            # the whole template away.
-            raise Unsupported("placeholder %r" % self.text)
+            # getPlaceholder's else branch: the enclosure holds an
+            # expression and not a name. The whole of it is read as
+            # Python, with the placeholders inside it resolved, and the
+            # closer is sliced off. The opener is gone too, so "$(a+b)"
+            # writes "a + b" and not "(a + b)".
+            if not opener:
+                raise Unsupported("placeholder %r" % self.text)
+            made = self.expression(enclosed=True, enclosures=[opener])
+            if made.endswith(lex.CLOSING[opener]):
+                made = made[:-1]
+            return made
         found = self.chunks()
         if not found:
             raise Unsupported("placeholder %r" % self.text)
@@ -801,7 +815,6 @@ def generate(source: str, settings: Any = None) -> Generated:
     _refuse_settings(settings)
     source = _preprocess(source)
     root = tree.parse(source)
-    _refuse_expression_placeholders(source, root)
     _refuse_raw_in_short_form(source, root)
     shape = _class_shape(root)
     # The imports #extends synthesises stand with the template's own.
@@ -949,42 +962,6 @@ def _encoding_is_transparent(source: str, name: str) -> bool:
         # An unknown name, a codec that is not a text codec at all, and
         # one that cannot read ASCII. ct3 raises the same two.
         return False
-
-
-# ct3's expressionPlaceholderStartRE: a dollar, an optional cache
-# token, one of the three enclosures, blanks, and then anything that is
-# not a closer. It is ct3's second placeholder start, and the only one
-# whose enclosure holds an expression rather than a name.
-EXPRESSION_PLACEHOLDER = re.compile(
-    r"(?<!\\)\$(?:\*[0-9.]+[smhdw]?\*|\*|)[{(\[][ \t\f]*(?=[^)}\]])")
-
-
-def _refuse_expression_placeholders(source: str, root: tree.Node) -> None:
-    """Turns away the placeholder start the lexer does not know.
-
-    ct3's parser tries the name-led placeholder first and this one
-    second, and then reads the whole enclosure as an expression:
-    ``$("%.3f" % $almanac.sun.alt)`` resolves the name and formats it.
-    lex.START requires a name behind the enclosure, so the same source
-    comes out as text, a placeholder and more text, and would be
-    written out literally. Doing nothing is not a refusal here, it is
-    wrong output, and weewx templates use the form.
-
-    Only a match standing in output text counts. Inside a comment ct3
-    looks for no placeholder either, and inside an expression the long
-    form is a ParseError the reader already raises.
-    """
-    if not EXPRESSION_PLACEHOLDER.search(source):
-        return
-    spans = [(token.start, token.end)
-             for node in root.walk() for token in lex.walk(node.tokens)
-             if token.kind == lex.TEXT]
-    for match in EXPRESSION_PLACEHOLDER.finditer(source):
-        for start, end in spans:
-            if start <= match.start() < end:
-                raise Unsupported(
-                    "the expression placeholder %r"
-                    % source[match.start():match.start() + 20])
 
 
 # -- What the template writes ----------------------------------------
@@ -1218,7 +1195,7 @@ def _piece(node: tree.Node, source: str,
     if node.kind == lex.PLACEHOLDER:
         token = node.tokens[0]
         _refuse_a_short_token(token, source)
-        marked = lex.START.match(token.text)
+        marked = lex.start_of(token.text)
         if marked is not None and (marked.group("silent")
                                    or marked.group("cache")):
             _modified_placeholder(node, token, marked, out)
@@ -1254,7 +1231,7 @@ def _refuse_a_short_token(token: lex.Token, source: str) -> None:
     The enclosure forms end where ct3 ends them, so they are left
     alone: ``${f(1)}upper`` writes the same bytes either way.
     """
-    marked = lex.START.match(token.text)
+    marked = lex.start_of(token.text)
     if marked is not None and marked.group("enclosure"):
         return
     following = source[token.end:token.end + 1]
@@ -3111,11 +3088,9 @@ def _try_block(node: tree.Node, source: str,
                escaped: list[str] | None = None) -> ast.stmt:
     """``#try`` with its ``#except`` and ``#finally`` arms."""
     statement = ast.Try(body=[], handlers=[], orelse=[], finalbody=[])
-    for directive, children in _branches(node, ("except", "finally")):
-        pieces = _pieces_of(children, source, hoisted, methods,
-                            escaped=escaped)
-        if leading and directive is node:
-            pieces.insert(0, (TEXT_PIECE, leading))
+    for directive, pieces in _branch_pieces(node, source, hoisted, methods,
+                                            leading, escaped,
+                                            ("except", "finally")):
         made = _statements(pieces) or [ast.Pass()]
         if directive is node:
             statement.body = made
@@ -3324,18 +3299,14 @@ def _if_block(node: tree.Node, source: str,
     the last one holds the #end, but escaped goes to every arm: which
     is the last is the tree's business, not this function's.
     """
-    branches = _branches(node)
+    branches = _branch_pieces(node, source, hoisted, methods, leading,
+                              escaped)
     statement = _framed("if %s:" % _argument(branches[0][0], node))
     assert isinstance(statement, ast.If)
     current = statement
-    first = _pieces_of(branches[0][1], source, hoisted, methods,
-                       escaped=escaped)
-    if leading:
-        first.insert(0, (TEXT_PIECE, leading))
-    statement.body = _statements(first)
-    for directive, children in branches[1:]:
-        body = _statements(_pieces_of(children, source, hoisted, methods,
-                                      escaped=escaped))
+    statement.body = _statements(branches[0][1])
+    for directive, pieces in branches[1:]:
+        body = _statements(pieces)
         condition = _branch_condition(directive)
         if condition is None:
             current.orelse = body
@@ -3375,6 +3346,40 @@ def _branches(node: tree.Node,
             continue
         found[-1][1].append(child)
     return found
+
+
+def _branch_pieces(node: tree.Node, source: str, hoisted: list[ast.stmt],
+                   methods: list[ast.stmt], leading: str,
+                   escaped: list[str] | None,
+                   at: Sequence[str] = BRANCHES,
+                   ) -> list[tuple[Any, list[tuple[str, Any]]]]:
+    """Each arm's pieces, with the branch tags' own lines settled.
+
+    An #else decides about the line it stands on like any other
+    directive, and the two halves of that decision land in different
+    arms: the indent before it was written by the arm above, and the
+    line ending after it is the first thing the arm below writes. Which
+    is why this cannot be done inside _pieces_of, where each arm is
+    walked without knowing what came before it.
+
+    Missing it left the two blanks of ``  #else`` in the output, and
+    neither the corpus nor the whitespace fuzz caught it: the corpus
+    puts no text on a branch tag's line, and the fuzz writes its
+    #except at column zero, where there is no indent to drop.
+    """
+    built: list[tuple[Any, list[tuple[str, Any]]]] = []
+    carry = leading
+    previous: list[tuple[str, Any]] | None = None
+    for directive, children in _branches(node, at):
+        if previous is not None:
+            carry = _eat_region_line(directive, source, previous)
+        pieces = _pieces_of(children, source, hoisted, methods,
+                            escaped=escaped)
+        if carry:
+            pieces.insert(0, (TEXT_PIECE, carry))
+        built.append((directive, pieces))
+        previous = pieces
+    return built
 
 
 def _body(node: tree.Node, source: str,
@@ -3662,16 +3667,29 @@ def _placeholder(written: Written) -> list[ast.stmt]:
     """
     catcher = _catcher()
     if catcher is not None and catcher.name is not None:
-        return _placeholder_value(_caught(written))
-    return _placeholder_value(_parsed(written.code))
+        return _placeholder_value(_caught(written), written.raw)
+    return _placeholder_value(_parsed(written.code), written.raw)
 
 
-def _placeholder_value(lookup: ast.expr) -> list[ast.stmt]:
+def _placeholder_value(lookup: ast.expr, raw: str = "") -> list[ast.stmt]:
     """The value first, then the write behind a guard.
 
     A placeholder that resolves to None writes nothing, and the filter
     never sees it.
+
+    Args:
+        raw (str): The template's own text for the placeholder, which
+            goes to the filter as rawExpr. ct3 adds it to every
+            placeholder write and to nothing else, #echo included, so
+            an empty string is how a caller says "not a placeholder".
+            The default filter ignores it and the corpus was blind to
+            it for that reason. weewx's AssureUnicode is not: where
+            str(value) raises, it writes rawExpr in its place, which is
+            how "$day.foobar.min" on a page comes out as itself rather
+            than as "foobar?".
     """
+    keywords = [ast.keyword(arg="rawExpr", value=ast.Constant(raw))] \
+        if raw else []
     return [
         _assign(VALUE, lookup),
         ast.If(
@@ -3680,7 +3698,8 @@ def _placeholder_value(lookup: ast.expr) -> list[ast.stmt]:
                              comparators=[ast.Constant(None)]),
             body=[_write(ast.Call(
                 func=ast.Name(id=FILTER, ctx=ast.Load()),
-                args=[ast.Name(id=VALUE, ctx=ast.Load())], keywords=[]))],
+                args=[ast.Name(id=VALUE, ctx=ast.Load())],
+                keywords=keywords))],
             orelse=[]),
     ]
 

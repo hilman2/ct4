@@ -21,7 +21,7 @@ import pytest
 from Cheetah.Template import Template
 from ct4.corpus import namespaces
 from ct4.corpus.case import RENDER, decode
-from ct4.fixture.filters import resolve
+from ct4.fixture.filters import WeewxAssureUnicode, resolve
 from ct4.lang import codegen
 
 from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
@@ -38,7 +38,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 #
 # The corpus is the wrong ruler for #errorCatcher: it moves 3 cases
 # here and 83 of the 390 real skin templates.
-FLOOR = 1320
+FLOOR = 1335
 
 
 def render_cases():
@@ -1092,7 +1092,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "$f(1)upper\n",                          # ct3's chain runs on
     "$a[\n1]\n",                             # the lexer stopped early
     "${aFunc(\n\n)}\n",                      # ... and left the "}" over
-    '$("%.3f" % $x)\n',                      # ct3's other placeholder start
     "$(a, 'x')\n",                           # arguments for the filter
     "#echo ${b}\n",                          # ParseError inside an expression
     "$str(c'$aStr')\n",                      # a c'...' placeholder string
@@ -1211,6 +1210,118 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     # ct3 renders nothing at all here. Reproducing that needs ct3's
     # chunk boundaries, so the template is refused instead.
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
+
+
+# -- The expression placeholder --------------------------------------
+#
+# ct3's second placeholder start, where the enclosure holds an
+# expression instead of a name. 46 corpus cases and 25 of the 390 skin
+# templates, so it is not an exotic corner: three weewx skins use it to
+# format a number.
+
+EXPRESSION_SHAPES = [
+    "$(6)\n",
+    "$(1+2)\n",
+    "$[1,2]\n",
+    '$("%.3f" % $pi)\n',
+    "$( 6 )\n",
+    "$($pi)\n",
+    "$($pi + 1)\n",
+    "$*(6)\n",
+    "$( $pi )\n",
+    "$[$a['b']]\n",
+    "$(1)$(2)\n",
+    "#set $x = 1\n$($x + 1)\n",
+    "$($a.b)\n",
+    # A jQuery call in a page is one of these, and ct3 writes what the
+    # expression evaluates to rather than the source.
+    "a$('#id')b\n",
+    "<a href=\"$('x')\">\n",
+    # Neither of these is one: the enclosure closes at once, so the
+    # dollar is a character.
+    "$()\n",
+    "$(]\n",
+    "price: $(5.00)\n",
+]
+
+
+@pytest.mark.parametrize("source", EXPRESSION_SHAPES)
+def test_the_expression_placeholder_matches_ct3(source):
+    context = {"pi": 3.14159, "a": {"b": "B"}}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[dict(context)]).respond())
+    assert codegen.supports(source), "refused: %r" % source
+    assert codegen.render(source, [dict(context)]) == want
+
+
+# -- The line a branch directive stands on ---------------------------
+
+BRANCH_SHAPES = [
+    "#if 1\nT\n  #else\nF\n#end if\n",
+    "#if 0\nT\n  #else\nF\n#end if\n",
+    "#if 1\nT#slurp\n  #else\nF#slurp\n  #end if\n",
+    "#if 1\nT\n  #elif 0\nX\n#end if\n",
+    "#if 0\nT\n  #elif 1\nX\n#end if\n",
+    "#try\nT\n  #except\nE\n#end try\n",
+    "#try\nT\n  #finally\nF\n#end try\n",
+    # Dirty line: the indent stays and the ending is the arm's output.
+    "#if 1\nA  #else\nB\n#end if\n",
+    "#if 0\nA  #else\nB\n#end if\n",
+]
+
+
+@pytest.mark.parametrize("source", BRANCH_SHAPES)
+def test_a_branch_tag_decides_about_its_own_line(source):
+    # An #else eats the whitespace before it and the line ending after
+    # it, like every other directive. Missing that left the two blanks
+    # of "  #else" in the output. Neither the corpus nor the whitespace
+    # fuzz saw it: the corpus writes no text on a branch tag's line,
+    # and the fuzz puts its #except at column zero.
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[{}]).respond())
+    assert codegen.supports(source), "refused: %r" % source
+    assert codegen.render(source, [{}]) == want
+
+
+class Unprintable:
+    """A value whose str() raises, the way a weewx unknown type does."""
+
+    def __str__(self) -> str:
+        raise AttributeError("foobar")
+
+
+def test_the_filter_gets_the_raw_placeholder():
+    # ct3 hands the filter the placeholder's own text as rawExpr on
+    # every placeholder write. The default filter ignores it, which is
+    # why 2026 corpus cases went by without noticing it was missing.
+    # weewx's AssureUnicode does not ignore it: where str(value)
+    # raises it writes rawExpr, so a page shows "$day.foobar.min"
+    # rather than "foobar?".
+    source = "$broken\n"
+    context = {"broken": Unprintable()}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[dict(context)],
+                      filter=WeewxAssureUnicode).respond())
+    assert want == "$broken\n"
+    assert codegen.render(source, [dict(context)],
+                          output_filter=WeewxAssureUnicode) == want
+
+
+def test_echo_does_not_get_the_raw_placeholder():
+    # And #echo is the one write that does not, which is ct3's own
+    # asymmetry: addEcho passes rawExpr=None.
+    source = "#echo $broken\n"
+    context = {"broken": Unprintable()}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[dict(context)],
+                      filter=WeewxAssureUnicode).respond())
+    assert want == "foobar?"
+    assert codegen.render(source, [dict(context)],
+                          output_filter=WeewxAssureUnicode) == want
 
 
 # -- #errorCatcher ---------------------------------------------------
