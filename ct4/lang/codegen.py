@@ -343,8 +343,19 @@ def _pieces_of(nodes: Sequence[tree.Node],
             if node.name in BRANCHES or node.name == "end":
                 # Handled by the block they belong to.
                 _eat_directive_line(node, source, out)
+            elif node.name == "slurp":
+                # It exists to swallow the line ending after it, and
+                # that ending is already inside its own tokens, so it
+                # never gets written. What is left is the indent, and
+                # eatSlurp drops that wherever the line was clear. Note
+                # that it does so without the second condition the
+                # other directives carry: a slurp always ends its line.
+                if _line_is_clear(source, node.tokens[0].start):
+                    _drop_indent(out)
             else:
-                raise Unsupported("#%s" % node.name)
+                _eat_directive_line(node, source, out)
+                for made in _simple_directive(node):
+                    out.append((STMT_PIECE, made))
         elif node.kind == lex.EOL_SLURP:
             # It writes nothing and has already taken its line ending
             # with it. What is left is the indent before it.
@@ -407,7 +418,90 @@ def _block(node: tree.Node, source: str) -> ast.stmt:
         return _for_block(node, source)
     if node.name == "if":
         return _if_block(node, source)
+    if node.name == "while":
+        return _headed_block("while %s:", node, source)
+    if node.name == "unless":
+        # ct3 writes the parentheses, and they matter: without them
+        # "#unless $a or $b" would negate only the first.
+        return _headed_block("if not (%s):", node, source)
+    if node.name == "repeat":
+        # A counter nobody can collide with, named after where the
+        # directive stands so that two runs give the same code.
+        name = "__ct4_repeat_%d_%d" % (node.line, node.column)
+        return _headed_block("for " + name + " in range(%s):", node, source)
     raise Unsupported("#%s" % node.name)
+
+
+def _headed_block(shape: str, node: tree.Node, source: str) -> ast.stmt:
+    """A block whose header is the shape with its argument in it."""
+    statement = _framed(shape % _argument(node, node))
+    statement.body = _body(node, source)                # type: ignore[attr-defined]
+    return statement
+
+
+def _simple_directive(node: tree.Node) -> list[ast.stmt]:
+    """A directive that is one or two statements and opens nothing."""
+    if node.name == "pass":
+        return [ast.Pass()]
+    if node.name == "break":
+        return [ast.Break()]
+    if node.name == "continue":
+        return [ast.Continue()]
+    if node.name == "silent":
+        # The expression is evaluated and its value dropped.
+        return [ast.Expr(value=_parsed(_argument(node, node)))]
+    if node.name == "echo":
+        # The same two statements a placeholder writes.
+        return _placeholder_value(_parsed(_argument(node, node)))
+    if node.name == "set":
+        return [_set_statement(node)]
+    raise Unsupported("#%s" % node.name)
+
+
+def _set_statement(node: tree.Node) -> ast.stmt:
+    """``#set $a = 1`` as ``a = 1``.
+
+    The target loses its dollar and becomes a plain name; only the
+    right-hand side is looked up. ``#set global`` is a different thing
+    altogether: ct3 writes it into the template instance, and there is
+    no instance here.
+    """
+    parts = []
+    target = True
+    for token in node.tokens[1:]:
+        if target and token.kind == lex.PLACEHOLDER:
+            path = _plain_path(token.text)
+            if path is None or token.children:
+                raise Unsupported("assignment target %r" % token.text)
+            parts.append(path)
+            continue
+        if target and token.kind == lex.TEXT and \
+                re.match(r"\s*global\b", token.text):
+            raise Unsupported("#set global needs a template instance")
+        parts.append(_token_source(token))
+        if target and token.kind == lex.TEXT and "=" in token.text:
+            target = False
+    made = _framed_statement("".join(parts).strip())
+    if not isinstance(made, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        raise Unsupported("#set that is not an assignment")
+    return made
+
+
+def _framed_statement(source: str) -> ast.stmt:
+    try:
+        parsed = ast.parse(source)
+    except SyntaxError as error:
+        raise Unsupported("cannot read %r: %s" % (source, error)) from None
+    if len(parsed.body) != 1:
+        raise Unsupported("more than one statement in %r" % source)
+    return parsed.body[0]
+
+
+def _parsed(source: str) -> ast.expr:
+    try:
+        return ast.parse(source, mode="eval").body
+    except SyntaxError as error:
+        raise Unsupported("cannot read %r: %s" % (source, error)) from None
 
 
 def _for_block(node: tree.Node, source: str) -> ast.stmt:
@@ -675,12 +769,16 @@ def _expression(chunks: list[Chunk]) -> str:
 
 
 def _placeholder(expression: str) -> list[ast.stmt]:
-    """The two statements ct3 writes for a placeholder.
+    """The two statements ct3 writes for a placeholder."""
+    return _placeholder_value(ast.parse(expression, mode="eval").body)
 
-    The value first, then the write behind a guard: a placeholder that
-    resolves to None writes nothing, and the filter never sees it.
+
+def _placeholder_value(lookup: ast.expr) -> list[ast.stmt]:
+    """The value first, then the write behind a guard.
+
+    A placeholder that resolves to None writes nothing, and the filter
+    never sees it.
     """
-    lookup = ast.parse(expression, mode="eval").body
     return [
         _assign(VALUE, lookup),
         ast.If(

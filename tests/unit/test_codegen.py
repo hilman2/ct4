@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 499
+FLOOR = 667
 
 
 def render_cases():
@@ -127,6 +127,52 @@ def test_an_indent_stays_where_the_directive_does_not_end_its_line():
     assert out(source, [{"r": [1, 2]}]) == "  12  "
 
 
+def test_set_assigns_a_plain_name():
+    # The target loses its dollar; only the right-hand side is a
+    # lookup. ct3 writes "a = 1".
+    assert out("#set $a = $b\n$a\n", [{"b": 4}]) == "4\n"
+
+
+def test_silent_evaluates_and_writes_nothing():
+    seen = []
+
+    def note():
+        seen.append(1)
+        return "written?"
+
+    # Autocalling reaches it, and nothing lands in the output.
+    assert out("#silent $note\n", [{"note": note}]) == ""
+    assert seen == [1]
+
+
+def test_echo_writes_like_a_placeholder():
+    assert out("#echo $a\n", [{"a": 7}]) == "7"
+
+
+def test_slurp_eats_the_line_ending():
+    assert out("x#slurp\ny\n", [{}]) == "xy\n"
+    # And the indent as well, wherever the line held nothing else.
+    assert out("a\n   #slurp\nb\n", [{}]) == "a\nb\n"
+
+
+def test_while_break_and_continue():
+    source = ("#set $n = 0\n#while 1\n#set $n = $n + 1\n"
+              "#if $n > 2\n#break\n#end if\nx\n#end while\n")
+    assert out(source, [{}]) == "x\nx\n"
+
+
+def test_unless_negates_the_whole_expression():
+    # ct3 writes "if not (expr)". Without the parentheses an "or"
+    # would bind only the first half.
+    assert out("#unless $a or $b\nx\n#end unless\n", [{"a": 0, "b": 1}]) == ""
+    assert out("#unless $a or $b\nx\n#end unless\n",
+               [{"a": 0, "b": 0}]) == "x\n"
+
+
+def test_repeat_counts():
+    assert out("#repeat 3\nx\n#end repeat\n", [{}]) == "x\nx\nx\n"
+
+
 def test_none_writes_nothing():
     # The guard ct3 writes: a placeholder that resolves to None puts
     # nothing in the output, and the filter never sees it.
@@ -150,8 +196,9 @@ def test_the_generated_code_is_python():
 # -- What it refuses -------------------------------------------------
 
 @pytest.mark.parametrize("source", [
-    "#set $a = 1\n$a\n",                     # #set is not read yet
-    "#while $a\nx\n#end while\n",            # nor #while
+    "#set global $a = 1\n$a\n",              # writes into the instance
+    "#def show\nx\n#end def\n",              # a method, not a statement
+    "#import os\n$a\n",                      # hoisted out of the body
     "$getVar('x')\n",                        # needs a Template object
     "$self.foo\n",                           # needs a Template object
     "$!a\n",                                 # no silence token yet
@@ -169,7 +216,7 @@ def test_refusing_is_not_the_same_as_failing():
     # An unsupported template must raise Unsupported and nothing else,
     # so a caller can fall back rather than crash.
     with pytest.raises(codegen.Unsupported):
-        codegen.generate("#set $a = 1\n$a\n")
+        codegen.generate("#block b\nx\n#end block\n")
 
 
 # -- Against the corpus ----------------------------------------------
