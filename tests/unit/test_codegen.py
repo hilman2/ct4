@@ -1146,6 +1146,77 @@ def test_it_refuses_a_name_only_one_engine_has(name):
     assert not codegen.supports("<% write(" + name + ") %>\n")
 
 
+# -- Whitespace around a directive -----------------------------------
+#
+# The corpus holds not one of these shapes: 2026 real cases, the whole
+# weewx skin set among them, and every one of them writes its
+# directives on lines of their own. A differential fuzz found 1864 of
+# 12627 accepted templates rendering differently from ct3, all of them
+# here. So the suite carries the shapes itself, compared against a real
+# ct3 rather than against a recorded string, which is what keeps them
+# from going stale when a rule is understood better.
+
+WHITESPACE_SHAPES = [
+    # An #end tag sharing its line with output. The line ending after
+    # it belongs after the block: ct3 has closed the loop before the
+    # text arrives, so it is written once and not once per turn.
+    "A\n#for $i in range(2)\nZ#end for\n",
+    "#for $i in range(2)\nZ#end for\n",
+    "A\n#if 1\nB#end if\nC\n",
+    "#for $i in range(2)\n#for $j in range(2)\nZ#end for\n#end for\n",
+    # An opening tag with output before it on the line. Its line ending
+    # is the other way round: it is the first thing the body writes.
+    "L#for $i in range(2)\nZ\n#end for\nA\n",
+    "L #while 0\nZ\n#end while\nA\n",
+    "$aStr#for $i in range(2)\nZ\n#end for\n",
+    # #echo writes, so its line ending comes after what it wrote.
+    "L#echo 1\nT\n",
+    "L#echo $aStr\nT\n",
+    # #stop ends the template. What stands behind it is never written,
+    # its own line ending included.
+    "L#stop\nT\n",
+    "L #stop\n",
+    # A block comment takes the rest of its line and its indent, unless
+    # it is the last thing in the template, where ct3 leaves the whole
+    # question alone.
+    "  #* c *#\nT\n",
+    "  #* c *#",
+    "  #* c *#X\n",
+    "  #* a\n   *#\nT\n",
+    "\t#* c *#  ",
+    # The same, with the other two line endings.
+    "A\r\n#for $i in range(2)\r\nZ#end for\r\n",
+    "A\r#for $i in range(2)\rZ#end for\r",
+]
+
+
+@pytest.mark.parametrize("source", WHITESPACE_SHAPES)
+def test_whitespace_around_a_directive_matches_ct3(source):
+    context = {"x": 1, "aStr": "blarg"}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[dict(context)]).respond())
+    assert codegen.supports(source), "refused: %r" % source
+    assert codegen.render(source, [dict(context)]) == want
+
+
+def test_text_before_a_def_is_refused_rather_than_kept():
+    # ct3 decides from its pending buffer and this layer from the
+    # source, and a #def is where the two part company: it carries its
+    # body off into a method, so the L is still pending when the #slurp
+    # two lines down truncates the buffer to the start of its line.
+    # ct3 renders nothing at all here. Reproducing that needs ct3's
+    # chunk boundaries, so the template is refused instead.
+    assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
+
+
+def test_it_reads_past_a_stop():
+    # ct3 writes a return and carries on generating, so a template that
+    # is malformed after #stop still fails to compile. Stopping the
+    # walk there would render it.
+    assert not codegen.supports("A\n#stop\n#attr $a = 1T")
+
+
 # -- Against the corpus ----------------------------------------------
 
 def taken():

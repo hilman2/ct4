@@ -1181,15 +1181,45 @@ Compiler-Einstellungen, 52. Danach `c'...'`-Zeichenketten, die Einzeiler-Form
 mit Doppelpunkt und ein gutes Dutzend Direktiven mit je zwölf Fällen oder
 weniger.
 
-**Was der Korpus nicht zeigt.** Ein differenzieller Fuzzer über 12.627
-angenommene Vorlagen fand 1.863, die andere Bytes liefern als ct3. Alle gehen
-auf fünf Whitespace-Regeln zurück, die der Korpus nicht enthält: ein `#end`,
-das sich eine Zeile mit Ausgabe teilt, 1.093; ein öffnendes Tag mit Text davor,
-436; `#echo` hinter Text, 189; `#stop` hinter Text, 104; ein eingerückter
-Blockkommentar, 41. Das ist keine Regression, dieselben Formen liefen schon
-vorher falsch. Es ist die Entscheidung, die ansteht: entweder ct3s
-Chunk-Modell nachbauen, `handleWSBeforeDirective` mit ausstehendem Chunk, oder
-die fünf Formen ablehnen. Die Regel verlangt eines von beiden.
+**Was der Korpus nicht zeigt, und was daraus wurde.** Der Korpus besteht aus
+2.026 echten Vorlagen, und jede einzelne schreibt ihre Direktiven auf eigene
+Zeilen. Über das, was passiert, wenn eine Direktive sich eine Zeile mit
+Ausgabe teilt, sagt er nichts. Ein differenzieller Fuzzer baute 13.072
+Vorlagen, die genau das tun, und fand **1.864 von 12.627 angenommenen mit
+anderen Bytes als ct3** — 14,8 Prozent, in fünf Gruppen, keine davon im
+Korpus.
+
+Alle fünf waren derselbe Fehler: das übrig gebliebene Zeilenende wurde eine
+Position zu früh ausgegeben. ct3 schreibt zuerst den Code der Direktive und
+dann den Text dahinter, und wo dieser Text hinfällt, hängt an der Direktive:
+
+| Direktive | wohin das Zeilenende gehört |
+|---|---|
+| öffnendes Tag (`#for`, `#if`, …) | **in** den Rumpf, als dessen erste Ausgabe |
+| `#end` | **hinter** den Block, ct3 hat ihn schon geschlossen |
+| `#echo` | hinter das, was `#echo` schreibt |
+| `#stop` | nirgendwohin, es steht hinter dem `return` |
+
+Dazu zwei Einzelheiten, die aus ct3s Quelltext kommen und nicht aus dem
+Nachdenken: `eatMultiLineComment` klammert seinen ganzen Whitespace-Block mit
+`not self.atEnd()`, deshalb lässt ein Blockkommentar am Dateiende seinen
+Einzug stehen; und `endOfFirstLine` wird vor dem Fressen gemessen, `pos`
+danach, deshalb ist ein einzeiliger Kommentar schon darüber hinaus, sobald
+sein Zeilenende genommen ist.
+
+**Stand: 0 von 12.765 falsch.** Angenommen werden mehr Vorlagen als vorher
+(12.627 → 12.765), und keine davon rendert anders als ct3. Der Fuzzer liegt
+als `tests/fuzz/whitespace.py` im Repo und läuft in `all` mit, 29 Sekunden.
+
+**Wo es doch aus dem Puffer entschieden wird.** ct3 fragt nicht den Quelltext,
+ob eine Zeile frei ist, sondern schneidet seinen ausstehenden Text auf den
+letzten Zeilenumbruch zurück. Meist ist das dasselbe. Nicht dasselbe ist es
+nach einem `#def`: dessen Rumpf wandert in eine Methode, das `L` aus
+`L#def g` bleibt ausstehend, und ein `#slurp` zwei Zeilen weiter löscht es.
+ct3 rendert dort gar nichts. Das nachzubauen bräuchte ct3s Chunk-Grenzen statt
+der Stücke dieser Schicht — ein Textlauf mit einem Escape darin ist dort ein
+Chunk und hier drei Stücke — also wird abgelehnt. Kosten: 186 Fuzz-Vorlagen,
+null Korpusfälle.
 
 **Geltungsbereiche.** Der Compiler führt einen Stapel der Namen, die er selbst
 gebunden hat, und löst Platzhalter darauf ohne die SearchList auf. Zahlen und

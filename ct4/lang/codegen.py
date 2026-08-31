@@ -62,6 +62,16 @@ where the enclosure holds an expression instead of a name, has no rule
 in the lexer at all and would come out as literal text; and a token
 that stops short of what ct3 read, "$a[\n1]" and "$f(1)upper", is
 turned away rather than read half. Both are refusals and not guesses.
+
+The whitespace around a directive is decided here from the source and
+in ct3 from a buffer of text not yet written, and the two answers part
+company in one place: a #def or #block carries its body off into a
+method, so text before its opening tag is still pending when a later
+directive on a clear line truncates the buffer. ct3 deletes that text.
+Reproducing it needs ct3's chunk boundaries rather than this layer's
+pieces, so the template is refused; see _drop_indent. Every other shape
+agrees, which tests/fuzz/whitespace.py measures over 12765 built
+templates the corpus does not contain.
 """
 
 from __future__ import annotations
@@ -920,6 +930,15 @@ STMT_PIECE = "stmt"
 # truncate a raw body like any other pending chunk, and this layer
 # refuses that case rather than working out where its chunks fall.
 RAW_PIECE = "raw"
+# Writes nothing. It marks the point where ct3 called commitStrConst,
+# which flushes its pending text and puts it out of reach of the next
+# handleWSBeforeDirective. Every statement-producing directive commits
+# through addChunk, so a STMT_PIECE is already such a mark; this one is
+# for the constructs that commit and produce no statement, which are
+# #slurp and the two kinds of comment. Without it "L#slurp" followed by
+# a #slurp on a clear line looks like an indent drop over an L that ct3
+# had already written out.
+BARRIER_PIECE = "barrier"
 
 # Directives that only announce a branch of the block they sit in.
 BRANCHES = ("else", "elif")
@@ -933,7 +952,8 @@ def _pieces(root: tree.Node, source: str,
 
 def _pieces_of(nodes: Sequence[tree.Node], source: str,
                hoisted: list[ast.stmt], methods: list[ast.stmt],
-               top: bool = False) -> list[tuple[str, Any]]:
+               top: bool = False,
+               escaped: list[str] | None = None) -> list[tuple[str, Any]]:
     """The output of a template, as text and values in order.
 
     A comment writes nothing, but it decides what happens to the
@@ -943,6 +963,15 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
     Walked by index rather than by iteration, because a PSP block is
     not a node: its opening token and its ``<%end%>`` are two siblings
     in this list, and everything between them is the body.
+
+    Args:
+        escaped (list[str]|None): Where these nodes are the body of a
+            block, the caller's place to receive the line ending the
+            closing #end tag leaves behind. That ending is written
+            after the block, not inside it, because ct3 has closed the
+            block before the text reaches the compiler. Without it a
+            "#for" whose "#end for" shares a line with output puts a
+            line ending into every turn of the loop.
     """
     out: list[tuple[str, Any]] = []
     # Set by a block comment: the whitespace up to the end of the line
@@ -965,14 +994,20 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 continue
         if node.kind == lex.COMMENT:
             _line_comment(node, source, out)
+            out.append((BARRIER_PIECE, ""))
         elif node.kind == lex.BLOCK_COMMENT:
             pending = _block_comment(node, source, out)
+            out.append((BARRIER_PIECE, ""))
         elif node.kind == tree.BLOCK:
             if node.name in ("def", "block"):
-                _eat_directive_line(node, source, out)
-                call = _definition(node, source, hoisted, methods, out)
+                after: list[str] = []
+                call = _definition(node, source, hoisted, methods,
+                                   _eat_region_line(node, source, out),
+                                   after)
                 if call is not None:
                     out.append((STMT_PIECE, call))
+                for text in after:
+                    out.append((TEXT_PIECE, text))
                 continue
             if node.name == "raw":
                 # Read off the source from end to end, its own closing
@@ -985,8 +1020,17 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # any of them is written.
                 _region(node, source, hoisted, methods, out)
                 continue
-            _eat_directive_line(node, source, out)
-            out.append((STMT_PIECE, _block(node, source, hoisted, methods)))
+            # The two line endings a block's tags leave behind fall on
+            # opposite sides of it. The opening tag's is body, because
+            # ct3 has written the loop header before the text arrives;
+            # the #end tag's is not, and _pieces_of hands it back
+            # through this list.
+            leading = _eat_region_line(node, source, out)
+            after = []
+            out.append((STMT_PIECE, _block(node, source, hoisted, methods,
+                                           leading, after)))
+            for text in after:
+                out.append((TEXT_PIECE, text))
         elif node.kind == lex.DIRECTIVE:
             if node.name in BRANCHES:
                 # A branch that reached here belongs to no block this
@@ -997,8 +1041,15 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # would simply vanish.
                 raise Unsupported("#%s outside a block" % node.name)
             if node.name == "end":
-                # Handled by the block it closes.
-                _eat_directive_line(node, source, out)
+                # The tag itself is handled by the block it closes.
+                # What it leaves behind is a line ending that belongs
+                # after that block: ct3 has already written the
+                # dedent when the text arrives.
+                ending = _directive_line_ending(node, source, out)
+                if ending and escaped is not None:
+                    escaped.append(ending)
+                elif ending:
+                    out.append((TEXT_PIECE, ending))
             elif node.name == "slurp":
                 # It exists to swallow the line ending after it, and
                 # that ending is already inside its own tokens, so it
@@ -1008,6 +1059,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # other directives carry: a slurp always ends its line.
                 if _line_is_clear(source, node.tokens[0].start):
                     _drop_indent(out)
+                out.append((BARRIER_PIECE, ""))
             elif node.name == "stop":
                 # ct3 stops generating here and drops the rest of the
                 # template, the closing directives included. Inside a
@@ -1015,7 +1067,19 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # not compile, so only the top level is taken.
                 if not top:
                     raise Unsupported("#stop inside a block")
-                _eat_directive_line(node, source, out)
+                # Called for the indent it drops, not for the ending it
+                # returns: that ending stands after the point where ct3
+                # stopped generating, so nothing writes it. "L#stop"
+                # renders "L" and not "L" and a line ending.
+                _directive_line_ending(node, source, out)
+                # ct3 does not stop reading here. It writes a return and
+                # carries on generating, so the rest of the template is
+                # still parsed and a syntax error in it still raises.
+                # The pieces go nowhere, being unreachable, but the
+                # imports and attributes are hoisted the same as ct3
+                # hoists them, and a shape this layer cannot read is
+                # still refused instead of rendered.
+                _pieces_of(nodes[index:], source, hoisted, methods, top)
                 return out
             elif node.name == "encoding":
                 # Not through _eat_directive_line: it is the one
@@ -1037,9 +1101,14 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             elif node.name == "include":
                 _include(node, source, out)
             else:
-                _eat_directive_line(node, source, out)
+                # After the statements, not before them. #echo writes,
+                # and "L#echo 1" puts the 1 in front of the line ending
+                # rather than behind it.
+                ending = _directive_line_ending(node, source, out)
                 for made in _simple_directive(node):
                     out.append((STMT_PIECE, made))
+                if ending:
+                    out.append((TEXT_PIECE, ending))
         elif node.kind == lex.PSP:
             index = _psp(nodes, index - 1, source, hoisted, methods, out)
         elif node.kind == lex.EOL_SLURP:
@@ -1047,6 +1116,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             # with it. What is left is the indent before it.
             if _line_is_clear(source, node.tokens[0].start):
                 _drop_indent(out)
+            out.append((BARRIER_PIECE, ""))
         else:
             _piece(node, source, out)
     return out
@@ -1752,7 +1822,7 @@ def _raw_tag_end(source: str, p: int, clear: bool, eol1: int,
     # RawDirective.test3 and test4 are the same template with and
     # without that hash, and they pin it from both sides.
     if clear and (p >= len(source) or p > eol1):
-        _drop_line_start(out)
+        _drop_indent(out)
     return p
 
 
@@ -1816,7 +1886,7 @@ def _raw_body(source: str, start: int, names: frozenset[str],
     if end_clear and p > eol2:
         # Reaches back onto the #raw line, because the body is not
         # pending yet: addRawText comes after both drops.
-        _drop_line_start(out)
+        _drop_indent(out)
     return body, p
 
 
@@ -2348,7 +2418,8 @@ def _take_trailing_eol(pieces: list[tuple[str, Any]]) -> str:
 
 def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
                 methods: list[ast.stmt],
-                out: list[tuple[str, Any]]) -> ast.stmt | None:
+                leading: str = "",
+                escaped: list[str] | None = None) -> ast.stmt | None:
     """``#def`` and ``#block`` as methods on the generated class.
 
     Returns the call a block makes where it stands, or None for a def,
@@ -2371,7 +2442,10 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
         raise Unsupported("#%s %r" % (node.name, header[:40]))
     params = _parameters(match.group("params"))
     name = match.group("name")
-    pieces = _pieces_of(node.children, source, hoisted, methods)
+    pieces = _pieces_of(node.children, source, hoisted, methods,
+                        escaped=escaped)
+    if leading:
+        pieces.insert(0, (TEXT_PIECE, leading))
     # Only the short form. The long one is closed by an #end, and its
     # body keeps every line ending it holds.
     short = not any(child.kind == lex.DIRECTIVE and child.name == "end"
@@ -2379,10 +2453,13 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     trailing = _take_trailing_eol(pieces) if short else ""
     body = _statements(pieces)
     methods.append(_method(name, params, body or [ast.Pass()]))
-    if trailing and not _line_is_clear(source, node.tokens[0].start):
+    if trailing and escaped is not None \
+            and not _line_is_clear(source, node.tokens[0].start):
         # The ending is not part of the method, and it survives where
-        # something else stood on the line before the directive.
-        out.append((TEXT_PIECE, trailing))
+        # something else stood on the line before the directive. It
+        # goes out through escaped and not straight into out, because
+        # a #block writes its call first and the ending follows it.
+        escaped.append(trailing)
     if node.name == "def":
         return None
     return ast.Expr(value=ast.Call(
@@ -2822,12 +2899,17 @@ def _timer_interval(text: str) -> float:
 
 def _try_block(node: tree.Node, source: str,
                hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> ast.stmt:
+               methods: list[ast.stmt],
+               leading: str = "",
+               escaped: list[str] | None = None) -> ast.stmt:
     """``#try`` with its ``#except`` and ``#finally`` arms."""
     statement = ast.Try(body=[], handlers=[], orelse=[], finalbody=[])
     for directive, children in _branches(node, ("except", "finally")):
-        made = _statements(_pieces_of(children, source, hoisted, methods)) \
-            or [ast.Pass()]
+        pieces = _pieces_of(children, source, hoisted, methods,
+                            escaped=escaped)
+        if leading and directive is node:
+            pieces.insert(0, (TEXT_PIECE, leading))
+        made = _statements(pieces) or [ast.Pass()]
         if directive is node:
             statement.body = made
             continue
@@ -2849,43 +2931,55 @@ def _try_block(node: tree.Node, source: str,
 
 def _block(node: tree.Node, source: str,
            hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> ast.stmt:
+               methods: list[ast.stmt],
+           leading: str = "", escaped: list[str] | None = None) -> ast.stmt:
     """The statement a block directive becomes.
 
     A block with no children at all never opened: it is the colon short
     form, whose body sits on the directive's own line, or the ternary
     ``#if a then b else c``. Both put the body somewhere this layer does
     not look, so they are turned away rather than read wrong.
+
+    Args:
+        leading (str): A line ending the opening tag left behind, which
+            is the first thing the body writes.
+        escaped (list[str]|None): Where the line ending of the closing
+            #end tag is put, for the caller to write after the block.
     """
     if not node.children:
         raise Unsupported("the one-line form of #%s" % node.name)
     if node.name == "for":
-        return _for_block(node, source, hoisted, methods)
+        return _for_block(node, source, hoisted, methods, leading, escaped)
     if node.name == "if":
-        return _if_block(node, source, hoisted, methods)
+        return _if_block(node, source, hoisted, methods, leading, escaped)
     if node.name == "try":
-        return _try_block(node, source, hoisted, methods)
+        return _try_block(node, source, hoisted, methods, leading, escaped)
     if node.name == "while":
-        return _headed_block("while %s:", node, source, hoisted, methods)
+        return _headed_block("while %s:", node, source, hoisted, methods,
+                             leading, escaped)
     if node.name == "unless":
         # ct3 writes the parentheses, and they matter: without them
         # "#unless $a or $b" would negate only the first.
-        return _headed_block("if not (%s):", node, source, hoisted, methods)
+        return _headed_block("if not (%s):", node, source, hoisted, methods,
+                             leading, escaped)
     if node.name == "repeat":
         # A counter nobody can collide with, named after where the
         # directive stands so that two runs give the same code.
         name = "__ct4_repeat_%d_%d" % (node.line, node.column)
         return _headed_block("for " + name + " in range(%s):", node,
-                             source, hoisted, methods)
+                             source, hoisted, methods, leading, escaped)
     raise Unsupported("#%s" % node.name)
 
 
 def _headed_block(shape: str, node: tree.Node, source: str,
                   hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> ast.stmt:
+               methods: list[ast.stmt],
+                  leading: str = "",
+                  escaped: list[str] | None = None) -> ast.stmt:
     """A block whose header is the shape with its argument in it."""
     statement = _framed(shape % _argument(node, node))
-    statement.body = _body(node, source, hoisted, methods)       # type: ignore[attr-defined]
+    statement.body = _body(node, source, hoisted, methods,       # type: ignore[attr-defined]
+                           leading, escaped)
     return statement
 
 
@@ -2993,7 +3087,9 @@ def _parsed(source: str) -> ast.expr:
 
 def _for_block(node: tree.Node, source: str,
                hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> ast.stmt:
+               methods: list[ast.stmt],
+               leading: str = "",
+               escaped: list[str] | None = None) -> ast.stmt:
     """``#for $r in $rows`` as a Python for statement.
 
     The targets lose their dollar and become plain names, which is what
@@ -3002,27 +3098,37 @@ def _for_block(node: tree.Node, source: str,
     """
     statement = _framed("for %s:" % _for_argument(node))
     assert isinstance(statement, ast.For)
-    statement.body = _body(node, source, hoisted, methods)
+    statement.body = _body(node, source, hoisted, methods, leading, escaped)
     return statement
 
 
 def _if_block(node: tree.Node, source: str,
               hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> ast.stmt:
+               methods: list[ast.stmt],
+              leading: str = "",
+              escaped: list[str] | None = None) -> ast.stmt:
     """``#if`` with its ``#elif`` and ``#else`` branches.
 
     The branches are children of the if in the tree, not blocks of
     their own, so the children are cut at them and each piece becomes
     the body of one arm.
+
+    Only the first arm can hold the opening tag's line ending and only
+    the last one holds the #end, but escaped goes to every arm: which
+    is the last is the tree's business, not this function's.
     """
     branches = _branches(node)
     statement = _framed("if %s:" % _argument(branches[0][0], node))
     assert isinstance(statement, ast.If)
     current = statement
-    statement.body = _statements(
-        _pieces_of(branches[0][1], source, hoisted, methods))
+    first = _pieces_of(branches[0][1], source, hoisted, methods,
+                       escaped=escaped)
+    if leading:
+        first.insert(0, (TEXT_PIECE, leading))
+    statement.body = _statements(first)
     for directive, children in branches[1:]:
-        body = _statements(_pieces_of(children, source, hoisted, methods))
+        body = _statements(_pieces_of(children, source, hoisted, methods,
+                                      escaped=escaped))
         condition = _branch_condition(directive)
         if condition is None:
             current.orelse = body
@@ -3066,14 +3172,19 @@ def _branches(node: tree.Node,
 
 def _body(node: tree.Node, source: str,
           hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> list[ast.stmt]:
+               methods: list[ast.stmt],
+          leading: str = "",
+          escaped: list[str] | None = None) -> list[ast.stmt]:
     """The statements of a block's body, never empty.
 
     Python needs something between the colon and the next line, and a
     template may well have a loop that writes nothing.
     """
-    made = _statements(_pieces_of(node.children, source, hoisted, methods))
-    return made or [ast.Pass()]
+    pieces = _pieces_of(node.children, source, hoisted, methods,
+                        escaped=escaped)
+    if leading:
+        pieces.insert(0, (TEXT_PIECE, leading))
+    return _statements(pieces) or [ast.Pass()]
 
 
 def _framed(header: str) -> ast.stmt:
@@ -3171,19 +3282,35 @@ def _block_comment(node: tree.Node, source: str,
 
     Returns whether the line ending after it is to be swallowed as
     well; the whitespace up to it always is, where there is nothing
-    else there. The indent before it goes where the line was clear and
-    either the comment ran past its own first line or nothing follows
-    it at all, which is ct3's ``self.atEnd() or pos > endOfFirstLine``.
+    else there.
+
+    Three things decide the indent, and ct3 spells them out in this
+    order. First, the whole whitespace block is guarded by ``not
+    self.atEnd()``: a comment that ends the template leaves everything
+    alone, indent included. Then the rest of its line is consumed where
+    nothing but whitespace stands there. Only then comes ``self.atEnd()
+    or self.pos() > endOfFirstLine``, and endOfFirstLine was measured
+    before the comment was eaten while pos is read after that consuming
+    step. So a one-line comment is already past endOfFirstLine the
+    moment its line ending is taken, which is why the indent of
+    ``  #* c *#`` goes when a line follows and stays when none does.
     """
     clear = _line_is_clear(source, node.tokens[0].start)
     if not clear:
         return False
-    spans_lines = lex.EOL.search(node.text()) is not None
-    # What would be left of the source once the trailing whitespace and
-    # the line ending are taken. ct3 asks self.atEnd() at exactly this
-    # point, after its readToEOL.
-    remaining = _without_trailing_space(source[node.tokens[-1].end:], True)
-    if spans_lines or not remaining:
+    rest = source[node.tokens[-1].end:]
+    if not rest:
+        return False
+    match = lex.EOL.search(rest)
+    head = rest[:match.start()] if match else rest
+    # Where ct3 stands when it asks. readToEOL runs only over a rest of
+    # line that is whitespace, and it lands past the line ending.
+    at = node.tokens[-1].end
+    if not head.strip():
+        at += match.end() if match is not None else len(rest)
+    first = lex.EOL.search(source, node.tokens[0].start)
+    end_of_first_line = first.start() if first is not None else len(source)
+    if at >= len(source) or at > end_of_first_line:
         _drop_indent(out)
     return clear
 
@@ -3220,18 +3347,39 @@ def _line_is_clear(source: str, at: int) -> bool:
 
 
 def _drop_indent(out: list[tuple[str, Any]]) -> None:
-    """Removes the whitespace already written for the current line.
+    """Removes what has been written since the start of the line.
 
     ct3 calls it handleWSBeforeDirective and truncates its pending text
-    back to the start of the line.
+    back to the last line break in it, without asking whether what goes
+    is whitespace. Usually it is: every caller here asks _line_is_clear
+    first, so the source between the line start and the directive holds
+    nothing else.
+
+    Usually, not always. Two things put text into this list that no
+    longer stands on the line the source says it does. A #def or #block
+    carries its body off into a method, so ``L#def g`` leaves the L
+    pending with the def's lines gone from the list; and the closing tag
+    of a #raw block drops from a position that can be on another line
+    than the pending text. ct3 deletes the L in both, because it looks
+    at its buffer and not at the source.
+
+    Reproducing that needs ct3's chunk boundaries rather than this
+    layer's pieces, and they fall in different places: a run of text
+    with an escape in it is one chunk there and three pieces here, and
+    ct3 truncates one chunk while this walks back through as many
+    pieces as it takes. So where what would go is not whitespace, the
+    template is refused.
     """
     while out:
         kind, text = out[-1]
         if kind == RAW_PIECE:
-            # ct3 has no such thing as a piece that may not be touched:
-            # a raw body is a pending chunk like any other, and this is
-            # where it would be cut. Refused rather than stopped short
-            # of, which would keep text ct3 removes.
+            if _trailing_eol(text) or not text:
+                # Nothing stands after the last line break, so ct3
+                # removes nothing here either and the two agree.
+                return
+            # A raw body is a pending chunk like any other in ct3, and
+            # this is where it would be cut. Refused rather than
+            # stopped short of, which would keep text ct3 removes.
             raise Unsupported("an indent drop that reaches a #raw body")
         if kind != TEXT_PIECE:
             return
@@ -3239,48 +3387,12 @@ def _drop_indent(out: list[tuple[str, Any]]) -> None:
         if match is not None:
             keep = len(text) - match.start()
             if text[keep:].strip():
-                return
-            out[-1] = (TEXT_PIECE, text[:keep])
-            return
-        if text.strip():
-            return
-        out.pop()
-
-
-def _drop_line_start(out: list[tuple[str, Any]]) -> None:
-    """handleWSBeforeDirective as ct3 really wrote it, for #raw.
-
-    _drop_indent above carries two ``strip()`` guards that ct3 does not
-    have. They are harmless for its own callers, which all ask
-    _line_is_clear first, so what they remove is whitespace by
-    construction. The closing tag of a raw block is the case where that
-    does not hold: its drop fires on a position that can be on another
-    line than the pending text, and ct3 then deletes text that is not
-    whitespace at all. ``A $v BBB#raw\\nX\\n  #end raw\\nC\\n`` renders
-    ``A V\\nX\\nC\\n`` there, with the BBB gone.
-
-    Reproducing that needs ct3's chunk boundaries rather than this
-    layer's pieces, which fall in different places: a run of text with
-    an escape in it is one chunk in ct3 and three pieces here. So where
-    what would go is not whitespace, the template is refused.
-    """
-    while out:
-        kind, text = out[-1]
-        if kind == RAW_PIECE:
-            raise Unsupported("a #raw indent drop that reaches a #raw body")
-        if kind != TEXT_PIECE:
-            return
-        match = lex.EOL.search(text[::-1])
-        if match is not None:
-            keep = len(text) - match.start()
-            if text[keep:].strip():
-                raise Unsupported("a #raw indent drop that removes %r"
+                raise Unsupported("an indent drop that removes %r"
                                   % text[keep:][:20])
             out[-1] = (TEXT_PIECE, text[:keep])
             return
         if text.strip():
-            raise Unsupported("a #raw indent drop that removes %r"
-                              % text[:20])
+            raise Unsupported("an indent drop that removes %r" % text[:20])
         out.pop()
 
 
@@ -3289,6 +3401,8 @@ def _drop_line_start(out: list[tuple[str, Any]]) -> None:
 def _statements(pieces: list[tuple[str, Any]]) -> list[ast.stmt]:
     out: list[ast.stmt] = []
     for kind, value in pieces:
+        if kind == BARRIER_PIECE:
+            continue
         if kind in (TEXT_PIECE, RAW_PIECE):
             if value:
                 out.append(_write(ast.Constant(value)))

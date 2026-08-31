@@ -6,6 +6,7 @@
 #   cheetah  the test suite that ct3 brings along
 #   evals    the diagnostics tasks
 #   corpus   the test bench
+#   fuzz     built templates, both engines, byte for byte
 #   bench    render times, ct3 against the fork
 #   large    one large series, time and memory
 #   coverage what the corpus holds, per mechanism
@@ -102,6 +103,16 @@ run_coverage() {
     python -m ct4.corpus --impl fork coverage $CORPUS
 }
 
+# The corpus is 2026 real templates and every one of them puts its
+# directives on lines of their own. This builds the templates that do
+# not, which is where the whitespace rules live, and holds the code
+# generator to the same rule: what it accepts renders byte for byte
+# what the compiler renders.
+run_fuzz() {
+    echo "== Built templates, generator against the compiler =="
+    PYTHONPATH=/work python tests/fuzz/whitespace.py
+}
+
 run_corpus() {
     echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -116,6 +127,7 @@ case "$WHAT" in
     unit)    run_unit ;;
     cheetah) run_cheetah ;;
     corpus)  run_corpus ;;
+    fuzz)    run_fuzz ;;
     check)   run_check ;;
     evals)   run_evals ;;
     bench)   run_bench ;;
@@ -123,6 +135,6 @@ case "$WHAT" in
     coverage) run_coverage ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
              run_check; echo; run_evals; echo; run_bench; echo
-             run_corpus ;;
+             run_corpus; echo; run_fuzz ;;
     *)       echo "Unknown: $WHAT" >&2; exit 2 ;;
 esac
