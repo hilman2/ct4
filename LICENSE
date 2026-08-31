@@ -1,4 +1,56 @@
+Cheetah Template 4 is free software: you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public
+License for more details.
+
+The full texts are in COPYING (GNU General Public License version 3)
+and COPYING.LESSER (GNU Lesser General Public License version 3). Both
+are needed: the Lesser license grants additional permissions on top of
+the General one and does not stand on its own.
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+Why the Lesser one
+------------------
+
+Cheetah is a library that other programs build into themselves. Under
+the ordinary GPL, every program that embedded it would have to be
+GPL-compatible as a whole. Under the Lesser license anyone may embed
+it, whatever their own program is licensed under, while changes to
+Cheetah itself stay free. That is the arrangement this project wants:
+the engine stays open, the programs using it are none of its business.
+
+
+The code inherited from Cheetah3
+--------------------------------
+
+Cheetah Template 4 is a fork of Cheetah3, which is under the MIT
+license. That permission is not withdrawn and cannot be: the code
+inherited from Cheetah3 remains available under the MIT license from
+its own project, and its notice is reproduced in full below, as the
+MIT license requires.
+
+Which is which can be read off the directories:
+
+    Cheetah/        inherited from Cheetah3 and modified here
+    ct4/            written for this project
+    tests/          written for this project
+    corpus/         see the section at the end
+
+The relicensing applies to the work as distributed here. Anyone who
+prefers the MIT terms will find them upstream:
+
+    https://github.com/CheetahTemplate3/cheetah3
+
+
 The MIT License
+---------------
 
 Copyright (c) 2017-2024, Oleg Broytman and contributors.
 Copyright (c) 2009-2012, R. Tyler Croy and contributors.
@@ -22,3 +74,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+The templates under corpus/
+---------------------------
+
+The test bench stores the source of third-party templates so that a
+change can be held against what those projects actually write. Those
+templates are not part of the library and are not covered by the
+license above. Each one stays under the license of the project it came
+from; corpus/skin-sources.json names the project, the licence and the
+commit for every one of them.

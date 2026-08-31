@@ -4,6 +4,17 @@
     "Datei laesst sich nicht pruefen, gegen welchen Stand der Korpus",
     "erhoben wurde, und ein Skin, der sich weiterentwickelt, wuerde",
     "unbemerkt an ihm vorbeilaufen.",
+    "",
+    "'license' ist Pflicht fuer jede Quelle. Der Korpus legt fremden",
+    "Vorlagentext vollstaendig ab. Der gehoert nicht zur Bibliothek und",
+    "faellt nicht unter deren LGPL-3.0-or-later, sondern bleibt unter",
+    "der Lizenz seines Projekts.",
+    "",
+    "'license_read_from' steht daneben, weil 'GPL-3.0-only' und",
+    "'-or-later' sich unterscheiden und die GitHub-API fuer beide das",
+    "mehrdeutige 'GPL-3.0' liefert. Wer die Angabe nachpruefen will,",
+    "soll wissen, wo sie herkommt.",
+    "",
     "Neu erheben:",
     "  git clone --depth 1 <repo> && git -C <dir> checkout <commit>",
     "  python -m ct4.corpus --impl installed harvest-skins NAME=PFAD ..."
@@ -12,9 +23,17 @@
   "harvested_on": "2026-08-31",
   "sources": [
     {
-      "names": ["weewx-seasons", "weewx-smartphone", "weewx-mobile",
-                "weewx-standard", "weewx-examples", "weewx-tests"],
+      "names": [
+        "weewx-seasons",
+        "weewx-smartphone",
+        "weewx-mobile",
+        "weewx-standard",
+        "weewx-examples",
+        "weewx-tests"
+      ],
       "repo": "https://github.com/weewx/weewx",
+      "license": "GPL-3.0-only",
+      "license_read_from": "pyproject.toml: license = \"GPL-3.0-only\"",
       "commit": "4a74ad9a35523bc8ef5b9832938c90fb5e31c9a0",
       "dated": "2026-08-28",
       "paths": {
@@ -27,25 +46,43 @@
       }
     },
     {
-      "names": ["belchertown"],
+      "names": [
+        "belchertown"
+      ],
       "repo": "https://github.com/poblabs/weewx-belchertown",
+      "license": "GPL-3.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "6f441b34a7a9a79a9a2937552dc65f62e292cd45",
       "dated": "2024-06-24",
-      "paths": {"belchertown": "skins"}
+      "paths": {
+        "belchertown": "skins"
+      }
     },
     {
-      "names": ["belchertown-new"],
+      "names": [
+        "belchertown-new"
+      ],
       "repo": "https://github.com/uajqq/weewx-belchertown-new",
+      "license": "GPL-3.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "a418d737cba217f732cdced1e28ddde1e262aa88",
       "dated": "2026-06-03",
-      "paths": {"belchertown-new": "skins"}
+      "paths": {
+        "belchertown-new": "skins"
+      }
     },
     {
-      "names": ["wdc"],
+      "names": [
+        "wdc"
+      ],
       "repo": "https://github.com/Daveiano/weewx-wdc",
+      "license": "GPL-3.0-only",
+      "license_read_from": "LICENSE holds the plain GPL-3.0 text and the project states no version policy of its own; read as -only",
       "commit": "4634c248fefa6d68d90ccbb723a84a0ba24fa655",
       "dated": "2026-01-25",
-      "paths": {"wdc": "skins"}
+      "paths": {
+        "wdc": "skins"
+      }
     }
   ]
 }

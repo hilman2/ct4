@@ -1,10 +1,16 @@
-Cheetah Template 3.4.1a1
+Cheetah Template 4.0.0a0
 ========================
 
-Cheetah3 is a free and open source (MIT) Python template engine.
-It's a fork of the original CheetahTemplate library.
+Cheetah 4 is a Python template engine and code generation tool, with
+its weight on evaluating data and producing JSON. It is a fork of
+Cheetah3, and it renders the templates of Cheetah3 byte for byte the
+same.
 
-Python 2.7 or 3.6+ is required.
+Python 3.10 or newer is required.
+
+Free software under the GNU Lesser General Public License, version 3
+or later. The code inherited from Cheetah3 stays available under the
+MIT license from its own project; see LICENSE for both.
 
 
 Where is CheetahTemplate3

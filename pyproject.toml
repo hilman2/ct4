@@ -6,8 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "ct4"
 description = "Cheetah 4, a template engine and code generation tool"
 readme = { file = "README.rst", content-type = "text/x-rst" }
-license = "MIT"
-license-files = ["LICENSE"]
+# Lesser, weil Cheetah eine Bibliothek ist, die andere Programme in
+# sich einbauen. Unter der gewoehnlichen GPL muesste jedes davon selbst
+# GPL-vertraeglich sein. Beide Texte gehoeren dazu: die Lesser-Lizenz
+# ist eine Zusatzerlaubnis auf die GPL und steht nicht fuer sich.
+# LICENSE traegt ausserdem den MIT-Vermerk von Cheetah3 weiter, den die
+# MIT-Lizenz zu erhalten verlangt.
+license = "LGPL-3.0-or-later"
+license-files = ["LICENSE", "COPYING", "COPYING.LESSER"]
 # Python 2 ist raus. Seine Kompatibilitaetsschicht zog sich durch den
 # ganzen Code und stand jeder Modernisierung im Weg. 3.10 ist die
 # Untergrenze, weil erst dort `X | Y` als Annotation und `match`
