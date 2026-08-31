@@ -965,8 +965,22 @@ kleiner, weil die handgesetzte Fassung Leerraum mitschreibt.
 Der Ausgabefilter, im Textmodus der zweitgrösste Posten, ist hier ohnehin weg:
 es wird keine Zeichenkette zusammengesetzt.
 
-Benchmark-Suite im Repo und in CI, mit Schwelle. Eine Regression bricht den
-Build.
+### Die Schwelle
+
+**Steht.** `tests/bench/render.py` läuft im Standarddurchlauf zweimal, gegen die
+installierte ct3 und gegen den Fork, und `compare.py --check` hält jeden Fall
+gegen eine Untergrenze.
+
+Verglichen wird ein **Verhältnis**, keine Millisekundenzahl. Beide Läufe
+passieren auf derselben Maschine in derselben Minute, damit fällt deren
+Geschwindigkeit heraus. Eine absolute Schwelle müsste für die langsamste
+Maschine gesetzt werden, die den Lauf je ausführt, und finge dann nichts.
+
+`tests/unit/test_bench_guard.py` füttert `compare.py` mit einer Regression und
+verlangt, dass er fehlschlägt. Ein Wächter, der immer durchlässt, sagt nichts.
+Ein Fall dort hält ausserdem die Namen der Untergrenzen gegen die Fälle, die der
+Benchmark wirklich erzeugt: eine Untergrenze, deren Name abgewandert ist,
+bewacht nichts, und nichts sonst würde das melden.
 
 ---
 
