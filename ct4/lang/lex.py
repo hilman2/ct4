@@ -53,11 +53,18 @@ BLOCK_COMMENT = "block_comment"
 PSP = "psp"
 ESCAPE = "escape"
 RAW = "raw"
+# A hash alone at the end of a line. It writes nothing and takes the
+# line ending with it, which is how a template breaks a long directive
+# argument over several lines without putting blanks in the output.
+EOL_SLURP = "eol_slurp"
 
 # Cheetah's own EOLre. Templates with old Mac line endings are in the
 # corpus, and a lexer that only knows "\n" swallows such a file whole
 # from the first directive on.
 EOL = re.compile(r"\r\n|\r|\n")
+
+# ct3's EOLSlurpRE: the token, optional blanks, then a line ending.
+SLURP = re.compile(r"#[ \t\f]*(?:\r\n|\r|\n)")
 
 # A placeholder start, as Parser._makeCheetahVarREs builds it: the
 # dollar, an optional silence token, an optional cache token, an
@@ -348,13 +355,17 @@ class _Lexer:
             end = len(source) if match is None else match.end()
             return COMMENT, end, "##"
         if source.startswith("#*", index):
-            end = source.find("*#", index + 2)
-            return BLOCK_COMMENT, len(source) if end < 0 else end + 2, "#*"
+            return BLOCK_COMMENT, _end_of_block_comment(source, index), "#*"
         name = _directive_name(source, index + 1, self.names)
         if name is None:
             if inside_directive:
                 # The hash that closes the directive we are inside.
                 return DIRECTIVE_END, index + 1, ""
+            # Last of all, the way ct3 orders its matchers: a directive
+            # always wins over the slurp token.
+            match = SLURP.match(source, index)
+            if match is not None:
+                return EOL_SLURP, match.end(), ""
             return None
         return DIRECTIVE, index + 1 + len(name), name
 
@@ -439,6 +450,30 @@ def _directive_name(source: str, index: int,
         if name in possible and following not in NAME_CHARS:
             return name
     return None
+
+
+def _end_of_block_comment(source: str, index: int) -> int:
+    """Past the ``*#`` that closes the ``#*`` at this position.
+
+    They nest, which is why the levels are counted rather than the
+    first closer taken: ct3's eatMultiLineComment does the same. An
+    unterminated one runs to the end of the file.
+    """
+    level = 0
+    length = len(source)
+    while index < length:
+        if source.startswith("#*", index):
+            level += 1
+            index += 2
+            continue
+        if source.startswith("*#", index):
+            level -= 1
+            index += 2
+            if not level:
+                return index
+            continue
+        index += 1
+    return length
 
 
 def _end_of_name(source: str, index: int) -> int:
