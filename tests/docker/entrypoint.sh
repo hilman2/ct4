@@ -49,6 +49,15 @@ run_cheetah() {
     PATH="/work/bin:$PATH" PYTHONPATH=/work python Cheetah/Tests/Test.py
 }
 
+# Ueber alle Vorlagen des Korpus. Erwartet wird genau ein Befund:
+# weewx' eigener Testfall fuer ein falsches Aggregat. Jeder weitere
+# waere ein Falschbefund, und ein Falschbefund bringt Leute dazu, das
+# Werkzeug zu ignorieren.
+run_check() {
+    echo "== ct4 check ueber die Skins des Korpus =="
+    python -m ct4.corpus --impl fork check-templates \n        /repo/corpus/skins.jsonl --expect 1
+}
+
 run_corpus() {
     echo "== Referenz gegen den eingecheckten Korpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -63,7 +72,8 @@ case "$WHAT" in
     unit)    run_unit ;;
     cheetah) run_cheetah ;;
     corpus)  run_corpus ;;
+    check)   run_check ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
-             run_corpus ;;
+             run_check; echo; run_corpus ;;
     *)       echo "Unbekannt: $WHAT" >&2; exit 2 ;;
 esac

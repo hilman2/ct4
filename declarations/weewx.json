@@ -1,0 +1,975 @@
+{
+ "name": "weewx",
+ "roots": {
+  "DisplayOptions": {
+   "open": true
+  },
+  "Extras": {
+   "open": true
+  },
+  "SkinInfo": {
+   "open": true
+  },
+  "alltime": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "almanac": {
+   "open": true
+  },
+  "current": {
+   "fields": {
+    "*": {
+     "open": true
+    }
+   }
+  },
+  "day": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "days_ago": {
+   "open": true
+  },
+  "encoding": {
+   "open": true
+  },
+  "filename": {
+   "open": true
+  },
+  "getobs": {
+   "open": true
+  },
+  "gettext": {
+   "open": true
+  },
+  "hour": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "hours_ago": {
+   "open": true
+  },
+  "jsonize": {
+   "open": true
+  },
+  "latest": {
+   "open": true
+  },
+  "month": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "month_name": {
+   "open": true
+  },
+  "obs": {
+   "open": true
+  },
+  "page": {
+   "open": true
+  },
+  "rainyear": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "rnd": {
+   "open": true
+  },
+  "season": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "seasonsyear": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "span": {
+   "open": true
+  },
+  "station": {
+   "open": true
+  },
+  "to_bool": {
+   "open": true
+  },
+  "to_int": {
+   "open": true
+  },
+  "to_list": {
+   "open": true
+  },
+  "trend": {
+   "open": true
+  },
+  "unit": {
+   "open": true
+  },
+  "week": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "year": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  },
+  "year_name": {
+   "open": true
+  },
+  "yesterday": {
+   "fields": {
+    "*": {
+     "fields": {
+      "avg": {},
+      "avg_ge": {},
+      "avg_le": {},
+      "count": {},
+      "diff": {},
+      "exists": {
+       "kind": "boolean"
+      },
+      "first": {},
+      "firsttime": {},
+      "gustdir": {},
+      "has_data": {
+       "kind": "boolean"
+      },
+      "last": {},
+      "lasttime": {},
+      "max": {},
+      "max_ge": {},
+      "max_le": {},
+      "maxmin": {},
+      "maxmintime": {},
+      "maxsum": {},
+      "maxsumtime": {},
+      "maxtime": {},
+      "meanmax": {},
+      "meanmin": {},
+      "min": {},
+      "min_ge": {},
+      "min_le": {},
+      "minmax": {},
+      "minmaxtime": {},
+      "minsum": {},
+      "minsumtime": {},
+      "mintime": {},
+      "not_null": {},
+      "rms": {},
+      "series": {
+       "open": true
+      },
+      "sum": {},
+      "sum_ge": {},
+      "sum_le": {},
+      "tderiv": {},
+      "vecavg": {},
+      "vecdir": {}
+     }
+    },
+    "check_for_data": {
+     "open": true
+    },
+    "dateTime": {
+     "open": true
+    },
+    "days": {
+     "open": true
+    },
+    "end": {
+     "open": true
+    },
+    "hours": {
+     "open": true
+    },
+    "length": {
+     "open": true
+    },
+    "months": {
+     "open": true
+    },
+    "records": {
+     "open": true
+    },
+    "seasons": {
+     "open": true
+    },
+    "spans": {
+     "open": true
+    },
+    "start": {
+     "open": true
+    },
+    "years": {
+     "open": true
+    }
+   }
+  }
+ },
+ "source": "weewx 5.5.0"
+}

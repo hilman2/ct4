@@ -47,6 +47,14 @@ def main(argv: list[str] | None = None) -> int:
     fixtures_cmd.add_argument("--name", default="weewx")
     fixtures_cmd.add_argument("--out", type=Path, default=DEFAULT_FIXTURES)
 
+    templates_cmd = sub.add_parser(
+        "check-templates",
+        help="ct4 check ueber die Vorlagen eines Korpus")
+    templates_cmd.add_argument("paths", type=Path, nargs="+")
+    templates_cmd.add_argument(
+        "--expect", type=int, default=0,
+        help="wie viele Befunde erwartet werden; mehr sind ein Fehler")
+
     check_cmd = sub.add_parser(
         "check", help="Korpus gegen die Implementierung pruefen")
     check_cmd.add_argument("paths", type=Path, nargs="+")
@@ -67,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
         return _harvest_skins(args.sources, args.out)
     if args.command == "harvest-fixtures":
         return _harvest_fixtures(args.root, args.name, args.out)
+    if args.command == "check-templates":
+        return _check_templates(args.paths, args.expect)
     return _check(args.paths, args.show, args.jobs)
 
 
@@ -115,6 +125,32 @@ def _harvest_fixtures(root: Path, name: str, out: Path) -> int:
     for reason, count in sorted(skipped.items()):
         print("uebersprungen: %-20s %d" % (reason, count))
     print("%d Faelle geschrieben nach %s" % (write_jsonl(cases, out), out))
+    return 0
+
+
+def _check_templates(paths: list[Path], expect: int) -> int:
+    """Prueft jede Vorlage des Korpus und zaehlt die Befunde.
+
+    Der Schutz vor Falschbefunden. Eine Anmeldung, die zu viel meldet,
+    ist schlimmer als keine: sie bringt Leute dazu, das Werkzeug
+    abzuschalten. Deshalb ist die erwartete Zahl Teil des Laufs.
+    """
+    from ct4.check import check_source
+    from ct4.cli import load_declarations
+    from ct4.corpus import check as checker
+
+    declarations = load_declarations([])
+    found = []
+    for case in checker.load(paths):
+        found.extend(check_source(case.template, case.id, declarations))
+    print("%d Vorlagen geprueft, %d Befunde (erwartet: %d)"
+          % (len(checker.load(paths)), len(found), expect))
+    for finding in found:
+        print("  %s" % finding)
+    if len(found) > expect:
+        print("\nMehr Befunde als erwartet. Entweder ist die Anmeldung "
+              "zu streng oder eine Vorlage ist neu kaputt.")
+        return 1
     return 0
 
 

@@ -18,13 +18,10 @@ ausdruecklich so gemeint:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
+from ct4.diagnostics import ERROR, WARNING, Diagnostic
 from ct4.jsonmode.parse import Arr, Expr, For, If, Lit, Member, Obj, Series
-
-ERROR = "error"
-WARNING = "warning"
 
 # Wie ein fester Wert der Vorlage auf die Typnamen von JSON Schema
 # abgebildet wird. bool steht vor int, weil True in Python ein int ist.
@@ -34,20 +31,6 @@ JSON_TYPES: tuple[tuple[type, str], ...] = (
     (int, "integer"),
     (float, "number"),
 )
-
-
-@dataclass(frozen=True)
-class Diagnostic:
-    """Ein Befund mit Pfad, damit man ihn wiederfindet."""
-
-    severity: str
-    code: str
-    path: str
-    message: str
-
-    def __str__(self) -> str:
-        return "%s %s %s: %s" % (self.code, self.severity.upper(),
-                                 self.path, self.message)
 
 
 def check(node: Any, schema: Any, path: str = "$") -> list[Diagnostic]:
@@ -66,8 +49,9 @@ def _check(node: Any, schema: Any, path: str,
     if isinstance(node, Obj):
         if kind not in (None, "object"):
             found.append(Diagnostic(
-                ERROR, "CT4210", path,
-                "das Schema erwartet %s, die Vorlage baut ein Objekt" % kind))
+                "CT4210", ERROR,
+                "das Schema erwartet %s, die Vorlage baut ein Objekt" % kind,
+                path=path))
             return
         _check_object(node, schema, path, found, certain)
         return
@@ -75,8 +59,9 @@ def _check(node: Any, schema: Any, path: str,
     if isinstance(node, Arr):
         if kind not in (None, "array"):
             found.append(Diagnostic(
-                ERROR, "CT4211", path,
-                "das Schema erwartet %s, die Vorlage baut eine Liste" % kind))
+                "CT4211", ERROR,
+                "das Schema erwartet %s, die Vorlage baut eine Liste" % kind,
+                path=path))
             return
         items = schema.get("items")
         if isinstance(items, dict):
@@ -88,9 +73,9 @@ def _check(node: Any, schema: Any, path: str,
         actual = _json_type(node.value)
         if not _type_fits(actual, kind):
             found.append(Diagnostic(
-                ERROR, "CT4212", path,
+                "CT4212", ERROR,
                 "das Schema erwartet %s, im Template steht %s"
-                % (kind, actual)))
+                % (kind, actual), path=path))
 
 
 def _check_object(node: Obj, schema: dict[str, Any], path: str,
@@ -103,21 +88,22 @@ def _check_object(node: Obj, schema: dict[str, Any], path: str,
             continue
         if name in sometimes or (name in always and not certain):
             found.append(Diagnostic(
-                WARNING, "CT4201", "%s.%s" % (path, name),
+                "CT4201", WARNING,
                 "das Schema verlangt das Feld, die Vorlage baut es nur "
-                "unter einer Bedingung"))
+                "unter einer Bedingung", path="%s.%s" % (path, name)))
         else:
             found.append(Diagnostic(
-                ERROR, "CT4200", "%s.%s" % (path, name),
-                "das Schema verlangt das Feld, die Vorlage baut es nicht"))
+                "CT4200", ERROR,
+                "das Schema verlangt das Feld, die Vorlage baut es nicht",
+                path="%s.%s" % (path, name)))
 
     if schema.get("additionalProperties") is False:
         for name in sorted(always | sometimes):
             if name not in properties:
                 found.append(Diagnostic(
-                    ERROR, "CT4202", "%s.%s" % (path, name),
+                    "CT4202", ERROR,
                     "das Schema kennt das Feld nicht und laesst keine "
-                    "weiteren zu"))
+                    "weiteren zu", path="%s.%s" % (path, name)))
 
     for member, sure in _members_of(node, certain):
         if not isinstance(member.key, Lit):
@@ -203,8 +189,8 @@ def unknown_expressions(node: Any, path: str = "$") -> list[Diagnostic]:
     out: list[Diagnostic] = []
     if isinstance(node, (Expr, Series)):
         out.append(Diagnostic(
-            WARNING, "CT4220", path,
-            "der Typ steht erst zur Laufzeit fest"))
+            "CT4220", WARNING,
+            "der Typ steht erst zur Laufzeit fest", path=path))
     elif isinstance(node, Obj):
         for member, _ in _members_of(node, True):
             key = (member.key.value if isinstance(member.key, Lit) else "?")

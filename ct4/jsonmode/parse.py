@@ -181,7 +181,11 @@ class _Parser:
             mark = self.pos
             self.pos += 1
             word = self.word()
-            if word == "precision":
+            if word == "mode":
+                # Die Ansage selbst. Sie steht dort, damit ct4 einer
+                # Datei ansieht, wie sie gelesen werden will.
+                self.line_rest()
+            elif word == "precision":
                 self.precision_directive()
             elif word == "missing":
                 self.doc.missing = self.missing_value(self.line_rest())

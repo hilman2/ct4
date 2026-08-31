@@ -52,6 +52,7 @@ schema = ["jsonschema"]
 cheetah = "Cheetah.CheetahWrapper:_cheetah"
 cheetah-compile = "Cheetah.CheetahWrapper:_cheetah_compile"
 cheetah-analyze = "Cheetah.DirectiveAnalyzer:main"
+ct4 = "ct4.cli:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "Cheetah.Version.Version" }
