@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 292
+FLOOR = 402
 
 
 def render_cases():
@@ -64,6 +64,25 @@ def test_a_dotted_placeholder_is_resolved():
     assert out("$a.b\n", [{"a": {"b": 7}}]) == "7\n"
 
 
+def test_a_call_splits_the_chain():
+    # ct3 stops treating the path as one name the moment a bracket
+    # appears: $a.b(1) becomes VFN(VFFSL(SL,"a",True),"b",False)(1).
+    # Measured off ct3, whose own docstring says something else.
+    names = [(c.name, c.autocall, c.remainder)
+             for c in codegen.chunks_of("$a.b.c[1].d().x.y.z")]
+    assert names == [("a.b", True, ""), ("c", True, "[1]"),
+                     ("d", False, "()"), ("x.y.z", True, "")]
+
+
+def test_a_subscript_keeps_autocalling_and_a_call_does_not():
+    assert codegen.chunks_of("$a()")[0].autocall is False
+    assert codegen.chunks_of("$a[0]")[0].autocall is True
+
+
+def test_a_called_placeholder_renders():
+    assert out("$a.b(2)\n", [{"a": {"b": lambda n: n * 3}}]) == "6\n"
+
+
 def test_an_enclosure_makes_no_difference():
     # ct3 generates the same single VFFSL for both forms.
     assert out("${a.b}\n", [{"a": {"b": 7}}]) == "7\n"
@@ -94,7 +113,8 @@ def test_the_generated_code_is_python():
 
 @pytest.mark.parametrize("source", [
     "#for $r in $rows\n$r\n#end for\n",      # no directives yet
-    "$a.b()\n",                              # no calls yet
+    "$getVar('x')\n",                        # needs a Template object
+    "$self.foo\n",                           # needs a Template object
     "$!a\n",                                 # no silence token yet
     "#unicode utf-8\n1234",                  # rewritten before parsing
     "#encoding utf-8\n1234",                 # decoded before parsing

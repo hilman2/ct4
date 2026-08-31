@@ -64,12 +64,126 @@ def _plain_path(text: str) -> str | None:
     path: str = match.group("bare") or match.group("wrapped")
     return path
 
+
+# What a placeholder starts with and this layer does not read yet.
+MODIFIERS = re.compile(r"^\$[!*]")
+
+_template_names: frozenset[str] | None = None
+
+
+def template_names() -> frozenset[str]:
+    """Names a template gets from the Template object it runs inside.
+
+    ct3 renders a template as a method, so its own search list holds
+    the instance: $getVar('x') and $self.foo resolve against it. What
+    this layer generates is a plain function with no instance anywhere,
+    so those names cannot resolve and the template has to be refused
+    rather than rendered wrong.
+
+    Read off the class rather than listed here, so a name added to
+    Template does not quietly become a wrong answer.
+    """
+    global _template_names
+
+    if _template_names is None:
+        from Cheetah.Template import Template
+
+        _template_names = frozenset(dir(Template)) | {"self", "trans"}
+    return _template_names
+
+
+@dataclass(frozen=True)
+class Chunk:
+    """One step of a placeholder's chain.
+
+    ``name`` is a dotted run, ``autocall`` says whether NameMapper may
+    call what it finds, and ``remainder`` is the call or subscript
+    hanging off it as Python source.
+    """
+
+    name: str
+    autocall: bool
+    remainder: str
+
+
+def chunks_of(text: str) -> list[Chunk] | None:
+    """A placeholder's chain, split the way ct3 splits it.
+
+    Called as ``chunks_of("$a.b.c[1].d().x")``. Returns None where the
+    text is not a chain this layer reads.
+
+    The rule is measured off ct3 rather than taken from its docstring,
+    which is out of date. The name carrying a bracket becomes a chunk
+    of its own, so ``$a.b.c[1]`` splits into ``a.b`` and ``c[1]`` and
+    not into ``a.b.c[1]``. Autocalling is off for a chunk that is
+    called, and on for one that is only subscripted.
+    """
+    if MODIFIERS.match(text):
+        return None
+    inner = text[1:]
+    if inner[:1] in "{([":
+        closing = {"{": "}", "(": ")", "[": "]"}[inner[0]]
+        if not inner.endswith(closing):
+            return None
+        inner = inner[1:-1].strip()
+    found: list[Chunk] = []
+    names: list[str] = []
+    index = 0
+    while index < len(inner):
+        start = index
+        while index < len(inner) and inner[index] in lex.IDENT:
+            index += 1
+        if index == start:
+            return None
+        names.append(inner[start:index])
+        if index < len(inner) and inner[index] == "." \
+                and inner[index + 1:index + 2] and \
+                inner[index + 1] in lex.IDENT_START:
+            index += 1
+            continue
+        if index < len(inner) and inner[index] in "([":
+            remainder, index = _brackets(inner, index)
+            if remainder is None:
+                return None
+            if len(names) > 1:
+                found.append(Chunk(".".join(names[:-1]), True, ""))
+            found.append(Chunk(names[-1], not remainder.startswith("("),
+                               remainder))
+            names = []
+            if index < len(inner) and inner[index] == "." \
+                    and inner[index + 1:index + 2] and \
+                    inner[index + 1] in lex.IDENT_START:
+                index += 1
+                continue
+        break
+    if index != len(inner):
+        return None
+    if names:
+        found.append(Chunk(".".join(names), True, ""))
+    if not found:
+        return None
+    if found[0].name.split(".")[0] in template_names():
+        return None
+    return found
+
+
+def _brackets(text: str, index: int) -> tuple[str | None, int]:
+    """Every bracket group in a row from here, as source."""
+    start = index
+    while index < len(text) and text[index] in "([":
+        closed = lex._balanced(text, index, text[index])
+        if closed is None:
+            return None, index
+        index = closed
+    return text[start:index], index
+
 # Node kinds that carry no output at all.
 SILENT_KINDS = frozenset({lex.COMMENT, lex.BLOCK_COMMENT})
 
 # The frame the generated body is put into. Parsed, not assembled, so
 # that whichever Python runs this fills in its own fields.
 SKELETON = """\
+from Cheetah.NameMapper import valueForName as VFN
 from Cheetah.NameMapper import valueFromFrameOrSearchList as VFFSL
 
 
@@ -232,10 +346,12 @@ def _piece(node: tree.Node, out: list[tuple[str, Any]]) -> None:
         return
     if node.kind == lex.PLACEHOLDER:
         token = node.tokens[0]
-        path = None if token.children else _plain_path(token.text)
-        if path is None:
+        # A nested placeholder means the chain carries another lookup
+        # inside its arguments, and those are not read yet.
+        chunks = None if token.children else chunks_of(token.text)
+        if chunks is None:
             raise Unsupported("placeholder %r" % token.text)
-        out.append((VALUE_PIECE, path))
+        out.append((VALUE_PIECE, _expression(chunks)))
         return
     raise Unsupported("no code for a %s node" % node.kind)
 
@@ -346,17 +462,30 @@ def _statements(pieces: list[tuple[str, Any]]) -> list[ast.stmt]:
     return out
 
 
-def _placeholder(path: str) -> list[ast.stmt]:
+def _expression(chunks: list[Chunk]) -> str:
+    """The Python ct3 writes for a chain of chunks.
+
+    The first is looked up in the search list, every one after it on
+    what the previous returned. Built as source and handed to Python's
+    own parser, because a remainder like ``(1, 2)`` is Python and there
+    is no reason to assemble it node by node.
+    """
+    first = chunks[0]
+    text = 'VFFSL(%s,"%s",%r)%s' % (SEARCH_LIST, first.name,
+                                    first.autocall, first.remainder)
+    for chunk in chunks[1:]:
+        text = 'VFN(%s,"%s",%r)%s' % (text, chunk.name, chunk.autocall,
+                                      chunk.remainder)
+    return text
+
+
+def _placeholder(expression: str) -> list[ast.stmt]:
     """The two statements ct3 writes for a placeholder.
 
     The value first, then the write behind a guard: a placeholder that
     resolves to None writes nothing, and the filter never sees it.
     """
-    lookup = ast.Call(
-        func=ast.Name(id="VFFSL", ctx=ast.Load()),
-        args=[ast.Name(id=SEARCH_LIST, ctx=ast.Load()),
-              ast.Constant(path), ast.Constant(True)],
-        keywords=[])
+    lookup = ast.parse(expression, mode="eval").body
     return [
         _assign(VALUE, lookup),
         ast.If(
