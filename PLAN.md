@@ -807,25 +807,59 @@ Daraus folgt, was für Parität nötig ist, und es sind zwei Dinge, nicht eines:
 
 ### Was davon umgesetzt ist
 
-`resolveKnownLocals`, Voreinstellung an. Der Compiler führt über `indent()` und
-`dedent()` einen Stapel der Namen, die er selbst gebunden hat, und lässt die
-Suche bei einem solchen Namen dort anfangen:
+**0,402 auf 0,211 ms, Faktor 1,9. Von 5,9x auf 3,1x jinja2.** Byte-identisch,
+keine Semantik geändert. Zwei Hebel:
+
+**1. `resolveKnownLocals`, Voreinstellung an.** Der Compiler führt über
+`indent()` und `dedent()` einen Stapel der Namen, die er selbst gebunden hat,
+und lässt die Suche bei einem solchen Namen dort anfangen:
 
 ```python
 _v = VFN({"r":r},"r.name",True)      # statt VFFSL(SL,"r.name",True)
 ```
 
-Gemessen 0,400 gegen 0,246 ms, **Faktor 1,62**. Byte-identisch: VFFSL sieht
-ohnehin zuerst in die Frame-Locals, die Abkürzung überspringt nur den Weg
-dorthin und behält jede Regel, Autocalling der ersten Komponente eingeschlossen.
+Gemessen 0,400 gegen 0,246 ms, Faktor 1,62. VFFSL sieht ohnehin zuerst in die
+Frame-Locals, die Abkürzung überspringt nur den Weg dorthin und behält jede
+Regel, Autocalling der ersten Komponente eingeschlossen.
+
+Dieselbe Buchführung braucht der Strict-Modus später ohnehin. Sie ist damit
+nicht nur der schnelle Zwischenschritt, sondern die Voraussetzung für Punkt 1
+oben.
+
+**2. `DummyResponse.write` ist die `append`-Methode der Liste.** Ein erzeugtes
+Template holt `write` einmal und ruft es für jede Konstante und jeden
+Platzhalter: eine Seite mit 200 Zeilen kommt auf über 1600 Aufrufe. Als
+Python-Methode kostet jeder einen Frame für einen einzigen `append`. Gemessen
+0,052 gegen 0,023 ms für 1400 Schreibvorgänge, im vollen Render 12 Prozent.
+Gesetzt nur, wo niemand `write` überschrieben hat.
 
 Das Korpus vergleicht `compile`-Fälle weiter gegen ct3. Die eine beabsichtigte
 Abweichung wird in `normalize_code` vor dem Vergleich zurückgerechnet, statt die
 Baseline auf ct4 neu zu ziehen. Sonst würden die 136 fremden Skins nur noch
 beweisen, dass ct4 mit sich selbst übereinstimmt.
 
-Dieselbe Buchführung braucht der Strict-Modus später ohnehin. Sie ist damit
-nicht nur der schnelle Zwischenschritt, sondern die Voraussetzung für Punkt 1.
+### Was geprüft und verworfen ist
+
+**Den Ausgabefilter beschleunigen.** Der Plan schätzte ihn auf 21 Prozent,
+gemessen sind es 0,032 ms. Davon ist fast nichts zu holen: eine freie Funktion
+statt der gebundenen Methode spart 0,004 ms, also 1,6 Prozent des Renders. Das
+`**kw` in `Filter.filter` kann nicht weg, weil der `#errorCatcher`-Pfad
+`_filter(_v, rawExpr='$x')` erzeugt, und genau das ist der teure Teil.
+
+**Die Template-Konstruktion.** 0,001 ms je Render. Es gibt nichts zu holen.
+
+### Was bleibt
+
+| | ms | Anteil am Rest |
+|---|---|---|
+| NameMapper | 0,114 | 54 % |
+| Filter | 0,032 | 15 % |
+| `respond()`-Prolog und Transaction | 0,028 | 13 % |
+| die eigentliche Arbeit | 0,035 | 17 % |
+
+Der grosse Posten ist der NameMapper, und er ist im kompatiblen Modus nicht zu
+holen. Damit sind die kompatiblen Hebel ausgeschöpft. Alles Weitere ist Punkt 1
+oben, also Strict-Modus.
 
 ### Warum Python und nicht Rust
 
