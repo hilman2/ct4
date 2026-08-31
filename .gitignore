@@ -10,3 +10,7 @@ dist
 docs/*.html
 docs/_build/
 docs/html/
+__pycache__/
+*.pyd
+.venv/
+corpus/*.harvested.jsonl

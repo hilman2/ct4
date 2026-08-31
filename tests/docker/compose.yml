@@ -1,0 +1,18 @@
+# Alles:   docker compose -f tests/docker/compose.yml run --rm tests
+# Nur Korpus:  ... run --rm tests corpus
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Die Quellen bleiben unberuehrt. Gebaut und geschrieben wird nur
+      # in der tmpfs unter /work.
+      - ../..:/repo:ro
+    tmpfs:
+      # uid/gid, weil der Lauf nicht als root stattfindet und eine tmpfs
+      # sonst root gehoert.
+      - /work:exec,size=512m,uid=1000,gid=1000
+    working_dir: /work
+    environment:
+      PYTHONUNBUFFERED: "1"

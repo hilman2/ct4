@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "Woher die Uebersetzungsfaelle in skins.jsonl stammen. Ohne diese",
+    "Datei laesst sich nicht pruefen, gegen welchen Stand der Korpus",
+    "erhoben wurde, und ein Skin, der sich weiterentwickelt, wuerde",
+    "unbemerkt an ihm vorbeilaufen.",
+    "Neu erheben:",
+    "  git clone --depth 1 <repo> && git -C <dir> checkout <commit>",
+    "  python -m ct4.corpus --impl installed harvest-skins NAME=PFAD ..."
+  ],
+  "harvested_with": "ct3 3.4.0.post5",
+  "harvested_on": "2026-08-31",
+  "sources": [
+    {
+      "names": ["weewx-seasons", "weewx-smartphone", "weewx-mobile",
+                "weewx-standard", "weewx-examples", "weewx-tests"],
+      "repo": "https://github.com/weewx/weewx",
+      "commit": "4a74ad9a35523bc8ef5b9832938c90fb5e31c9a0",
+      "dated": "2026-08-28",
+      "paths": {
+        "weewx-seasons": "src/weewx_data/skins/Seasons",
+        "weewx-smartphone": "src/weewx_data/skins/Smartphone",
+        "weewx-mobile": "src/weewx_data/skins/Mobile",
+        "weewx-standard": "src/weewx_data/skins/Standard",
+        "weewx-examples": "src/weewx_data/examples",
+        "weewx-tests": "src/weewx/tests/test_skins"
+      }
+    },
+    {
+      "names": ["belchertown"],
+      "repo": "https://github.com/poblabs/weewx-belchertown",
+      "commit": "6f441b34a7a9a79a9a2937552dc65f62e292cd45",
+      "dated": "2024-06-24",
+      "paths": {"belchertown": "skins"}
+    },
+    {
+      "names": ["belchertown-new"],
+      "repo": "https://github.com/uajqq/weewx-belchertown-new",
+      "commit": "a418d737cba217f732cdced1e28ddde1e262aa88",
+      "dated": "2026-06-03",
+      "paths": {"belchertown-new": "skins"}
+    },
+    {
+      "names": ["wdc"],
+      "repo": "https://github.com/Daveiano/weewx-wdc",
+      "commit": "4634c248fefa6d68d90ccbb723a84a0ba24fa655",
+      "dated": "2026-01-25",
+      "paths": {"wdc": "skins"}
+    }
+  ]
+}
