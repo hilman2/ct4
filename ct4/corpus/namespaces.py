@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ct4.corpus.case import CT3_DEFAULT, INLINE, Case
+from ct4.corpus.case import CT3_DEFAULT, FIXTURE, INLINE, Case
 
 Builder = Callable[[], "list[Any]"]
 
@@ -34,6 +34,12 @@ def build(case: Case) -> list[Any]:
     """Baut die searchList, mit der ein Fall gerendert wird."""
     if case.namespace == INLINE:
         return list(case.context)
+    if case.namespace == FIXTURE:
+        # Eine aufgezeichnete searchList: je Namensraum ein Baum, in der
+        # Reihenfolge, in der die Anwendung sie durchsucht hat.
+        from ct4.fixture.record import replay
+
+        return [replay(tree) for tree in case.context]
     try:
         builder = BUILDERS[case.namespace]
     except KeyError:

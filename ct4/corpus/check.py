@@ -93,11 +93,18 @@ def render(case: Case) -> str:
     """Rendert einen Fall mit der gerade geladenen Implementierung."""
     from Cheetah.Template import Template
 
+    from ct4.fixture.filters import resolve
+
     template_class = Template.compile(
         source=case.template,
         compilerSettings=decode(case.settings),
         **decode(case.compile_kwargs))
-    template = template_class(searchList=namespaces.build(case))
+    # Der Filter gehoert zum Fall, nicht zum Pruefstand: welche Anwendung
+    # die Vorlage rendert, entscheidet, was aus None und aus einem
+    # Fehler beim Umwandeln wird.
+    filter_class = resolve(case.filter)
+    kwargs = {"filter": filter_class} if filter_class else {}
+    template = template_class(searchList=namespaces.build(case), **kwargs)
     try:
         return template.respond()
     finally:

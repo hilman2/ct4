@@ -1,0 +1,3343 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/NOAA/NOAA-%Y.txt.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/NOAA/NOAA-2010.txt",
+ "template": "#errorCatcher Echo\n#set $YM=\"%Y %m\"\n#set $D=\"  %d\"\n#set $M=\" %b\"\n#set $NODAY=\" N/A\"\n#set $Temp=\"%6.1f\"\n#set $Wind=\"%6.1f\"\n#set $Dir=\"%6.0f\"\n#set $Count=\"%6d\"\n#set $NONE=\"   N/A\"\n#if $unit.unit_type_dict.group_temperature == \"degree_F\"\n#set $Hot     =(90.0,\"degree_F\")\n#set $Cold    =(32.0,\"degree_F\")\n#set $VeryCold=(0.0, \"degree_F\")\n#else\n#set $Hot     =(30.0,\"degree_C\")\n#set $Cold    =(0.0,\"degree_C\")\n#set $VeryCold=(-20.0,\"degree_C\")\n#end if\n#if $unit.unit_type_dict.group_rain == \"inch\"\n#set $Trace    =(0.01,\"inch\")\n#set $SomeRain =(0.1, \"inch\")\n#set $Soak     =(1.0, \"inch\")\n#set $Rain=\"%6.2f\"\n#elif $unit.unit_type_dict.group_rain == \"mm\"\n#set $Trace    =(.3,  \"mm\")\n#set $SomeRain =(3,   \"mm\")\n#set $Soak     =(30.0,\"mm\")\n#set $Rain=\"%6.1f\"\n#else\n#set $Trace    =(.03,\"cm\")\n#set $SomeRain =(.3, \"cm\")\n#set $Soak     =(3.0,\"cm\")\n#set $Rain=\"%6.2f\"\n#end if\n#def ShowInt($T)\n$(\"%6d\" % $T[0])#slurp\n#end def\n#def ShowFloat($R)\n$(\"%6.2f\" % $R[0])#slurp\n#end def\n                     CLIMATOLOGICAL SUMMARY for year $year_name\n\n\nNAME: $station.location                  \nELEV: $station.altitude    LAT: $station.latitude[0]-$station.latitude[1] $station.latitude[2]    LONG: $station.longitude[0]-$station.longitude[1] $station.longitude[2]\n\n\n                                       TEMPERATURE ($unit.label.outTemp.strip())\n\n                              HEAT    COOL                              MAX    MAX    MIN    MIN\n          MEAN   MEAN         DEG     DEG                                >=     <=     <=     <=\n YR  MO   MAX    MIN    MEAN  DAYS    DAYS      HI  DAY     LOW  DAY $ShowInt($Hot) $ShowInt($Cold) $ShowInt($Cold) $ShowInt($VeryCold)\n------------------------------------------------------------------------------------------------\n#for $month in $year.months\n#if $month.outTemp.has_data\n$month.dateTime.format($YM) $month.outTemp.meanmax.format($Temp,$NONE,add_label=False) $month.outTemp.meanmin.format($Temp,$NONE,add_label=False) $month.outTemp.avg.format($Temp,$NONE,add_label=False) $month.heatdeg.sum.format($Temp,$NONE,add_label=False) $month.cooldeg.sum.format($Temp,$NONE,add_label=False)  $month.outTemp.max.format($Temp,$NONE,add_label=False) $month.outTemp.maxtime.format($D,$NODAY)  $month.outTemp.min.format($Temp,$NONE,add_label=False) $month.outTemp.mintime.format($D,$NODAY) $month.outTemp.max_ge($Hot).format($Count,$NONE,add_label=False) $month.outTemp.max_le($Cold).format($Count,$NONE,add_label=False) $month.outTemp.min_le($Cold).format($Count,$NONE,add_label=False) $month.outTemp.min_le($VeryCold).format($Count,$NONE,add_label=False)\n#else\n$month.dateTime.format($YM)\n#end if\n#end for\n#if $year.outTemp.has_data\n------------------------------------------------------------------------------------------------\n        $year.outTemp.meanmax.format($Temp,$NONE,add_label=False) $year.outTemp.meanmin.format($Temp,$NONE,add_label=False) $year.outTemp.avg.format($Temp,$NONE,add_label=False) $year.heatdeg.sum.format($Temp,$NONE,add_label=False) $year.cooldeg.sum.format($Temp,$NONE,add_label=False)  $year.outTemp.max.format($Temp,$NONE,add_label=False) $year.outTemp.maxtime.format($M,$NODAY)  $year.outTemp.min.format($Temp,$NONE,add_label=False) $year.outTemp.mintime.format($M,$NODAY) $year.outTemp.max_ge($Hot).format($Count,$NONE,add_label=False) $year.outTemp.max_le($Cold).format($Count,$NONE,add_label=False) $year.outTemp.min_le($Cold).format($Count,$NONE,add_label=False) $year.outTemp.min_le($VeryCold).format($Count,$NONE,add_label=False)\n#end if\n\n\n                  PRECIPITATION ($unit.label.rain.strip())\n\n                  MAX         ---DAYS OF RAIN---\n                  OBS.               OVER\n YR  MO  TOTAL    DAY  DATE $ShowFloat(Trace) $ShowFloat($SomeRain) $ShowFloat($Soak)\n------------------------------------------------\n#for $month in $year.months\n#if $month.rain.has_data\n$month.dateTime.format($YM) $month.rain.sum.format($Rain,$NONE,add_label=False) $month.rain.maxsum.format($Rain,$NONE,add_label=False)  $month.rain.maxsumtime.format($D,$NODAY) $month.rain.sum_ge($Trace).format($Count,$NONE,add_label=False) $month.rain.sum_ge($SomeRain).format($Count,$NONE,add_label=False) $month.rain.sum_ge($Soak).format($Count,$NONE,add_label=False)\n#else\n$month.dateTime.format($YM)\n#end if\n#end for\n#if $year.rain.has_data\n------------------------------------------------\n        $year.rain.sum.format($Rain,$NONE,add_label=False) $year.rain.maxsum.format($Rain,$NONE,add_label=False)  $year.rain.maxsumtime.format($M,$NODAY) $year.rain.sum_ge($Trace).format($Count,$NONE,add_label=False) $year.rain.sum_ge($SomeRain).format($Count,$NONE,add_label=False) $year.rain.sum_ge($Soak).format($Count,$NONE,add_label=False)\n#end if\n\n\n           WIND SPEED ($unit.label.windSpeed.strip())\n\n                                DOM\n YR  MO    AVG     HI   DATE    DIR\n-----------------------------------\n#for $month in $year.months\n#if $month.wind.has_data\n$month.dateTime.format($YM) $month.wind.avg.format($Wind,$NONE,add_label=False) $month.wind.max.format($Wind,$NONE,add_label=False)   $month.wind.maxtime.format($D,$NODAY) $month.wind.vecdir.format($Dir,$NONE,add_label=False)\n#else\n$month.dateTime.format($YM)\n#end if\n#end for\n#if $year.wind.has_data\n-----------------------------------\n        $year.wind.avg.format($Wind,$NONE,add_label=False) $year.wind.max.format($Wind,$NONE,add_label=False)   $year.wind.maxtime.format($M,$NODAY) $year.wind.vecdir.format($Dir,$NONE,add_label=False)\n#end if\n",
+ "expected": "                     CLIMATOLOGICAL SUMMARY for year 2010\n\n\nNAME: Ĺōćāţĩőń with UTF8 characters                  \nELEV: 100 m    LAT: 45-41.16 N    LONG: 121-33.96 W\n\n\n                                       TEMPERATURE (°C)\n\n                              HEAT    COOL                              MAX    MAX    MIN    MIN\n          MEAN   MEAN         DEG     DEG                                >=     <=     <=     <=\n YR  MO   MAX    MIN    MEAN  DAYS    DAYS      HI  DAY     LOW  DAY     30      0      0    -20\n------------------------------------------------------------------------------------------------\n2010 01   -5.6  -27.9  -16.7 1087.2    0.0    -3.6   31   -28.9   01      0     31     31     31\n2010 02   -0.1  -22.5  -11.3  829.2    0.0     3.7   28   -25.8   01      0     15     28     23\n2010 03    9.4  -13.0   -1.8  624.0    0.0    14.9   31   -18.3   01      0      0     31      0\n2010 04   20.8   -1.6    9.6  262.3    0.0    26.0   30    -7.1   01      0      0     19      0\n2010 05   30.7    8.4   19.6   17.3   56.3    34.5   31     3.9   01     18      0      0      0\n2010 06   36.7   14.4   25.5    0.0  216.1    37.8   30    12.4   01     30      0      0      0\n2010 07   36.9   14.7   25.8    0.0  230.6    37.8   02    12.9   31     31      0      0      0\n2010 08   31.2    9.1   20.1   11.0   67.2    34.9   01     4.8   31     21      0      0      0\n2010 09   23.5    4.2   14.0   16.3    0.0    26.6   01     3.8   03      0      0      0      0\n2010 10\n2010 11\n2010 12\n------------------------------------------------------------------------------------------------\n          20.2   -2.1    9.1 2847.3  570.3    37.8  Jul   -28.9  Jan    100     46    109     54\n\n\n                  PRECIPITATION (mm)\n\n                  MAX         ---DAYS OF RAIN---\n                  OBS.               OVER\n YR  MO  TOTAL    DAY  DATE   0.30   3.00  30.00\n------------------------------------------------\n2010 01  260.1   17.3    01     16     16      0\n2010 02  227.6   17.3    02     14     14      0\n2010 03  260.1   19.3    15     16     16      0\n2010 04  227.6   19.3    04     14     14      0\n2010 05  260.1   19.3    02     16     16      0\n2010 06  240.8   19.3    03     15     15      0\n2010 07  246.9   19.3    01     15     15      0\n2010 08  260.1   19.3    02     16     16      0\n2010 09   32.5   19.3    03      2      2      0\n2010 10\n2010 11\n2010 12\n------------------------------------------------\n        2015.7   19.3   Mar    124    124      0\n\n\n           WIND SPEED (kph)\n\n                                DOM\n YR  MO    AVG     HI   DATE    DIR\n-----------------------------------\n2010 01   16.4   38.6     02     91\n2010 02   16.1   38.6     03     90\n2010 03   16.4   38.6     03     89\n2010 04   15.4   38.6     04     90\n2010 05   16.4   38.6     02     91\n2010 06   16.1   38.6     03     85\n2010 07   15.8   38.6     01     94\n2010 08   16.4   38.6     02     91\n2010 09   18.5   38.6     03     61\n2010 10\n2010 11\n2010 12\n-----------------------------------\n          16.2   38.6    Jan     90\n",
+ "context": [
+  {
+   "attrs": {
+    "year_name": {
+     "value": 2010
+    }
+   }
+  },
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "station": {
+     "attrs": {
+      "location": {
+       "value": "Ĺōćāţĩőń with UTF8 characters"
+      },
+      "altitude": {
+       "text": "100 m"
+      },
+      "latitude": {
+       "items": {
+        "0": {
+         "value": "45"
+        },
+        "1": {
+         "value": "41.16"
+        },
+        "2": {
+         "value": "N"
+        }
+       }
+      },
+      "longitude": {
+       "items": {
+        "0": {
+         "value": "121"
+        },
+        "1": {
+         "value": "33.96"
+        },
+        "2": {
+         "value": "W"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "attrs": {
+    "year": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "months": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -5.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -27.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -16.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -3.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  31"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -28.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    31"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    31"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    31"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 01"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "1087.2"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 260.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  17.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    91"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -0.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -22.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -11.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  28"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -25.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    15"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    28"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    23"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 02"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 829.2"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 227.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  17.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    14"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    14"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    90"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   9.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -13.0"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -1.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  14.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  31"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " -18.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    31"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 03"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 624.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 260.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  15"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    89"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  20.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -1.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   9.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  26.0"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  30"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  -7.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    19"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 04"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 262.3"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 227.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  04"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    14"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    14"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  15.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  04"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    90"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  30.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   8.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  34.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  31"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    18"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 05"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  17.3"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  56.3"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 260.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    91"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  36.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  14.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  25.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  37.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  30"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  12.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    30"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 06"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 216.1"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 240.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    15"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    15"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    85"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  36.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  14.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  25.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  37.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  12.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  31"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    31"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 07"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 230.6"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 246.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    15"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    15"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  15.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    94"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  31.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   9.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  20.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  34.9"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   4.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  31"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    21"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 08"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  11.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  67.2"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": " 260.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "    16"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  02"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    91"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "meanmax": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  23.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "meanmin": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   4.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  14.0"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  26.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  01"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_ge": {
+                 "calls": {
+                  "((30.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "max_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "min_le": {
+                 "calls": {
+                  "((0.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((-20.0, 'degree_C'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 09"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  16.3"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  32.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxsumtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "sum_ge": {
+                 "calls": {
+                  "((0.3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     2"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((3, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     2"
+                      }
+                     }
+                    }
+                   }
+                  },
+                  "((30.0, 'mm'))": {
+                   "attrs": {
+                    "format": {
+                     "calls": {
+                      "('%6d', '   N/A', add_label=False)": {
+                       "value": "     0"
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  18.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('  %d', ' N/A')": {
+                     "value": "  03"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    61"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 10"
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 11"
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%Y %m')": {
+                   "value": "2010 12"
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "outTemp": {
+         "attrs": {
+          "has_data": {
+           "value": true
+          },
+          "meanmax": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  20.2"
+              }
+             }
+            }
+           }
+          },
+          "meanmin": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  -2.1"
+              }
+             }
+            }
+           }
+          },
+          "avg": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "   9.1"
+              }
+             }
+            }
+           }
+          },
+          "max": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  37.8"
+              }
+             }
+            }
+           }
+          },
+          "maxtime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %b', ' N/A')": {
+               "value": " Jul"
+              }
+             }
+            }
+           }
+          },
+          "min": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": " -28.9"
+              }
+             }
+            }
+           }
+          },
+          "mintime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %b', ' N/A')": {
+               "value": " Jan"
+              }
+             }
+            }
+           }
+          },
+          "max_ge": {
+           "calls": {
+            "((30.0, 'degree_C'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "   100"
+                }
+               }
+              }
+             }
+            }
+           }
+          },
+          "max_le": {
+           "calls": {
+            "((0.0, 'degree_C'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "    46"
+                }
+               }
+              }
+             }
+            }
+           }
+          },
+          "min_le": {
+           "calls": {
+            "((0.0, 'degree_C'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "   109"
+                }
+               }
+              }
+             }
+            },
+            "((-20.0, 'degree_C'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "    54"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "heatdeg": {
+         "attrs": {
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "2847.3"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "cooldeg": {
+         "attrs": {
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": " 570.3"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "rain": {
+         "attrs": {
+          "has_data": {
+           "value": true
+          },
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "2015.7"
+              }
+             }
+            }
+           }
+          },
+          "maxsum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  19.3"
+              }
+             }
+            }
+           }
+          },
+          "maxsumtime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %b', ' N/A')": {
+               "value": " Mar"
+              }
+             }
+            }
+           }
+          },
+          "sum_ge": {
+           "calls": {
+            "((0.3, 'mm'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "   124"
+                }
+               }
+              }
+             }
+            },
+            "((3, 'mm'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "   124"
+                }
+               }
+              }
+             }
+            },
+            "((30.0, 'mm'))": {
+             "attrs": {
+              "format": {
+               "calls": {
+                "('%6d', '   N/A', add_label=False)": {
+                 "value": "     0"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "wind": {
+         "attrs": {
+          "has_data": {
+           "value": true
+          },
+          "avg": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  16.2"
+              }
+             }
+            }
+           }
+          },
+          "max": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  38.6"
+              }
+             }
+            }
+           }
+          },
+          "maxtime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %b', ' N/A')": {
+               "value": " Jan"
+              }
+             }
+            }
+           }
+          },
+          "vecdir": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.0f', '   N/A', add_label=False)": {
+               "value": "    90"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "attrs": {
+    "unit": {
+     "attrs": {
+      "unit_type_dict": {
+       "attrs": {
+        "group_temperature": {
+         "value": "degree_C"
+        },
+        "group_rain": {
+         "value": "mm"
+        }
+       }
+      },
+      "label": {
+       "attrs": {
+        "outTemp": {
+         "value": "°C"
+        },
+        "rain": {
+         "value": " mm"
+        },
+        "windSpeed": {
+         "value": " kph"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "filter": "weewx.AssureUnicode"
+}

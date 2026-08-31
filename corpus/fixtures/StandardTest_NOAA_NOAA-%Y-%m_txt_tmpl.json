@@ -1,0 +1,1757 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/NOAA/NOAA-%Y-%m.txt.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/NOAA/NOAA-2010-09.txt",
+ "template": "#errorCatcher Echo\n#set $YM=\"%Y %m\"\n#set $D=\" %d\"\n#set $M=\" %b\"\n#set $Time=\" %H:%M\"\n#set $NODAY=\" N/A\"\n#set $Temp=\"%6.1f\"\n#set $Wind=\"%6.1f\"\n#set $Dir=\"%6.0f\"\n#set $Count=\"%6d\"\n#set $NONE=\"   N/A\"\n#if $unit.unit_type_dict.group_rain == \"mm\"\n#set $Rain=\"%6.1f\"\n#else\n#set $Rain=\"%6.2f\"\n#end if\n                   MONTHLY CLIMATOLOGICAL SUMMARY for $month_name $year_name\n\n\nNAME: $station.location                  \nELEV: $station.altitude    LAT: $station.latitude[0]-$station.latitude[1] $station.latitude[2]    LONG: $station.longitude[0]-$station.longitude[1] $station.longitude[2]\n\n\n                   TEMPERATURE ($unit.label.outTemp.strip()), RAIN ($unit.label.rain.strip()), WIND SPEED ($unit.label.windSpeed.strip())\n\n                                         HEAT   COOL         AVG\n      MEAN                               DEG    DEG          WIND                   DOM\nDAY   TEMP   HIGH   TIME    LOW   TIME   DAYS   DAYS   RAIN  SPEED   HIGH   TIME    DIR\n---------------------------------------------------------------------------------------\n#for $day in $month.days\n#if $day.outTemp.has_data or $day.rain.has_data or $day.wind.has_data\n$day.dateTime.format($D, add_label=False) $day.outTemp.avg.format($Temp,$NONE,add_label=False) $day.outTemp.max.format($Temp,$NONE,add_label=False) $day.outTemp.maxtime.format($Time,add_label=False) $day.outTemp.min.format($Temp,$NONE,add_label=False) $day.outTemp.mintime.format($Time,add_label=False) $day.heatdeg.sum.format($Temp,$NONE,add_label=False) $day.cooldeg.sum.format($Temp,$NONE,add_label=False) $day.rain.sum.format($Rain,$NONE,add_label=False) $day.wind.avg.format($Wind,$NONE,add_label=False) $day.wind.max.format($Wind,$NONE,add_label=False) $day.wind.maxtime.format($Time,add_label=False) $day.wind.vecdir.format($Dir,$NONE,add_label=False)\n#else\n$day.dateTime.format($D)\n#end if\n#end for\n#if $month.outTemp.has_data or $month.rain.has_data or $month.wind.has_data\n---------------------------------------------------------------------------------------\n    $month.outTemp.avg.format($Temp,$NONE,add_label=False) $month.outTemp.max.format($Temp,$NONE,add_label=False)    $month.outTemp.maxtime.format($D,add_label=False) $month.outTemp.min.format($Temp,$NONE,add_label=False)    $month.outTemp.mintime.format($D,add_label=False) $month.heatdeg.sum.format($Temp,$NONE,add_label=False) $month.cooldeg.sum.format($Temp,$NONE,add_label=False) $month.rain.sum.format($Rain,$NONE,add_label=False) $month.wind.avg.format($Wind,$NONE,add_label=False) $month.wind.max.format($Wind,$NONE,add_label=False)    $month.wind.maxtime.format($D,add_label=False) $month.wind.vecdir.format($Dir,add_label=False)\n#end if\n",
+ "expected": "                   MONTHLY CLIMATOLOGICAL SUMMARY for Sep 2010\n\n\nNAME: Ĺōćāţĩőń with UTF8 characters                  \nELEV: 100 m    LAT: 45-41.16 N    LONG: 121-33.96 W\n\n\n                   TEMPERATURE (°C), RAIN (mm), WIND SPEED (kph)\n\n                                         HEAT   COOL         AVG\n      MEAN                               DEG    DEG          WIND                   DOM\nDAY   TEMP   HIGH   TIME    LOW   TIME   DAYS   DAYS   RAIN  SPEED   HIGH   TIME    DIR\n---------------------------------------------------------------------------------------\n 01   15.3   26.6  16:00    4.5  04:00    3.0    0.0    0.0    5.4   18.0  00:00    335\n 02   15.2   26.2  16:00    4.2  04:00    3.2    0.0   13.2   26.0   38.6  00:00     47\n 03    8.2   17.7  11:00    3.8  04:00   10.1    0.0   19.3   31.1   38.6  01:00    107\n 04\n 05\n 06\n 07\n 08\n 09\n 10\n 11\n 12\n 13\n 14\n 15\n 16\n 17\n 18\n 19\n 20\n 21\n 22\n 23\n 24\n 25\n 26\n 27\n 28\n 29\n 30\n---------------------------------------------------------------------------------------\n      14.0   26.6     01    3.8     03   16.3    0.0   32.5   18.5   38.6     03     61\n",
+ "context": [
+  {
+   "attrs": {
+    "month_name": {
+     "value": "Sep"
+    },
+    "year_name": {
+     "value": 2010
+    }
+   }
+  },
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "station": {
+     "attrs": {
+      "location": {
+       "value": "Ĺōćāţĩőń with UTF8 characters"
+      },
+      "altitude": {
+       "text": "100 m"
+      },
+      "latitude": {
+       "items": {
+        "0": {
+         "value": "45"
+        },
+        "1": {
+         "value": "41.16"
+        },
+        "2": {
+         "value": "N"
+        }
+       }
+      },
+      "longitude": {
+       "items": {
+        "0": {
+         "value": "121"
+        },
+        "1": {
+         "value": "33.96"
+        },
+        "2": {
+         "value": "W"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "attrs": {
+    "month": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "days": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  15.3"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  26.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 16:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   4.5"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 04:00"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d', add_label=False)": {
+                   "value": " 01"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   5.4"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  18.0"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 00:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "   335"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  15.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  26.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 16:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   4.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 04:00"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d', add_label=False)": {
+                   "value": " 02"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.2"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  13.2"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  26.0"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 00:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "    47"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": true
+                },
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   8.2"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  17.7"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 11:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "min": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   3.8"
+                    }
+                   }
+                  }
+                 }
+                },
+                "mintime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 04:00"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d', add_label=False)": {
+                   "value": " 03"
+                  }
+                 }
+                }
+               }
+              },
+              "heatdeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  10.1"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "cooldeg": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "   0.0"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "sum": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  19.3"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "avg": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  31.1"
+                    }
+                   }
+                  }
+                 }
+                },
+                "max": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.1f', '   N/A', add_label=False)": {
+                     "value": "  38.6"
+                    }
+                   }
+                  }
+                 }
+                },
+                "maxtime": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "(' %H:%M', add_label=False)": {
+                     "value": " 01:00"
+                    }
+                   }
+                  }
+                 }
+                },
+                "vecdir": {
+                 "attrs": {
+                  "format": {
+                   "calls": {
+                    "('%6.0f', '   N/A', add_label=False)": {
+                     "value": "   107"
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 04"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 05"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 06"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 07"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 08"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 09"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 10"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 11"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 12"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 13"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 14"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 15"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 16"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 17"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 18"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 19"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 20"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 21"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 22"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "22": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 23"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "23": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 24"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "24": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 25"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "25": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 26"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "26": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 27"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "27": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 28"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "28": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 29"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "29": {
+             "attrs": {
+              "outTemp": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "rain": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "wind": {
+               "attrs": {
+                "has_data": {
+                 "value": false
+                }
+               }
+              },
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "(' %d')": {
+                   "value": " 30"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "outTemp": {
+         "attrs": {
+          "has_data": {
+           "value": true
+          },
+          "avg": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  14.0"
+              }
+             }
+            }
+           }
+          },
+          "max": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  26.6"
+              }
+             }
+            }
+           }
+          },
+          "maxtime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %d', add_label=False)": {
+               "value": " 01"
+              }
+             }
+            }
+           }
+          },
+          "min": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "   3.8"
+              }
+             }
+            }
+           }
+          },
+          "mintime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %d', add_label=False)": {
+               "value": " 03"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "heatdeg": {
+         "attrs": {
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  16.3"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "cooldeg": {
+         "attrs": {
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "   0.0"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "rain": {
+         "attrs": {
+          "sum": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  32.5"
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "wind": {
+         "attrs": {
+          "avg": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  18.5"
+              }
+             }
+            }
+           }
+          },
+          "max": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.1f', '   N/A', add_label=False)": {
+               "value": "  38.6"
+              }
+             }
+            }
+           }
+          },
+          "maxtime": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "(' %d', add_label=False)": {
+               "value": " 03"
+              }
+             }
+            }
+           }
+          },
+          "vecdir": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%6.0f', add_label=False)": {
+               "value": "    61"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "attrs": {
+    "unit": {
+     "attrs": {
+      "unit_type_dict": {
+       "attrs": {
+        "group_rain": {
+         "value": "mm"
+        }
+       }
+      },
+      "label": {
+       "attrs": {
+        "outTemp": {
+         "value": "°C"
+        },
+        "rain": {
+         "value": " mm"
+        },
+        "windSpeed": {
+         "value": " kph"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ ],
+ "filter": "weewx.AssureUnicode"
+}

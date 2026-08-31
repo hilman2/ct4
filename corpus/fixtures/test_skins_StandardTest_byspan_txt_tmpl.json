@@ -1,0 +1,3378 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/byspan.txt.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/byspan.txt",
+ "template": "Current time is $current.dateTime ($current.dateTime.raw)\n\nHourly Top Temperatures in Last Day\n#for $_hour in $day(days_ago=1).hours\n$_hour.start.format(\"%a %m/%d %H:%M\")-$_hour.end.format(\"%H:%M\"): $_hour.outTemp.max at $_hour.outTemp.maxtime\n#end for\n\nDaily Top Temperatures in Last Week\n#for $_day in $week(weeks_ago=1).days\n$_day.dateTime.format(\"%a %m/%d\"): $_day.outTemp.max at $_day.outTemp.maxtime\n#end for\n\nDaily Top Temperatures in Last Month\n#for $_day in $month(months_ago=1).days\n$_day.dateTime.format(\"%a %m/%d\"): $_day.outTemp.max at $_day.outTemp.maxtime\n#end for\n\nMonthly Top Temperatures this Year\n#for $_month in $year.months\n$_month.dateTime.format(\"%b %Y\"): $_month.outTemp.max at $_month.outTemp.maxtime\n#end for\n\n3 hour averages over yesterday\n#for $span in $yesterday.spans(interval=10800)\n$span.dateTime.format(\"%m/%d %H:%M\")-$span.end.format(\"%H:%M\"): $span.outTemp.avg\n#end for\n\nAll temperature records for yesterday\n#for $record in $yesterday.records\n$record.dateTime.format(\"%m/%d %H:%M\"): $record.outTemp\n#end for\n",
+ "expected": "Current time is 03-Sep-2010 11:00 (1283536800)\n\nHourly Top Temperatures in Last Day\nThu 09/02 00:00-01:00: 8.6°C at 00:30\nThu 09/02 01:00-02:00: 6.5°C at 01:30\nThu 09/02 02:00-03:00: 5.0°C at 02:30\nThu 09/02 03:00-04:00: 4.3°C at 03:30\nThu 09/02 04:00-05:00: 4.5°C at 05:00\nThu 09/02 05:00-06:00: 5.6°C at 06:00\nThu 09/02 06:00-07:00: 7.4°C at 07:00\nThu 09/02 07:00-08:00: 9.7°C at 08:00\nThu 09/02 08:00-09:00: 12.3°C at 09:00\nThu 09/02 09:00-10:00: 15.2°C at 10:00\nThu 09/02 10:00-11:00: 18.1°C at 11:00\nThu 09/02 11:00-12:00: 20.7°C at 12:00\nThu 09/02 12:00-13:00: 23.0°C at 13:00\nThu 09/02 13:00-14:00: 24.8°C at 14:00\nThu 09/02 14:00-15:00: 25.9°C at 15:00\nThu 09/02 15:00-16:00: 26.2°C at 16:00\nThu 09/02 16:00-17:00: 26.1°C at 16:30\nThu 09/02 17:00-18:00: 25.4°C at 17:30\nThu 09/02 18:00-19:00: 23.9°C at 18:30\nThu 09/02 19:00-20:00: 21.8°C at 19:30\nThu 09/02 20:00-21:00: 19.3°C at 20:30\nThu 09/02 21:00-22:00: 16.5°C at 21:30\nThu 09/02 22:00-23:00: 13.6°C at 22:30\nThu 09/02 23:00-00:00: 10.8°C at 23:30\n\nDaily Top Temperatures in Last Week\nSun 08/22: 29.7°C at 16:00\nMon 08/23: 29.4°C at 16:00\nTue 08/24: 29.1°C at 16:00\nWed 08/25: 28.8°C at 16:00\nThu 08/26: 28.5°C at 16:00\nFri 08/27: 28.2°C at 16:00\nSat 08/28: 27.9°C at 16:00\n\nDaily Top Temperatures in Last Month\nSun 08/01: 34.9°C at 16:00\nMon 08/02: 34.7°C at 16:00\nTue 08/03: 34.5°C at 16:00\nWed 08/04: 34.3°C at 16:00\nThu 08/05: 34.1°C at 16:00\nFri 08/06: 33.8°C at 16:00\nSat 08/07: 33.6°C at 16:00\nSun 08/08: 33.4°C at 16:00\nMon 08/09: 33.2°C at 16:00\nTue 08/10: 32.9°C at 16:00\nWed 08/11: 32.7°C at 16:00\nThu 08/12: 32.4°C at 16:00\nFri 08/13: 32.2°C at 16:00\nSat 08/14: 31.9°C at 16:00\nSun 08/15: 31.7°C at 16:00\nMon 08/16: 31.4°C at 16:00\nTue 08/17: 31.1°C at 16:00\nWed 08/18: 30.9°C at 16:00\nThu 08/19: 30.6°C at 16:00\nFri 08/20: 30.3°C at 16:00\nSat 08/21: 30.0°C at 16:00\nSun 08/22: 29.7°C at 16:00\nMon 08/23: 29.4°C at 16:00\nTue 08/24: 29.1°C at 16:00\nWed 08/25: 28.8°C at 16:00\nThu 08/26: 28.5°C at 16:00\nFri 08/27: 28.2°C at 16:00\nSat 08/28: 27.9°C at 16:00\nSun 08/29: 27.6°C at 16:00\nMon 08/30: 27.2°C at 16:00\nTue 08/31: 26.9°C at 16:00\n\nMonthly Top Temperatures this Year\nJan 2010: -3.6°C at 31-Jan-2010 15:00\nFeb 2010: 3.7°C at 28-Feb-2010 15:00\nMar 2010: 14.9°C at 31-Mar-2010 16:00\nApr 2010: 26.0°C at 30-Apr-2010 16:00\nMay 2010: 34.5°C at 31-May-2010 16:00\nJun 2010: 37.8°C at 30-Jun-2010 16:00\nJul 2010: 37.8°C at 02-Jul-2010 16:00\nAug 2010: 34.9°C at 01-Aug-2010 16:00\nSep 2010: 26.6°C at 01-Sep-2010 16:00\nOct 2010:    N/A at    N/A\nNov 2010:    N/A at    N/A\nDec 2010:    N/A at    N/A\n\n3 hour averages over yesterday\n09/02 00:00-03:00: 6.3°C\n09/02 03:00-06:00: 4.7°C\n09/02 06:00-09:00: 9.2°C\n09/02 09:00-12:00: 17.3°C\n09/02 12:00-15:00: 24.2°C\n09/02 15:00-18:00: 25.7°C\n09/02 18:00-21:00: 21.1°C\n09/02 21:00-00:00: 12.9°C\n\nAll temperature records for yesterday\n09/02 00:30: 8.6°C\n09/02 01:00: 7.5°C\n09/02 01:30: 6.5°C\n09/02 02:00: 5.7°C\n09/02 02:30: 5.0°C\n09/02 03:00: 4.6°C\n09/02 03:30: 4.3°C\n09/02 04:00: 4.2°C\n09/02 04:30: 4.3°C\n09/02 05:00: 4.5°C\n09/02 05:30: 5.0°C\n09/02 06:00: 5.6°C\n09/02 06:30: 6.4°C\n09/02 07:00: 7.4°C\n09/02 07:30: 8.5°C\n09/02 08:00: 9.7°C\n09/02 08:30: 11.0°C\n09/02 09:00: 12.3°C\n09/02 09:30: 13.8°C\n09/02 10:00: 15.2°C\n09/02 10:30: 16.7°C\n09/02 11:00: 18.1°C\n09/02 11:30: 19.4°C\n09/02 12:00: 20.7°C\n09/02 12:30: 21.9°C\n09/02 13:00: 23.0°C\n09/02 13:30: 24.0°C\n09/02 14:00: 24.8°C\n09/02 14:30: 25.4°C\n09/02 15:00: 25.9°C\n09/02 15:30: 26.1°C\n09/02 16:00: 26.2°C\n09/02 16:30: 26.1°C\n09/02 17:00: 25.8°C\n09/02 17:30: 25.4°C\n09/02 18:00: 24.7°C\n09/02 18:30: 23.9°C\n09/02 19:00: 22.9°C\n09/02 19:30: 21.8°C\n09/02 20:00: 20.6°C\n09/02 20:30: 19.3°C\n09/02 21:00: 17.9°C\n09/02 21:30: 16.5°C\n09/02 22:00: 15.0°C\n09/02 22:30: 13.6°C\n09/02 23:00: 12.2°C\n09/02 23:30: 10.8°C\n09/03 00:00: 9.5°C\n",
+ "context": [
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "current": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "dateTime": {
+         "text": "03-Sep-2010 11:00",
+         "attrs": {
+          "raw": {
+           "value": 1283536800
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "day": {
+     "calls": {
+      "(days_ago=1)": {
+       "attrs": {
+        "hours": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 00:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "01:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "8.6°C"
+                },
+                "maxtime": {
+                 "text": "00:30"
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 01:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "02:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "6.5°C"
+                },
+                "maxtime": {
+                 "text": "01:30"
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 02:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "03:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "5.0°C"
+                },
+                "maxtime": {
+                 "text": "02:30"
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 03:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "04:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "4.3°C"
+                },
+                "maxtime": {
+                 "text": "03:30"
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 04:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "05:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "4.5°C"
+                },
+                "maxtime": {
+                 "text": "05:00"
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 05:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "06:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "5.6°C"
+                },
+                "maxtime": {
+                 "text": "06:00"
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 06:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "07:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "7.4°C"
+                },
+                "maxtime": {
+                 "text": "07:00"
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 07:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "08:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "9.7°C"
+                },
+                "maxtime": {
+                 "text": "08:00"
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 08:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "09:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "12.3°C"
+                },
+                "maxtime": {
+                 "text": "09:00"
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 09:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "10:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "15.2°C"
+                },
+                "maxtime": {
+                 "text": "10:00"
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 10:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "11:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "18.1°C"
+                },
+                "maxtime": {
+                 "text": "11:00"
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 11:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "12:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "20.7°C"
+                },
+                "maxtime": {
+                 "text": "12:00"
+                }
+               }
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 12:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "13:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "23.0°C"
+                },
+                "maxtime": {
+                 "text": "13:00"
+                }
+               }
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 13:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "14:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "24.8°C"
+                },
+                "maxtime": {
+                 "text": "14:00"
+                }
+               }
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 14:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "15:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "25.9°C"
+                },
+                "maxtime": {
+                 "text": "15:00"
+                }
+               }
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 15:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "16:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "26.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 16:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "17:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "26.1°C"
+                },
+                "maxtime": {
+                 "text": "16:30"
+                }
+               }
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 17:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "18:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "25.4°C"
+                },
+                "maxtime": {
+                 "text": "17:30"
+                }
+               }
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 18:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "19:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "23.9°C"
+                },
+                "maxtime": {
+                 "text": "18:30"
+                }
+               }
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 19:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "20:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "21.8°C"
+                },
+                "maxtime": {
+                 "text": "19:30"
+                }
+               }
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 20:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "21:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "19.3°C"
+                },
+                "maxtime": {
+                 "text": "20:30"
+                }
+               }
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 21:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "22:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "16.5°C"
+                },
+                "maxtime": {
+                 "text": "21:30"
+                }
+               }
+              }
+             }
+            },
+            "22": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 22:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "23:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "13.6°C"
+                },
+                "maxtime": {
+                 "text": "22:30"
+                }
+               }
+              }
+             }
+            },
+            "23": {
+             "attrs": {
+              "start": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d %H:%M')": {
+                   "value": "Thu 09/02 23:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "00:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "10.8°C"
+                },
+                "maxtime": {
+                 "text": "23:30"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "week": {
+     "calls": {
+      "(weeks_ago=1)": {
+       "attrs": {
+        "days": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/22"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.7°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/23"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.4°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/24"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.1°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Wed 08/25"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.8°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Thu 08/26"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.5°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Fri 08/27"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sat 08/28"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "27.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "month": {
+     "calls": {
+      "(months_ago=1)": {
+       "attrs": {
+        "days": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/01"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/02"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.7°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/03"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.5°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Wed 08/04"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.3°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Thu 08/05"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.1°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Fri 08/06"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "33.8°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sat 08/07"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "33.6°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/08"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "33.4°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/09"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "33.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/10"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "32.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Wed 08/11"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "32.7°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Thu 08/12"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "32.4°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Fri 08/13"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "32.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sat 08/14"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "31.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/15"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "31.7°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/16"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "31.4°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/17"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "31.1°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Wed 08/18"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "30.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Thu 08/19"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "30.6°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Fri 08/20"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "30.3°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sat 08/21"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "30.0°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/22"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.7°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "22": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/23"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.4°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "23": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/24"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "29.1°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "24": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Wed 08/25"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.8°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "25": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Thu 08/26"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.5°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "26": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Fri 08/27"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "28.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "27": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sat 08/28"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "27.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "28": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Sun 08/29"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "27.6°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "29": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Mon 08/30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "27.2°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            },
+            "30": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%a %m/%d')": {
+                   "value": "Tue 08/31"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "26.9°C"
+                },
+                "maxtime": {
+                 "text": "16:00"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "year": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "months": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Jan 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "-3.6°C"
+                },
+                "maxtime": {
+                 "text": "31-Jan-2010 15:00"
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Feb 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "3.7°C"
+                },
+                "maxtime": {
+                 "text": "28-Feb-2010 15:00"
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Mar 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "14.9°C"
+                },
+                "maxtime": {
+                 "text": "31-Mar-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Apr 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "26.0°C"
+                },
+                "maxtime": {
+                 "text": "30-Apr-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "May 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.5°C"
+                },
+                "maxtime": {
+                 "text": "31-May-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Jun 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "37.8°C"
+                },
+                "maxtime": {
+                 "text": "30-Jun-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Jul 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "37.8°C"
+                },
+                "maxtime": {
+                 "text": "02-Jul-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Aug 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "34.9°C"
+                },
+                "maxtime": {
+                 "text": "01-Aug-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Sep 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "26.6°C"
+                },
+                "maxtime": {
+                 "text": "01-Sep-2010 16:00"
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Oct 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                },
+                "maxtime": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Nov 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                },
+                "maxtime": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%b %Y')": {
+                   "value": "Dec 2010"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                },
+                "maxtime": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "yesterday": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "spans": {
+         "calls": {
+          "(interval=10800)": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 00:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "03:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "6.3°C"
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 03:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "06:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "4.7°C"
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 06:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "09:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "9.2°C"
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 09:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "12:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "17.3°C"
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 12:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "15:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "24.2°C"
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 15:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "18:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "25.7°C"
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 18:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "21:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "21.1°C"
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 21:00"
+                  }
+                 }
+                }
+               }
+              },
+              "end": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%H:%M')": {
+                   "value": "00:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "attrs": {
+                "avg": {
+                 "text": "12.9°C"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "records": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 00:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "8.6°C"
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 01:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "7.5°C"
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 01:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "6.5°C"
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 02:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "5.7°C"
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 02:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "5.0°C"
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 03:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "4.6°C"
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 03:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "4.3°C"
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 04:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "4.2°C"
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 04:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "4.3°C"
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 05:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "4.5°C"
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 05:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "5.0°C"
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 06:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "5.6°C"
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 06:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "6.4°C"
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 07:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "7.4°C"
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 07:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "8.5°C"
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 08:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "9.7°C"
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 08:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "11.0°C"
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 09:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "12.3°C"
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 09:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "13.8°C"
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 10:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "15.2°C"
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 10:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "16.7°C"
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 11:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "18.1°C"
+              }
+             }
+            },
+            "22": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 11:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "19.4°C"
+              }
+             }
+            },
+            "23": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 12:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "20.7°C"
+              }
+             }
+            },
+            "24": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 12:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "21.9°C"
+              }
+             }
+            },
+            "25": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 13:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "23.0°C"
+              }
+             }
+            },
+            "26": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 13:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "24.0°C"
+              }
+             }
+            },
+            "27": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 14:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "24.8°C"
+              }
+             }
+            },
+            "28": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 14:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "25.4°C"
+              }
+             }
+            },
+            "29": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 15:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "25.9°C"
+              }
+             }
+            },
+            "30": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 15:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "26.1°C"
+              }
+             }
+            },
+            "31": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 16:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "26.2°C"
+              }
+             }
+            },
+            "32": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 16:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "26.1°C"
+              }
+             }
+            },
+            "33": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 17:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "25.8°C"
+              }
+             }
+            },
+            "34": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 17:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "25.4°C"
+              }
+             }
+            },
+            "35": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 18:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "24.7°C"
+              }
+             }
+            },
+            "36": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 18:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "23.9°C"
+              }
+             }
+            },
+            "37": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 19:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "22.9°C"
+              }
+             }
+            },
+            "38": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 19:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "21.8°C"
+              }
+             }
+            },
+            "39": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 20:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "20.6°C"
+              }
+             }
+            },
+            "40": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 20:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "19.3°C"
+              }
+             }
+            },
+            "41": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 21:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "17.9°C"
+              }
+             }
+            },
+            "42": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 21:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "16.5°C"
+              }
+             }
+            },
+            "43": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 22:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "15.0°C"
+              }
+             }
+            },
+            "44": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 22:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "13.6°C"
+              }
+             }
+            },
+            "45": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 23:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "12.2°C"
+              }
+             }
+            },
+            "46": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/02 23:30"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "10.8°C"
+              }
+             }
+            },
+            "47": {
+             "attrs": {
+              "dateTime": {
+               "attrs": {
+                "format": {
+                 "calls": {
+                  "('%m/%d %H:%M')": {
+                   "value": "09/03 00:00"
+                  }
+                 }
+                }
+               }
+              },
+              "outTemp": {
+               "text": "9.5°C"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {}
+ ],
+ "filter": "weewx.AssureUnicode"
+}

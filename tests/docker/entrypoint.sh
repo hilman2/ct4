@@ -15,7 +15,7 @@ cp -r /repo/Cheetah /repo/ct4 /repo/tests /repo/setup.py /repo/SetupTools.py \
 cd /work
 python setup.py build_ext --inplace >/dev/null 2>&1
 
-CORPUS="/repo/corpus/ct3-tests.jsonl /repo/corpus/skins.jsonl"
+CORPUS="/repo/corpus/ct3-tests.jsonl /repo/corpus/skins.jsonl /repo/corpus/weewx-render.jsonl"
 WHAT="${1:-all}"
 
 run_unit() {

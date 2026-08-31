@@ -15,6 +15,7 @@ from typing import Any, Iterable, Iterator
 
 CT3_DEFAULT = "ct3_default"
 INLINE = "inline"
+FIXTURE = "fixture"
 
 # Zwei Arten von Fall. "render" vergleicht die Ausgabe und braucht
 # dafuer einen Kontext. "compile" vergleicht den erzeugten Modulcode
@@ -50,6 +51,7 @@ class Case:
     context: list[Any] = field(default_factory=list)
     settings: dict[str, Any] = field(default_factory=dict)
     compile_kwargs: dict[str, Any] = field(default_factory=dict)
+    filter: str = ""
     origin: str = ""
 
 

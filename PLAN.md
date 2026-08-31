@@ -712,7 +712,7 @@ nichts.
 **Fertig, wenn:** Korpus mindestens 1.000 Fälle, ct4 stimmt auf 100 Prozent mit
 ct3 überein.
 
-Stand 31-Aug-2026: 1.764 Fälle, beide Seiten 100 Prozent, lokal unter Windows
+Stand 31-Aug-2026: 1.772 Fälle, beide Seiten 100 Prozent, lokal unter Windows
 und Python 3.14 wie im Container unter Linux und Python 3.13.
 
 | Quelle | Fälle | Art |
@@ -720,13 +720,17 @@ und Python 3.14 wie im Container unter Linux und Python 3.13.
 | ct3-Testsuite | 1.628 | `render` |
 | weewx: Seasons, Smartphone, Mobile, Standard, Beispiele, Test-Skins | 53 | `compile` |
 | Belchertown, Belchertown New, weewx-wdc | 83 | `compile` |
+| weewx-Seiten aus einem echten Report-Lauf | 8 | `render` |
 
 Aus der Testsuite fehlen noch 62 Fälle: 40 wegen `macroDirectives` mit einer
 Funktion darin, 14 wegen einer Datei neben der Vorlage, 6 wegen `os.environ`,
 2 wegen einer nicht ablegbaren searchList.
 
-Offen bleibt `ct4 fixture capture`. Solange es das nicht gibt, stehen die Skins
-nur als `compile`-Fälle im Korpus, und ihre Ausgabe ist ungeprüft.
+`ct4 fixture capture` steht und liefert die letzte Zeile der Tabelle. Es hängt
+sich in weewx' eigene Testsuite ein, zeichnet auf, was jede Vorlage aus dem
+Kontext liest, und legt das als JSON ab. Danach rendert dieselbe Vorlage ohne
+weewx und ohne Datenbank, byte-identisch. Was dabei aufzufallen hatte, steht in
+Abschnitt 14.
 
 ### P1 — Infrastruktur, Semantik unverändert
 
@@ -801,6 +805,14 @@ Anschluss an das Upstream-Projekt gewünscht ist.
 - **Kompatibilität ist ein Anspruch, kein Zustand.** Der Korpus deckt nie alles.
   Gegenmassnahme: jeder gemeldete Unterschied wird ein Korpusfall, bevor er
   behoben wird.
+- **Der Kontext ist mehr als seine Werte.** Beim Aufzeichnen mussten vier Dinge
+  mitgeschrieben werden, die man nicht erwartet: dass ein Wert eine gebundene
+  Methode war (Cheetah ruft die von selbst auf und erkennt sie an `__func__`),
+  dass ein Zugriff eine Ausnahme geworfen hat (ein Skin führt das absichtlich
+  vor), welcher Ausgabefilter galt, und unter welchem Pfad ein weitergereichter
+  Wert stand. Jedes dieser vier Stücke hat gefehlt und den Vergleich zum
+  Scheitern gebracht. Es können weitere fehlen; ein Fixture ist erst richtig,
+  wenn es byte-identisch reproduziert.
 - **Eine gemessene Lücke: Stack-Frames.** Am 31-Aug-2026 gegen den Korpus
   gemessen, indem einzelne Compiler-Schalter umgelegt wurden. `useNameMapper`
   aus lässt 46 Prozent der Fälle gleich, `useAutocalling` aus 88 Prozent,

@@ -1,0 +1,265 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/byrecord.txt.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/byrecord.txt",
+ "template": "#errorCatcher Echo\n                   TEST ITERATING BY RECORDS\n---------------------------------------------------------------------------------------\n#for $_record in $day.records\n$_record.dateTime $_record.outTemp\n#end for\n---------------------------------------------------------------------------------------\n    \n",
+ "expected": "                   TEST ITERATING BY RECORDS\n---------------------------------------------------------------------------------------\n03-Sep-2010 00:30 8.2°C\n03-Sep-2010 01:00 7.1°C\n03-Sep-2010 01:30 6.2°C\n03-Sep-2010 02:00    N/A\n03-Sep-2010 02:30 4.7°C\n03-Sep-2010 03:00 4.2°C\n03-Sep-2010 03:30 3.9°C\n03-Sep-2010 04:00 3.8°C\n03-Sep-2010 04:30 3.9°C\n03-Sep-2010 05:00 4.2°C\n03-Sep-2010 05:30 4.7°C\n03-Sep-2010 06:00 5.3°C\n03-Sep-2010 06:30 6.1°C\n03-Sep-2010 07:00 7.1°C\n03-Sep-2010 07:30 8.1°C\n03-Sep-2010 08:00 9.3°C\n03-Sep-2010 08:30 10.6°C\n03-Sep-2010 09:00 12.0°C\n03-Sep-2010 09:30 13.4°C\n03-Sep-2010 10:00 14.9°C\n03-Sep-2010 10:30 16.3°C\n03-Sep-2010 11:00 17.7°C\n---------------------------------------------------------------------------------------\n    \n",
+ "context": [
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "day": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "records": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 00:30"
+              },
+              "outTemp": {
+               "text": "8.2°C"
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 01:00"
+              },
+              "outTemp": {
+               "text": "7.1°C"
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 01:30"
+              },
+              "outTemp": {
+               "text": "6.2°C"
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 02:00"
+              },
+              "outTemp": {
+               "text": "   N/A"
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 02:30"
+              },
+              "outTemp": {
+               "text": "4.7°C"
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 03:00"
+              },
+              "outTemp": {
+               "text": "4.2°C"
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 03:30"
+              },
+              "outTemp": {
+               "text": "3.9°C"
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 04:00"
+              },
+              "outTemp": {
+               "text": "3.8°C"
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 04:30"
+              },
+              "outTemp": {
+               "text": "3.9°C"
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 05:00"
+              },
+              "outTemp": {
+               "text": "4.2°C"
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 05:30"
+              },
+              "outTemp": {
+               "text": "4.7°C"
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 06:00"
+              },
+              "outTemp": {
+               "text": "5.3°C"
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 06:30"
+              },
+              "outTemp": {
+               "text": "6.1°C"
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 07:00"
+              },
+              "outTemp": {
+               "text": "7.1°C"
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 07:30"
+              },
+              "outTemp": {
+               "text": "8.1°C"
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 08:00"
+              },
+              "outTemp": {
+               "text": "9.3°C"
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 08:30"
+              },
+              "outTemp": {
+               "text": "10.6°C"
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 09:00"
+              },
+              "outTemp": {
+               "text": "12.0°C"
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 09:30"
+              },
+              "outTemp": {
+               "text": "13.4°C"
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 10:00"
+              },
+              "outTemp": {
+               "text": "14.9°C"
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 10:30"
+              },
+              "outTemp": {
+               "text": "16.3°C"
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "dateTime": {
+               "text": "03-Sep-2010 11:00"
+              },
+              "outTemp": {
+               "text": "17.7°C"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {}
+ ],
+ "filter": "weewx.AssureUnicode"
+}

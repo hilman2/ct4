@@ -18,6 +18,7 @@ from ct4 import impl
 
 DEFAULT_OUT = Path("corpus/ct3-tests.jsonl")
 DEFAULT_SKINS = Path("corpus/skins.jsonl")
+DEFAULT_FIXTURES = Path("corpus/weewx-render.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +40,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Name des Skins und Wurzelverzeichnis seiner Vorlagen")
     skins_cmd.add_argument("--out", type=Path, default=DEFAULT_SKINS)
 
+    fixtures_cmd = sub.add_parser(
+        "harvest-fixtures",
+        help="aufgezeichnete Kontexte in Faelle umwandeln")
+    fixtures_cmd.add_argument("root", type=Path)
+    fixtures_cmd.add_argument("--name", default="weewx")
+    fixtures_cmd.add_argument("--out", type=Path, default=DEFAULT_FIXTURES)
+
     check_cmd = sub.add_parser(
         "check", help="Korpus gegen die Implementierung pruefen")
     check_cmd.add_argument("paths", type=Path, nargs="+")
@@ -57,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
         return _harvest(args.out)
     if args.command == "harvest-skins":
         return _harvest_skins(args.sources, args.out)
+    if args.command == "harvest-fixtures":
+        return _harvest_fixtures(args.root, args.name, args.out)
     return _check(args.paths, args.show, args.jobs)
 
 
@@ -94,6 +104,17 @@ def _harvest_skins(sources: list[str], out: Path) -> int:
 
     count = write_jsonl(cases, out)
     print("\n%d Faelle geschrieben nach %s" % (count, out))
+    return 0
+
+
+def _harvest_fixtures(root: Path, name: str, out: Path) -> int:
+    from ct4.corpus import fixtures
+    from ct4.corpus.case import write_jsonl
+
+    cases, skipped = fixtures.harvest(root, name)
+    for reason, count in sorted(skipped.items()):
+        print("uebersprungen: %-20s %d" % (reason, count))
+    print("%d Faelle geschrieben nach %s" % (write_jsonl(cases, out), out))
     return 0
 
 

@@ -1,0 +1,241 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/almanac.html.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/almanac.html",
+ "template": "#errorCatcher Echo\n#encoding UTF-8\n<!DOCTYPE html>\n<html lang=\"$lang\">\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n    <title>Test almanac</title>\n    <style>\n        table {\n            border: thin solid #000000;\n        }\n\n        td {\n            border: thin solid #000000;\n            padding: 2px;\n        }\n    </style>\n</head>\n<body>\n<h1>Test for \\$almanac. Requires pyephem</h1>\n<h2>Sun</h2>\n<table>\n    <tr>\n        <td>\\$almanac.sun.az (old-style)</td>\n        <td>$(\"%.3f\" % $almanac.sun.az)</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.alt (old-style)</td>\n        <td>$(\"%.3f\" % $almanac.sun.alt)</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.azimuth</td>\n        <td>$almanac.sun.azimuth</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.azimuth.format(\"%03.2f\")</td>\n        <td>$almanac.sun.azimuth.format(\"%03.2f\")</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.altitude</td>\n        <td>$almanac.sun.altitude</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.altitude.format(\"%02.2f\")</td>\n        <td>$almanac.sun.altitude.format(\"%02.2f\")</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.altitude.radian</td>\n        <td>$almanac.sun.altitude.radian</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.astro_ra</td>\n        <td>$almanac.sun.astro_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.astro_dec</td>\n        <td>$almanac.sun.astro_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.geo_ra</td>\n        <td>$almanac.sun.geo_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.geo_dec</td>\n        <td>$almanac.sun.geo_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.topo_ra</td>\n        <td>$almanac.sun.topo_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sun.topo_dec</td>\n        <td>$almanac.sun.topo_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sidereal_time</td>\n        <td>$almanac.sidereal_time</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.sidereal_angle</td>\n        <td>$almanac.sidereal_angle</td>\n    </tr>\n</table>\n\n<h2>Jupiter</h2>\n<table>\n    <tr>\n        <td>\\$almanac.jupiter.az (old-style)</td>\n        <td>$(\"%.3f\" % $almanac.jupiter.az)</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.alt (old-style)</td>\n        <td>$(\"%.3f\" % $almanac.jupiter.alt)</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.azimuth</td>\n        <td>$almanac.jupiter.azimuth</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.altitude</td>\n        <td>$almanac.jupiter.altitude</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.astro_ra</td>\n        <td>$almanac.jupiter.astro_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.astro_dec</td>\n        <td>$almanac.jupiter.astro_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.geo_ra</td>\n        <td>$almanac.jupiter.geo_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.geo_dec</td>\n        <td>$almanac.jupiter.geo_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.topo_ra</td>\n        <td>$almanac.jupiter.topo_ra</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.topo_dec</td>\n        <td>$almanac.jupiter.topo_dec</td>\n    </tr>\n    <tr>\n        <td>\\$almanac.jupiter.topo_dec.radian</td>\n        <td>$almanac.jupiter.topo_dec.radian</td>\n    </tr>\n</table>\n\n<h2>Venus</h2>\n<p>Example from the <a href=\"https://rhodesmill.org/pyephem/quick.html#body-compute-observer\">PyEphem manual</a>:</p>\n<table>\n    <tr>\n        <td>\\$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.altitude</td>\n        <td>$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.altitude.format(\"%02.2f\")</td>\n    </tr>\n    <tr>\n        <td>\\$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.azimuth</td>\n        <td>$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.azimuth.format(\"%03.2f\")</td>\n    </tr>\n</table>\n\n<h2>Example from the docs</h2>\nCurrent time is $current.dateTime\n#if $almanac.hasExtras\n    <pre>\n    Sunrise, transit, sunset: $almanac.sun.rise $almanac.sun.transit $almanac.sun.set\n    Moonrise, transit, moonset: $almanac.moon.rise $almanac.moon.transit $almanac.moon.set\n    Mars rise, transit, set: $almanac.mars.rise $almanac.mars.transit $almanac.mars.set\n    Azimuth, altitude of Mars: $almanac.mars.azimuth $almanac.mars.altitude\n    Next new, full moon: $almanac.next_new_moon; $almanac.next_full_moon\n    Next summer, winter solstice: $almanac.next_summer_solstice; $almanac.next_winter_solstice\n    </pre>\n#else\n    Sunrise, sunset: $almanac.sunrise $almanac.sunset\n#end if\n</body>\n</html>\n",
+ "expected": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n    <title>Test almanac</title>\n    <style>\n        table {\n            border: thin solid #000000;\n        }\n\n        td {\n            border: thin solid #000000;\n            padding: 2px;\n        }\n    </style>\n</head>\n<body>\n<h1>Test for $almanac. Requires pyephem</h1>\n<h2>Sun</h2>\n<table>\n    <tr>\n        <td>$almanac.sun.az (old-style)</td>\n        <td>134.962</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.alt (old-style)</td>\n        <td>43.127</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.azimuth</td>\n        <td>135°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.azimuth.format(\"%03.2f\")</td>\n        <td>134.96°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.altitude</td>\n        <td>43°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.altitude.format(\"%02.2f\")</td>\n        <td>43.13°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.altitude.radian</td>\n        <td>0.753 rad</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.astro_ra</td>\n        <td>162°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.astro_dec</td>\n        <td>07°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.geo_ra</td>\n        <td>163°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.geo_dec</td>\n        <td>07°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.topo_ra</td>\n        <td>163°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sun.topo_dec</td>\n        <td>07°</td>\n    </tr>\n    <tr>\n        <td>$almanac.sidereal_time</td>\n        <td>131.19896418033775</td>\n    </tr>\n    <tr>\n        <td>$almanac.sidereal_angle</td>\n        <td>131°</td>\n    </tr>\n</table>\n\n<h2>Jupiter</h2>\n<table>\n    <tr>\n        <td>$almanac.jupiter.az (old-style)</td>\n        <td>300.152</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.alt (old-style)</td>\n        <td>-27.598</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.azimuth</td>\n        <td>300°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.altitude</td>\n        <td>-28°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.astro_ra</td>\n        <td>001°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.astro_dec</td>\n        <td>-1°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.geo_ra</td>\n        <td>001°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.geo_dec</td>\n        <td>-1°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.topo_ra</td>\n        <td>001°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.topo_dec</td>\n        <td>-1°</td>\n    </tr>\n    <tr>\n        <td>$almanac.jupiter.topo_dec.radian</td>\n        <td>-0.021 rad</td>\n    </tr>\n</table>\n\n<h2>Venus</h2>\n<p>Example from the <a href=\"https://rhodesmill.org/pyephem/quick.html#body-compute-observer\">PyEphem manual</a>:</p>\n<table>\n    <tr>\n        <td>$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.altitude</td>\n        <td>72.33°</td>\n    </tr>\n    <tr>\n        <td>$almanac(lon=-84.39733, lat=33.775867, altitude=320, almanac_time=454782176).venus.azimuth</td>\n        <td>134.24°</td>\n    </tr>\n</table>\n\n<h2>Example from the docs</h2>\nCurrent time is 03-Sep-2010 11:00\n    <pre>\n    Sunrise, transit, sunset: 06:29 13:05 19:40\n    Moonrise, transit, moonset: 00:29 08:37 16:39\n    Mars rise, transit, set: 10:12 15:38 21:04\n    Azimuth, altitude of Mars: 111° 08°\n    Next new, full moon: 08-Sep-2010 03:29; 23-Sep-2010 02:17\n    Next summer, winter solstice: 21-Jun-2011 10:16; 21-Dec-2010 15:38\n    </pre>\n</body>\n</html>\n",
+ "context": [
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "almanac": {
+     "attrs": {
+      "sun": {
+       "attrs": {
+        "az": {
+         "value": 134.96171030113558
+        },
+        "alt": {
+         "value": 43.12727949503748
+        },
+        "azimuth": {
+         "text": "135°",
+         "attrs": {
+          "format": {
+           "calls": {
+            "('%03.2f')": {
+             "value": "134.96°"
+            }
+           }
+          }
+         }
+        },
+        "altitude": {
+         "text": "43°",
+         "attrs": {
+          "format": {
+           "calls": {
+            "('%02.2f')": {
+             "value": "43.13°"
+            }
+           }
+          },
+          "radian": {
+           "text": "0.753 rad"
+          }
+         }
+        },
+        "astro_ra": {
+         "text": "162°"
+        },
+        "astro_dec": {
+         "text": "07°"
+        },
+        "geo_ra": {
+         "text": "163°"
+        },
+        "geo_dec": {
+         "text": "07°"
+        },
+        "topo_ra": {
+         "text": "163°"
+        },
+        "topo_dec": {
+         "text": "07°"
+        },
+        "rise": {
+         "text": "06:29"
+        },
+        "transit": {
+         "text": "13:05"
+        },
+        "set": {
+         "text": "19:40"
+        }
+       }
+      },
+      "sidereal_time": {
+       "value": 131.19896418033775
+      },
+      "sidereal_angle": {
+       "text": "131°"
+      },
+      "jupiter": {
+       "attrs": {
+        "az": {
+         "value": 300.1515156044298
+        },
+        "alt": {
+         "value": -27.59810846413042
+        },
+        "azimuth": {
+         "text": "300°"
+        },
+        "altitude": {
+         "text": "-28°"
+        },
+        "astro_ra": {
+         "text": "001°"
+        },
+        "astro_dec": {
+         "text": "-1°"
+        },
+        "geo_ra": {
+         "text": "001°"
+        },
+        "geo_dec": {
+         "text": "-1°"
+        },
+        "topo_ra": {
+         "text": "001°"
+        },
+        "topo_dec": {
+         "text": "-1°",
+         "attrs": {
+          "radian": {
+           "text": "-0.021 rad"
+          }
+         }
+        }
+       }
+      },
+      "hasExtras": {
+       "value": true
+      },
+      "moon": {
+       "attrs": {
+        "rise": {
+         "text": "00:29"
+        },
+        "transit": {
+         "text": "08:37"
+        },
+        "set": {
+         "text": "16:39"
+        }
+       }
+      },
+      "mars": {
+       "attrs": {
+        "rise": {
+         "text": "10:12"
+        },
+        "transit": {
+         "text": "15:38"
+        },
+        "set": {
+         "text": "21:04"
+        },
+        "azimuth": {
+         "text": "111°"
+        },
+        "altitude": {
+         "text": "08°"
+        }
+       }
+      },
+      "next_new_moon": {
+       "text": "08-Sep-2010 03:29"
+      },
+      "next_full_moon": {
+       "text": "23-Sep-2010 02:17"
+      },
+      "next_summer_solstice": {
+       "text": "21-Jun-2011 10:16"
+      },
+      "next_winter_solstice": {
+       "text": "21-Dec-2010 15:38"
+      }
+     },
+     "calls": {
+      "(almanac_time=454782176, altitude=320, lat=33.775867, lon=-84.39733)": {
+       "attrs": {
+        "venus": {
+         "attrs": {
+          "altitude": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%02.2f')": {
+               "value": "72.33°"
+              }
+             }
+            }
+           }
+          },
+          "azimuth": {
+           "attrs": {
+            "format": {
+             "calls": {
+              "('%03.2f')": {
+               "value": "134.24°"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "attrs": {
+    "current": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "dateTime": {
+         "text": "03-Sep-2010 11:00"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "lang": {
+     "value": "de"
+    }
+   }
+  },
+  {},
+  {},
+  {}
+ ],
+ "filter": "weewx.AssureUnicode"
+}

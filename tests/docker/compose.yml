@@ -16,3 +16,17 @@ services:
     working_dir: /work
     environment:
       PYTHONUNBUFFERED: "1"
+
+  # Kontexte aus einem echten weewx-Lauf mitschreiben:
+  #   docker compose -f tests/docker/compose.yml run --rm capture
+  capture:
+    build:
+      context: .
+      dockerfile: Dockerfile.capture
+    volumes:
+      - ../..:/repo:ro
+      - ../../corpus/fixtures:/out
+    tmpfs:
+      - /work:exec,size=512m,uid=1000,gid=1000
+    environment:
+      PYTHONUNBUFFERED: "1"

@@ -1,0 +1,765 @@
+{
+ "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/byhour.txt.tmpl",
+ "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/byhour.txt",
+ "template": "#errorCatcher Echo\n                   TEST HOURS ITERABLE\n---------------------------------------------------------------------------------------\n#for $_hour in $day.hours\n$_hour.end $_hour.outTemp.max\n#end for\n---------------------------------------------------------------------------------------\n    \n                   TEST USING ALTERNATE BINDING\n---------------------------------------------------------------------------------------\n#for $_hour in $day.hours\n$_hour($data_binding='alt_binding').end $_hour($data_binding='alt_binding').outTemp.max\n#end for\n---------------------------------------------------------------------------------------\n\n",
+ "expected": "                   TEST HOURS ITERABLE\n---------------------------------------------------------------------------------------\n01:00 8.2°C\n02:00 6.2°C\n03:00 4.7°C\n04:00 3.9°C\n05:00 4.2°C\n06:00 5.3°C\n07:00 7.1°C\n08:00 9.3°C\n09:00 12.0°C\n10:00 14.9°C\n11:00 17.7°C\n12:00    N/A\n13:00    N/A\n14:00    N/A\n15:00    N/A\n16:00    N/A\n17:00    N/A\n18:00    N/A\n19:00    N/A\n20:00    N/A\n21:00    N/A\n22:00    N/A\n23:00    N/A\n00:00    N/A\n---------------------------------------------------------------------------------------\n    \n                   TEST USING ALTERNATE BINDING\n---------------------------------------------------------------------------------------\n01:00 -11.0°C\n02:00 -11.8°C\n03:00 -12.1°C\n04:00 -12.0°C\n05:00 -11.4°C\n06:00 -10.6°C\n07:00 -9.4°C\n08:00 -8.1°C\n09:00 -6.6°C\n10:00 -5.2°C\n11:00 -3.9°C\n12:00    N/A\n13:00    N/A\n14:00    N/A\n15:00    N/A\n16:00    N/A\n17:00    N/A\n18:00    N/A\n19:00    N/A\n20:00    N/A\n21:00    N/A\n22:00    N/A\n23:00    N/A\n00:00    N/A\n---------------------------------------------------------------------------------------\n\n",
+ "context": [
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {},
+  {
+   "attrs": {
+    "day": {
+     "calls": {
+      "()": {
+       "attrs": {
+        "hours": {
+         "calls": {
+          "()": {
+           "items": {
+            "0": {
+             "attrs": {
+              "end": {
+               "text": "01:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "8.2°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "01:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-11.0°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "1": {
+             "attrs": {
+              "end": {
+               "text": "02:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "6.2°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "02:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-11.8°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "2": {
+             "attrs": {
+              "end": {
+               "text": "03:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "4.7°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "03:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-12.1°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "3": {
+             "attrs": {
+              "end": {
+               "text": "04:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "3.9°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "04:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-12.0°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "4": {
+             "attrs": {
+              "end": {
+               "text": "05:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "4.2°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "05:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-11.4°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "5": {
+             "attrs": {
+              "end": {
+               "text": "06:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "5.3°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "06:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-10.6°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "6": {
+             "attrs": {
+              "end": {
+               "text": "07:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "7.1°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "07:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-9.4°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "7": {
+             "attrs": {
+              "end": {
+               "text": "08:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "9.3°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "08:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-8.1°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "8": {
+             "attrs": {
+              "end": {
+               "text": "09:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "12.0°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "09:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-6.6°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "9": {
+             "attrs": {
+              "end": {
+               "text": "10:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "14.9°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "10:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-5.2°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "10": {
+             "attrs": {
+              "end": {
+               "text": "11:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "17.7°C"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "11:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "-3.9°C"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "11": {
+             "attrs": {
+              "end": {
+               "text": "12:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "12:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "12": {
+             "attrs": {
+              "end": {
+               "text": "13:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "13:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "13": {
+             "attrs": {
+              "end": {
+               "text": "14:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "14:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "14": {
+             "attrs": {
+              "end": {
+               "text": "15:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "15:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "15": {
+             "attrs": {
+              "end": {
+               "text": "16:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "16:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "16": {
+             "attrs": {
+              "end": {
+               "text": "17:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "17:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "17": {
+             "attrs": {
+              "end": {
+               "text": "18:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "18:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "18": {
+             "attrs": {
+              "end": {
+               "text": "19:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "19:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "19": {
+             "attrs": {
+              "end": {
+               "text": "20:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "20:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "20": {
+             "attrs": {
+              "end": {
+               "text": "21:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "21:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "21": {
+             "attrs": {
+              "end": {
+               "text": "22:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "22:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "22": {
+             "attrs": {
+              "end": {
+               "text": "23:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "23:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            },
+            "23": {
+             "attrs": {
+              "end": {
+               "text": "00:00"
+              },
+              "outTemp": {
+               "attrs": {
+                "max": {
+                 "text": "   N/A"
+                }
+               }
+              }
+             },
+             "calls": {
+              "(data_binding='alt_binding')": {
+               "attrs": {
+                "end": {
+                 "text": "00:00"
+                },
+                "outTemp": {
+                 "attrs": {
+                  "max": {
+                   "text": "   N/A"
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {}
+ ],
+ "filter": "weewx.AssureUnicode"
+}
