@@ -12,10 +12,16 @@ point of the exercise. Concatenation is why the old compiler cannot
 give a traceback a real line number, and why every generated construct
 has to be re-escaped by hand.
 
-What it can do today is the slice the corpus said was worth building:
-text, comments, escapes, and placeholders that are a plain dotted
-name. That is 37 per cent of the render cases before a single
-directive is understood.
+What it can do today: text, comments, escapes, placeholders with their
+call and subscript chains, and #for, #if, #while, #unless, #repeat,
+#try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
+and #from. That is 731 of the 1636 render cases.
+
+What it turns away, in the order the corpus says it costs most: #def
+and #block, which are methods rather than statements; the colon short
+form of any block, whose body sits on the directive's own line where
+this layer does not look; the cache token; PSP; #include and #extends,
+which need a template to include into.
 """
 
 from __future__ import annotations
@@ -234,11 +240,12 @@ def generate(source: str) -> Generated:
     """
     _refuse_preprocessed(source)
     root = tree.parse(source)
+    hoisted: list[ast.stmt] = []
     body: list[ast.stmt] = [
         _assign("_out", ast.List(elts=[], ctx=ast.Load())),
         _assign(WRITE, _attribute("_out", "append")),
     ]
-    body.extend(_statements(_pieces(root, source)))
+    body.extend(_statements(_pieces(root, source, hoisted)))
     body.append(ast.Return(
         value=ast.Call(func=_attribute_of(ast.Constant(""), "join"),
                        args=[ast.Name(id="_out", ctx=ast.Load())],
@@ -248,6 +255,9 @@ def generate(source: str) -> Generated:
     # them, and this project runs from 3.10. Parsing a skeleton gets
     # every field right for whichever version is running it.
     module = ast.parse(SKELETON)
+    # Before the function, the way ct3 puts them at module level. An
+    # import inside the body would run on every render.
+    module.body[-1:-1] = hoisted
     function = module.body[-1]
     assert isinstance(function, ast.FunctionDef)
     function.body = body
@@ -304,12 +314,13 @@ STMT_PIECE = "stmt"
 BRANCHES = ("else", "elif")
 
 
-def _pieces(root: tree.Node, source: str) -> list[tuple[str, Any]]:
-    return _pieces_of(root.children, source)
+def _pieces(root: tree.Node, source: str,
+            hoisted: list[ast.stmt]) -> list[tuple[str, Any]]:
+    return _pieces_of(root.children, source, hoisted)
 
 
-def _pieces_of(nodes: Sequence[tree.Node],
-               source: str) -> list[tuple[str, Any]]:
+def _pieces_of(nodes: Sequence[tree.Node], source: str,
+               hoisted: list[ast.stmt]) -> list[tuple[str, Any]]:
     """The output of a template, as text and values in order.
 
     A comment writes nothing, but it decides what happens to the
@@ -337,8 +348,14 @@ def _pieces_of(nodes: Sequence[tree.Node],
         elif node.kind == lex.BLOCK_COMMENT:
             pending = _block_comment(node, source, out)
         elif node.kind == tree.BLOCK:
+            if node.name == "raw":
+                # More shapes than this layer reads: a colon short
+                # form, a line ending that belongs to the directive
+                # rather than the contents, and an indent rule that
+                # reaches back past the start of the line.
+                raise Unsupported("#raw")
             _eat_directive_line(node, source, out)
-            out.append((STMT_PIECE, _block(node, source)))
+            out.append((STMT_PIECE, _block(node, source, hoisted)))
         elif node.kind == lex.DIRECTIVE:
             if node.name in BRANCHES or node.name == "end":
                 # Handled by the block they belong to.
@@ -352,6 +369,9 @@ def _pieces_of(nodes: Sequence[tree.Node],
                 # other directives carry: a slurp always ends its line.
                 if _line_is_clear(source, node.tokens[0].start):
                     _drop_indent(out)
+            elif node.name in ("import", "from"):
+                _eat_directive_line(node, source, out)
+                hoisted.append(_import_statement(node))
             else:
                 _eat_directive_line(node, source, out)
                 for made in _simple_directive(node):
@@ -367,7 +387,7 @@ def _pieces_of(nodes: Sequence[tree.Node],
 
 
 def _piece(node: tree.Node, out: list[tuple[str, Any]]) -> None:
-    if node.kind == lex.TEXT:
+    if node.kind in (lex.TEXT, lex.RAW):
         out.append((TEXT_PIECE, node.text()))
         return
     if node.kind == lex.ESCAPE:
@@ -412,30 +432,81 @@ def _eat_directive_line(node: tree.Node, source: str,
         out.append((TEXT_PIECE, ending))
 
 
-def _block(node: tree.Node, source: str) -> ast.stmt:
-    """The statement a block directive becomes."""
+
+def _import_statement(node: tree.Node) -> ast.stmt:
+    """``#import os`` and ``#from os import path`` as themselves.
+
+    No placeholders are resolved: an import names modules, and a dollar
+    in one would be a mistake rather than a lookup.
+    """
+    text = "".join(t.text for t in node.tokens).strip()
+    made = _framed_statement(text)
+    if not isinstance(made, (ast.Import, ast.ImportFrom)):
+        raise Unsupported("#%s that is not an import" % node.name)
+    return made
+
+
+def _try_block(node: tree.Node, source: str,
+               hoisted: list[ast.stmt]) -> ast.stmt:
+    """``#try`` with its ``#except`` and ``#finally`` arms."""
+    statement = ast.Try(body=[], handlers=[], orelse=[], finalbody=[])
+    for directive, children in _branches(node, ("except", "finally")):
+        made = _statements(_pieces_of(children, source, hoisted)) \
+            or [ast.Pass()]
+        if directive is node:
+            statement.body = made
+            continue
+        if directive.name == "finally":
+            statement.finalbody = made
+            continue
+        header = _framed("try:\n    pass\nexcept %s:"
+                         % (_argument(directive, node) or "Exception"))
+        assert isinstance(header, ast.Try)
+        handler = header.handlers[0]
+        handler.body = made
+        statement.handlers.append(handler)
+    if not statement.handlers and not statement.finalbody:
+        raise Unsupported("#try without an #except or #finally")
+    return statement
+
+
+def _block(node: tree.Node, source: str,
+           hoisted: list[ast.stmt]) -> ast.stmt:
+    """The statement a block directive becomes.
+
+    A block with no children at all never opened: it is the colon short
+    form, whose body sits on the directive's own line, or the ternary
+    ``#if a then b else c``. Both put the body somewhere this layer does
+    not look, so they are turned away rather than read wrong.
+    """
+    if not node.children:
+        raise Unsupported("the one-line form of #%s" % node.name)
     if node.name == "for":
-        return _for_block(node, source)
+        return _for_block(node, source, hoisted)
     if node.name == "if":
-        return _if_block(node, source)
+        return _if_block(node, source, hoisted)
+    if node.name == "try":
+        return _try_block(node, source, hoisted)
     if node.name == "while":
-        return _headed_block("while %s:", node, source)
+        return _headed_block("while %s:", node, source, hoisted)
     if node.name == "unless":
         # ct3 writes the parentheses, and they matter: without them
         # "#unless $a or $b" would negate only the first.
-        return _headed_block("if not (%s):", node, source)
+        return _headed_block("if not (%s):", node, source, hoisted)
     if node.name == "repeat":
         # A counter nobody can collide with, named after where the
         # directive stands so that two runs give the same code.
         name = "__ct4_repeat_%d_%d" % (node.line, node.column)
-        return _headed_block("for " + name + " in range(%s):", node, source)
+        return _headed_block("for " + name + " in range(%s):", node,
+                             source, hoisted)
     raise Unsupported("#%s" % node.name)
 
 
-def _headed_block(shape: str, node: tree.Node, source: str) -> ast.stmt:
+def _headed_block(shape: str, node: tree.Node, source: str,
+                  hoisted: list[ast.stmt]) -> ast.stmt:
     """A block whose header is the shape with its argument in it."""
     statement = _framed(shape % _argument(node, node))
-    statement.body = _body(node, source)                # type: ignore[attr-defined]
+    statement.body = _body(node, source, hoisted)       # type: ignore[attr-defined]
     return statement
 
 
@@ -504,7 +575,8 @@ def _parsed(source: str) -> ast.expr:
         raise Unsupported("cannot read %r: %s" % (source, error)) from None
 
 
-def _for_block(node: tree.Node, source: str) -> ast.stmt:
+def _for_block(node: tree.Node, source: str,
+               hoisted: list[ast.stmt]) -> ast.stmt:
     """``#for $r in $rows`` as a Python for statement.
 
     The targets lose their dollar and become plain names, which is what
@@ -513,11 +585,12 @@ def _for_block(node: tree.Node, source: str) -> ast.stmt:
     """
     statement = _framed("for %s:" % _for_argument(node))
     assert isinstance(statement, ast.For)
-    statement.body = _body(node, source)
+    statement.body = _body(node, source, hoisted)
     return statement
 
 
-def _if_block(node: tree.Node, source: str) -> ast.stmt:
+def _if_block(node: tree.Node, source: str,
+              hoisted: list[ast.stmt]) -> ast.stmt:
     """``#if`` with its ``#elif`` and ``#else`` branches.
 
     The branches are children of the if in the tree, not blocks of
@@ -528,9 +601,10 @@ def _if_block(node: tree.Node, source: str) -> ast.stmt:
     statement = _framed("if %s:" % _argument(branches[0][0], node))
     assert isinstance(statement, ast.If)
     current = statement
-    statement.body = _statements(_pieces_of(branches[0][1], source))
+    statement.body = _statements(
+        _pieces_of(branches[0][1], source, hoisted))
     for directive, children in branches[1:]:
-        body = _statements(_pieces_of(children, source))
+        body = _statements(_pieces_of(children, source, hoisted))
         condition = _branch_condition(directive)
         if condition is None:
             current.orelse = body
@@ -559,24 +633,27 @@ def _branch_condition(directive: tree.Node) -> str | None:
     return match.group(1).strip() if match else None
 
 
-def _branches(node: tree.Node) -> list[tuple[Any, list[tree.Node]]]:
-    """The block's children cut at every #elif and #else."""
+def _branches(node: tree.Node,
+              at: Sequence[str] = BRANCHES,
+              ) -> list[tuple[Any, list[tree.Node]]]:
+    """The block's children cut at every branch directive."""
     found: list[tuple[Any, list[tree.Node]]] = [(node, [])]
     for child in node.children:
-        if child.kind == lex.DIRECTIVE and child.name in BRANCHES:
+        if child.kind == lex.DIRECTIVE and child.name in at:
             found.append((child, []))
             continue
         found[-1][1].append(child)
     return found
 
 
-def _body(node: tree.Node, source: str) -> list[ast.stmt]:
+def _body(node: tree.Node, source: str,
+          hoisted: list[ast.stmt]) -> list[ast.stmt]:
     """The statements of a block's body, never empty.
 
     Python needs something between the colon and the next line, and a
     template may well have a loop that writes nothing.
     """
-    made = _statements(_pieces_of(node.children, source))
+    made = _statements(_pieces_of(node.children, source, hoisted))
     return made or [ast.Pass()]
 
 
@@ -598,10 +675,7 @@ def _argument(directive: tree.Node, owner: tree.Node) -> str:
     parts = []
     for token in directive.tokens[1:]:
         parts.append(_token_source(token))
-    text = "".join(parts).strip()
-    if not text:
-        raise Unsupported("#%s without an expression" % owner.name)
-    return text
+    return _without_trailing_colon("".join(parts), owner.name)
 
 
 def _for_argument(node: tree.Node) -> str:
@@ -623,10 +697,22 @@ def _for_argument(node: tree.Node) -> str:
         if target and token.kind == lex.TEXT and \
                 re.search(r"\bin\b", token.text):
             target = False
-    text = "".join(parts).strip()
-    if not text:
-        raise Unsupported("#for without an expression")
-    return text
+    return _without_trailing_colon("".join(parts), "for")
+
+
+def _without_trailing_colon(text: str, name: str) -> str:
+    """An argument without the colon that may already close it.
+
+    ``#for $i in range(5):`` is written both ways, and the header this
+    layer builds adds a colon of its own. Two of them are a syntax
+    error, and 88 corpus cases were refused for it.
+    """
+    stripped = text.strip()
+    if stripped.endswith(":"):
+        stripped = stripped[:-1].rstrip()
+    if not stripped:
+        raise Unsupported("#%s without an expression" % name)
+    return stripped
 
 
 def _token_source(token: lex.Token) -> str:
@@ -636,9 +722,13 @@ def _token_source(token: lex.Token) -> str:
         if chunks is None:
             raise Unsupported("placeholder %r" % token.text)
         return _expression(chunks)
-    if token.kind in (lex.TEXT, lex.DIRECTIVE_END):
-        # The end token is punctuation, not part of the expression.
-        return "" if token.kind == lex.DIRECTIVE_END else token.text
+    if token.kind == lex.TEXT:
+        return token.text
+    if token.kind in (lex.DIRECTIVE_END, lex.COMMENT, lex.BLOCK_COMMENT):
+        # Punctuation and comments are not part of the expression.
+        # "#set $a = 1 ## why" is an assignment, and ct3 eats the
+        # comment before it looks at the expression.
+        return ""
     raise Unsupported("%s in a directive argument" % token.kind)
 
 
