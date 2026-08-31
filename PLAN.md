@@ -892,9 +892,78 @@ extrahiert sind, ist der Rest Daten zu Bytes ohne fremde Objekte im heissen
 Pfad. Dafür gibt es `orjson`, und das ist Rust. Dann optional einbinden, nicht
 selbst schreiben.
 
-Der zweitgrösste Posten, der Ausgabefilter mit 21 Prozent, ist im JSON-Modus
-ohnehin weg: dort gibt es keinen Filter, weil keine Zeichenkette zusammengesetzt
-wird.
+### Gegen ct3
+
+Gemessen im Container gegen die installierte 3.4.0.post5, beides Python 3.13,
+`tests/bench/render.py`:
+
+| | ct3 | ct4 | |
+|---|---|---|---|
+| Text, blanke Objekte | 0,790 ms | 0,441 ms | **1,79x** |
+| Text, Helper-Objekte wie weewx | 0,951 ms | 0,549 ms | **1,73x** |
+| Text, JSON von Hand geschrieben | 1,120 ms | 0,740 ms | **1,51x** |
+| Übersetzen | 0,693 ms | 0,724 ms | 0,96x |
+| `json.dumps` als Kontrolle | 0,151 ms | 0,153 ms | 0,99x |
+
+Übersetzen ist 4 Prozent langsamer: der Compiler ruft je `#for` einmal
+`ast.parse`, um die Schleifenziele zu lesen. Das trifft nur den ersten Lauf, der
+Compile-Cache deckt es ab.
+
+### Der JSON-Modus, gemessen
+
+Der Plan behauptete hier „deutlich über jinja2, weil die Serialisierung in C
+läuft". Gemessen worden war das nie, und der erste Lauf sagte das Gegenteil: bei
+500 Punkten brauchte der JSON-Modus über `#for` **2,30 ms**, die Textvorlage,
+die er ersetzt, 0,73 ms. Er war dreimal langsamer als das, was er ablösen soll.
+
+Der Grund war überall derselbe: Arbeit je Wert, die je Vorlage feststeht.
+
+- Der Emitter sprach seinen eigenen Builder als `$B` an. `$B.item(x)` erzeugt
+  `VFN(VFFSL(SL,"B",True),"item",False)`, also zwei Lookups je Aufruf, und eine
+  Schleife macht vier Aufrufe je Element. `B` ist der Parameter der Definition,
+  die der Emitter selbst schreibt. Blank geschrieben ist es ein direkter Zugriff.
+- `Builder.prepare` ging für jedes `float` durch zwei fehlschlagende `getattr`
+  und eine `Ct4Value`, um bei der Rundungsregel anzukommen. Eingebaute Skalare
+  können keinen der beiden Haken tragen.
+- Eine Serie zerlegte ihre Feldpfade je Element neu statt einmal.
+- `json.dumps` legt bei jedem Aufruf mit eigenen Schlüsselwortargumenten einen
+  neuen `JSONEncoder` an. Das Streamen rief es je Zeile.
+
+Danach, dieselben 500 Punkte:
+
+| | ms | zu Hand |
+|---|---|---|
+| von Hand, `json.dumps` | 0,130 | 1x |
+| JSON-Modus, `#series` | 0,332 | 2,6x |
+| JSON-Modus, `#for` | 0,534 | 4,1x |
+| Textvorlage unter ct4 | 0,731 | 5,7x |
+| JSON-Modus, streamend | 0,698 | 5,4x |
+
+Davon sind 0,11 ms `json.dumps` selbst, und das ist C.
+
+### Bei 100.000 Zeilen
+
+Ein Jahr weewx-Archiv im Fünf-Minuten-Takt sind rund 105.000 Sätze. Zehn Werte
+je Satz ist eine gewöhnliche Plot-Seite. `tests/bench/large.py`, Quelle als
+Generator, damit gemessen wird, was die Maschine hält, nicht was der Aufrufer
+übergibt:
+
+| | Sekunden | Peak MB | Ausgabe MB |
+|---|---|---|---|
+| ct3, Textvorlage wie heute | 7,81 | 90,9 | 13,6 |
+| ct4, dieselbe Textvorlage | 4,25 | 89,4 | 13,6 |
+| ct4, JSON-Modus sammelnd | 2,86 | 58,6 | 12,5 |
+| ct4, JSON-Modus streamend | 3,56 | **0,5** | 12,5 |
+| ct4, direkt in die Datei | 3,58 | **0,0** | 12,5 |
+| von Hand, `json.dumps` | 2,07 | 54,7 | 12,5 |
+
+Das ist die Zahl, auf die es ankommt: **91 MB auf 0,5 MB**, Faktor 180, für
+25 Prozent mehr Zeit. Auf einer Station mit 512 MB entscheidet das darüber, ob
+die Seite entsteht. Die Zeit halbiert sich nebenbei, und die Ausgabe ist
+kleiner, weil die handgesetzte Fassung Leerraum mitschreibt.
+
+Der Ausgabefilter, im Textmodus der zweitgrösste Posten, ist hier ohnehin weg:
+es wird keine Zeichenkette zusammengesetzt.
 
 Benchmark-Suite im Repo und in CI, mit Schwelle. Eine Regression bricht den
 Build.

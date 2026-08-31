@@ -86,6 +86,12 @@ class Compiled:
         return schema_module.check(self.document.root, self.schema)
 
 
+# The encoder for the usual case, built once. json.dumps caches an
+# encoder only for its default arguments and builds a new one whenever
+# it is given any of its own keywords, which is every call here.
+_COMPACT = json.JSONEncoder(ensure_ascii=False, separators=SEPARATORS)
+
+
 def dumps(value: Any, indent: int | None = None) -> str:
     """Writes a structure as JSON.
 
@@ -94,8 +100,9 @@ def dumps(value: Any, indent: int | None = None) -> str:
     keep the order of the template; sorting them would be a second
     order next to the one the author wrote down.
     """
-    return json.dumps(value, ensure_ascii=False, indent=indent,
-                      separators=SEPARATORS if indent is None else None)
+    if indent is None:
+        return _COMPACT.encode(value)
+    return json.dumps(value, ensure_ascii=False, indent=indent)
 
 
 def compile_template(source: str, base_dir: Path | None = None,

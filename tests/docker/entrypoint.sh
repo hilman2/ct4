@@ -6,6 +6,8 @@
 #   cheetah  the test suite that ct3 brings along
 #   evals    the diagnostics tasks
 #   corpus   the test bench
+#   bench    render times, ct3 against the fork
+#   large    one large series, time and memory
 #   all      everything (default)
 #
 # Work happens in /work, a tmpfs. The repo is mounted read-only under
@@ -67,6 +69,29 @@ run_evals() {
     python -c "import sys; from ct4 import evals; r = evals.run(); print(evals.report(r)); sys.exit(1 if evals.failed(r) else 0)"
 }
 
+# The same measurements once against the installed ct3 and once against
+# the fork. Which Cheetah gets loaded is decided by PYTHONPATH alone:
+# without it the interpreter finds the installed ct3 in site-packages,
+# with /work on it the fork wins. The reference run finds no ct4 either,
+# and that is right: ct3 has no JSON mode, and the run says so instead
+# of quietly leaving the line out.
+run_bench() {
+    echo "== Render, ct3 against the fork =="
+    python tests/bench/render.py --json > /tmp/reference.json
+    PYTHONPATH=/work python tests/bench/render.py --json > /tmp/fork.json
+    PYTHONPATH=/work python tests/bench/compare.py \
+        /tmp/reference.json /tmp/fork.json
+}
+
+# A year of archive records at five-minute intervals, ten values each.
+# The size at which the question stops being which way is faster.
+run_large() {
+    echo "== A large series, ct3 against the fork =="
+    python tests/bench/large.py
+    echo
+    PYTHONPATH=/work python tests/bench/large.py
+}
+
 run_corpus() {
     echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -83,6 +108,8 @@ case "$WHAT" in
     corpus)  run_corpus ;;
     check)   run_check ;;
     evals)   run_evals ;;
+    bench)   run_bench ;;
+    large)   run_large ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
              run_check; echo; run_evals; echo; run_corpus ;;
     *)       echo "Unknown: $WHAT" >&2; exit 2 ;;

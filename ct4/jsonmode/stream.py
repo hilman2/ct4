@@ -32,9 +32,17 @@ from ct4.jsonmode.render import SEPARATORS
 COMMA, COLON = SEPARATORS
 
 
+# One encoder for the whole process. json.dumps keeps a cached encoder
+# only for its default arguments; given any of its own keywords it
+# builds a fresh JSONEncoder for the call. Streaming calls encode once
+# per element, so a series of ten thousand readings built ten thousand
+# encoders to write ten thousand short lists.
+_ENCODER = json.JSONEncoder(ensure_ascii=False, separators=SEPARATORS)
+
+
 def encode(value: Any) -> str:
     """A single value, just as json.dumps would write it."""
-    return json.dumps(value, ensure_ascii=False, separators=SEPARATORS)
+    return _ENCODER.encode(value)
 
 
 class StreamBuilder(Builder):
