@@ -25,7 +25,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 # What it reached when this was written. A floor, not a target: it goes
 # up as directives are added, and it must never go down without
 # somebody saying so here.
-FLOOR = 402
+FLOOR = 499
 
 
 def render_cases():
@@ -89,6 +89,44 @@ def test_an_enclosure_makes_no_difference():
     assert out("$(a.b)\n", [{"a": {"b": 7}}]) == "7\n"
 
 
+def test_a_loop_runs():
+    # The targets lose their dollar and become plain names, which is
+    # what ct3 writes: for r in VFFSL(SL,"rows",True).
+    source = "#for $r in $rows\n[$r]\n#end for\n"
+    assert out(source, [{"rows": [1, 2]}]) == "[1]\n[2]\n"
+
+
+def test_a_loop_with_two_targets():
+    source = "#for $k, $v in $pairs\n$k=$v\n#end for\n"
+    assert out(source, [{"pairs": [("a", 1)]}]) == "a=1\n"
+
+
+def test_a_condition_and_its_branches():
+    source = "#if $a\nA\n#elif $b\nB\n#else\nC\n#end if\n"
+    assert out(source, [{"a": 0, "b": 0}]) == "C\n"
+    assert out(source, [{"a": 0, "b": 1}]) == "B\n"
+    assert out(source, [{"a": 1, "b": 0}]) == "A\n"
+
+
+def test_else_if_is_a_second_spelling_of_elif():
+    # A corpus template writes it that way. Read as a plain else, its
+    # body would run whatever the condition said.
+    source = "#if $a\nA\n#else if $b\nB\n#end if\n"
+    assert out(source, [{"a": 0, "b": 1}]) == "B\n"
+    assert out(source, [{"a": 0, "b": 0}]) == ""
+
+
+def test_a_directive_on_a_line_of_its_own_leaves_no_blank_line():
+    assert out("x\n#if $a\ny\n#end if\nz\n", [{"a": 1}]) == "x\ny\nz\n"
+
+
+def test_an_indent_stays_where_the_directive_does_not_end_its_line():
+    # ct3 removes the whitespace before a directive only where the tag
+    # also ran past the end of its own line. Here it ends at the hash.
+    source = "  #for $i in $r#$i#end for#  "
+    assert out(source, [{"r": [1, 2]}]) == "  12  "
+
+
 def test_none_writes_nothing():
     # The guard ct3 writes: a placeholder that resolves to None puts
     # nothing in the output, and the filter never sees it.
@@ -112,7 +150,8 @@ def test_the_generated_code_is_python():
 # -- What it refuses -------------------------------------------------
 
 @pytest.mark.parametrize("source", [
-    "#for $r in $rows\n$r\n#end for\n",      # no directives yet
+    "#set $a = 1\n$a\n",                     # #set is not read yet
+    "#while $a\nx\n#end while\n",            # nor #while
     "$getVar('x')\n",                        # needs a Template object
     "$self.foo\n",                           # needs a Template object
     "$!a\n",                                 # no silence token yet

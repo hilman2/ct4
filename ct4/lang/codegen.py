@@ -296,9 +296,20 @@ def _refuse_preprocessed(source: str) -> None:
 
 TEXT_PIECE = "text"
 VALUE_PIECE = "value"
+# A block already turned into statements. It carries no text, so the
+# whitespace rules never reach into it.
+STMT_PIECE = "stmt"
+
+# Directives that only announce a branch of the block they sit in.
+BRANCHES = ("else", "elif")
 
 
 def _pieces(root: tree.Node, source: str) -> list[tuple[str, Any]]:
+    return _pieces_of(root.children, source)
+
+
+def _pieces_of(nodes: Sequence[tree.Node],
+               source: str) -> list[tuple[str, Any]]:
     """The output of a template, as text and values in order.
 
     A comment writes nothing, but it decides what happens to the
@@ -312,7 +323,7 @@ def _pieces(root: tree.Node, source: str) -> list[tuple[str, Any]]:
     # to the tree, because the tree has to stay what the layer below
     # built: it is the thing that writes back to the source.
     pending: bool | None = None
-    for node in root.children:
+    for node in nodes:
         if pending is not None:
             gobble = pending
             pending = None
@@ -325,6 +336,15 @@ def _pieces(root: tree.Node, source: str) -> list[tuple[str, Any]]:
             _line_comment(node, source, out)
         elif node.kind == lex.BLOCK_COMMENT:
             pending = _block_comment(node, source, out)
+        elif node.kind == tree.BLOCK:
+            _eat_directive_line(node, source, out)
+            out.append((STMT_PIECE, _block(node, source)))
+        elif node.kind == lex.DIRECTIVE:
+            if node.name in BRANCHES or node.name == "end":
+                # Handled by the block they belong to.
+                _eat_directive_line(node, source, out)
+            else:
+                raise Unsupported("#%s" % node.name)
         elif node.kind == lex.EOL_SLURP:
             # It writes nothing and has already taken its line ending
             # with it. What is left is the indent before it.
@@ -354,6 +374,178 @@ def _piece(node: tree.Node, out: list[tuple[str, Any]]) -> None:
         out.append((VALUE_PIECE, _expression(chunks)))
         return
     raise Unsupported("no code for a %s node" % node.kind)
+
+
+def _eat_directive_line(node: tree.Node, source: str,
+                        out: list[tuple[str, Any]]) -> None:
+    """A directive writes nothing, and decides about its own line.
+
+    Two conditions, both ct3's, and the second is easy to miss.
+    _eatRestOfDirectiveTag removes the whitespace before a directive
+    only where the line was clear *and* the tag ran past the end of its
+    own first line. In ``  #for $i in range(5)#$i#end for#`` the tag
+    ends at the hash in the middle of the line, so the two spaces stay
+    and a corpus case says so.
+
+    The line ending is inside the directive's own tokens where it took
+    one, so keeping it means writing it out again.
+    """
+    own = "".join(t.text for t in node.tokens)
+    ending = _trailing_eol(own)
+    past_its_line = bool(ending) or node.tokens[-1].end >= len(source)
+    if _line_is_clear(source, node.tokens[0].start):
+        if past_its_line:
+            _drop_indent(out)
+        return
+    if ending:
+        out.append((TEXT_PIECE, ending))
+
+
+def _block(node: tree.Node, source: str) -> ast.stmt:
+    """The statement a block directive becomes."""
+    if node.name == "for":
+        return _for_block(node, source)
+    if node.name == "if":
+        return _if_block(node, source)
+    raise Unsupported("#%s" % node.name)
+
+
+def _for_block(node: tree.Node, source: str) -> ast.stmt:
+    """``#for $r in $rows`` as a Python for statement.
+
+    The targets lose their dollar and become plain names, which is what
+    ct3 writes: ``for r in VFFSL(SL,"rows",True):``. Only the iterable
+    is looked up.
+    """
+    statement = _framed("for %s:" % _for_argument(node))
+    assert isinstance(statement, ast.For)
+    statement.body = _body(node, source)
+    return statement
+
+
+def _if_block(node: tree.Node, source: str) -> ast.stmt:
+    """``#if`` with its ``#elif`` and ``#else`` branches.
+
+    The branches are children of the if in the tree, not blocks of
+    their own, so the children are cut at them and each piece becomes
+    the body of one arm.
+    """
+    branches = _branches(node)
+    statement = _framed("if %s:" % _argument(branches[0][0], node))
+    assert isinstance(statement, ast.If)
+    current = statement
+    statement.body = _statements(_pieces_of(branches[0][1], source))
+    for directive, children in branches[1:]:
+        body = _statements(_pieces_of(children, source))
+        condition = _branch_condition(directive)
+        if condition is None:
+            current.orelse = body
+            continue
+        nested = _framed("if %s:" % condition)
+        assert isinstance(nested, ast.If)
+        nested.body = body
+        current.orelse = [nested]
+        current = nested
+    return statement
+
+
+def _branch_condition(directive: tree.Node) -> str | None:
+    """The condition of a branch, or None where it is a plain else.
+
+    ``#else if x`` is a second spelling of ``#elif x``, and a corpus
+    template uses it. Read as an else, its body would run whatever the
+    condition said.
+    """
+    text = "".join(_token_source(t) for t in directive.tokens[1:]).strip()
+    if directive.name == "elif":
+        return text or None
+    if directive.name != "else":
+        return None
+    match = re.match(r"if\b(.*)", text, re.S)
+    return match.group(1).strip() if match else None
+
+
+def _branches(node: tree.Node) -> list[tuple[Any, list[tree.Node]]]:
+    """The block's children cut at every #elif and #else."""
+    found: list[tuple[Any, list[tree.Node]]] = [(node, [])]
+    for child in node.children:
+        if child.kind == lex.DIRECTIVE and child.name in BRANCHES:
+            found.append((child, []))
+            continue
+        found[-1][1].append(child)
+    return found
+
+
+def _body(node: tree.Node, source: str) -> list[ast.stmt]:
+    """The statements of a block's body, never empty.
+
+    Python needs something between the colon and the next line, and a
+    template may well have a loop that writes nothing.
+    """
+    made = _statements(_pieces_of(node.children, source))
+    return made or [ast.Pass()]
+
+
+def _framed(header: str) -> ast.stmt:
+    """The statement a header line opens, with a placeholder body.
+
+    Parsed rather than assembled, for the reason the module frame is:
+    the node classes have gained fields between Python versions.
+    """
+    try:
+        parsed = ast.parse("%s\n    pass\n" % header)
+    except SyntaxError as error:
+        raise Unsupported("cannot read %r: %s" % (header, error)) from None
+    return parsed.body[0]
+
+
+def _argument(directive: tree.Node, owner: tree.Node) -> str:
+    """A directive's argument as Python, placeholders resolved."""
+    parts = []
+    for token in directive.tokens[1:]:
+        parts.append(_token_source(token))
+    text = "".join(parts).strip()
+    if not text:
+        raise Unsupported("#%s without an expression" % owner.name)
+    return text
+
+
+def _for_argument(node: tree.Node) -> str:
+    """``$r in $rows`` as ``r in VFFSL(...)``.
+
+    Before the ``in`` the placeholders are targets and keep only their
+    name; after it they are looked up.
+    """
+    parts = []
+    target = True
+    for token in node.tokens[1:]:
+        if target and token.kind == lex.PLACEHOLDER:
+            path = _plain_path(token.text)
+            if path is None or token.children:
+                raise Unsupported("loop target %r" % token.text)
+            parts.append(path)
+            continue
+        parts.append(_token_source(token))
+        if target and token.kind == lex.TEXT and \
+                re.search(r"\bin\b", token.text):
+            target = False
+    text = "".join(parts).strip()
+    if not text:
+        raise Unsupported("#for without an expression")
+    return text
+
+
+def _token_source(token: lex.Token) -> str:
+    """One argument token as Python source."""
+    if token.kind == lex.PLACEHOLDER:
+        chunks = None if token.children else chunks_of(token.text)
+        if chunks is None:
+            raise Unsupported("placeholder %r" % token.text)
+        return _expression(chunks)
+    if token.kind in (lex.TEXT, lex.DIRECTIVE_END):
+        # The end token is punctuation, not part of the expression.
+        return "" if token.kind == lex.DIRECTIVE_END else token.text
+    raise Unsupported("%s in a directive argument" % token.kind)
 
 
 def _line_comment(node: tree.Node, source: str,
@@ -457,6 +649,9 @@ def _statements(pieces: list[tuple[str, Any]]) -> list[ast.stmt]:
         if kind == TEXT_PIECE:
             if value:
                 out.append(_write(ast.Constant(value)))
+            continue
+        if kind == STMT_PIECE:
+            out.append(value)
             continue
         out.extend(_placeholder(value))
     return out
