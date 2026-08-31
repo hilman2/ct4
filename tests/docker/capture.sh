@@ -76,7 +76,7 @@ run_json() {
     for lauf in 1 2; do
         export CT4_JSON_OUT="/tmp/day-$lauf.json"
         python -m pytest test_templates.py -q             -p ct4.fixture.weewx_capture -k sqlite 2>&1 |
-            grep -E "^ct4 schema:" || true
+            grep -E "^ct4" || true
     done
 
     echo

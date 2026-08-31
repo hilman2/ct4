@@ -19,6 +19,7 @@ hat. Aus diesen drei Stuecken wird ein Korpusfall, der ohne weewx laeuft.
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -134,6 +135,17 @@ def _render_json(search_list: list[Any]) -> None:
     text = compiled.render(search_list, indent=1, validate=True)
     out = Path(os.environ.get(JSON_OUT_ENV, "day.json"))
     out.write_text(text, encoding="utf-8", newline="\n")
+
+    # Dieselbe Vorlage noch einmal, diesmal stroemend. Beide Wege muessen
+    # dieselben Bytes liefern; daran haengt der zweite Weg, und hier
+    # steht die Zusicherung gegen echte Daten statt gegen Testobjekte.
+    puffer = io.StringIO()
+    compiled.stream(puffer, search_list)
+    gerade = compiled.render(search_list)
+    if puffer.getvalue() != gerade:
+        raise AssertionError(
+            "stroemend und sammelnd liefern verschiedene Bytes")
+    print("ct4: stroemend und sammelnd gleich (%d Bytes)" % len(gerade))
     _rendered.append(True)
 
 

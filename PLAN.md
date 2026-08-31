@@ -291,8 +291,28 @@ jeder Skin anders löst und das man dem Leser erklären muss.
 | `pairs`   | `[[t, v], [t, v], ...]` |
 | `records` | `[{"t": ..., "v": ...}, ...]` |
 
-`gaps` steuert Lücken: `null`, `omit` oder `interpolate`. Der Serialisierer
-läuft über einen Generator, der Speicher bleibt konstant.
+`gaps` steuert Lücken: `null`, `omit` oder `interpolate`.
+
+Für grosse Reihen gibt es einen zweiten Weg, der schreibt statt zu sammeln.
+Gemessen an 100.000 Punkten, beide Male mit einem Generator als Quelle:
+
+| | Speicher | Zeit |
+|---|---|---|
+| sammelnd | 16,5 MB | 0,76 s |
+| strömend | 0,2 MB | 1,36 s |
+
+Also **93x weniger Speicher, dafür 1,8x langsamer**, und der Bedarf des zweiten
+Wegs hängt nicht an der Länge der Reihe. Das ist ein Tausch, keine
+Verbesserung: sammelnd bleibt die Vorgabe, strömend gibt es für den Fall, dass
+der Speicher knapp ist. Auf einem Raspberry Pi ist er das.
+
+Beide liefern **byte-identisch dasselbe**. Jeder Einzelwert geht durch
+`json.dumps`, damit Escaping, Zahlformat und `null` sich nicht unterscheiden
+können; die Trennzeichen kommen aus einer Quelle. Elf Testfälle prüfen die
+Gleichheit, und der Lauf gegen echte weewx-Daten prüft sie noch einmal.
+
+Nicht strömbar ist `layout="columns"`: dort steht der erste Wert jeder Spalte
+neben dem letzten, und dafür muss die Reihe gesammelt werden.
 
 ### Schema
 

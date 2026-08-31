@@ -189,3 +189,63 @@ def test_referenz_sagt_was_geschlossen_werden_muss():
                  if entry["closeable"]}
     assert "for" in closeable
     assert "set" not in closeable
+
+
+# -- Plugin-Registry -------------------------------------------------
+
+class FalscherEintrag:
+    """Ein Entry Point, wie importlib.metadata ihn liefert."""
+
+    def __init__(self, name, ziel):
+        self.name = name
+        self._ziel = ziel
+
+    def load(self):
+        if isinstance(self._ziel, Exception):
+            raise self._ziel
+        return self._ziel
+
+
+class NurAnmeldung:
+    @staticmethod
+    def declare():
+        return Declaration(name="probe2", roots={"x": Node(open=True)})
+
+
+class NurAdapter:
+    eingehaengt = False
+
+    @classmethod
+    def install(cls):
+        cls.eingehaengt = True
+
+
+def test_plugin_meldet_seine_namen_an():
+    from ct4 import registry
+
+    plugins = registry.discover(lambda: [
+        FalscherEintrag("a", NurAnmeldung)])
+    gemeldet = registry.declarations(plugins)
+    assert [d.name for d in gemeldet] == ["probe2"]
+
+
+def test_plugin_ohne_anmeldung_ist_vollstaendig():
+    # Ein Plugin, das nur Typen anmeldet, ist kein halbes Plugin.
+    from ct4 import registry
+
+    NurAdapter.eingehaengt = False
+    plugins = registry.discover(lambda: [FalscherEintrag("b", NurAdapter)])
+    assert registry.declarations(plugins) == []
+    assert registry.install_all(plugins) == ["b"]
+    assert NurAdapter.eingehaengt
+
+
+def test_kaputtes_plugin_legt_den_lauf_nicht_lahm():
+    # Ein Fremdpaket, das sich nicht laden laesst, darf ct4 check nicht
+    # unbrauchbar machen.
+    from ct4 import registry
+
+    plugins = registry.discover(lambda: [
+        FalscherEintrag("kaputt", ImportError("fehlt")),
+        FalscherEintrag("gut", NurAnmeldung)])
+    assert [p.name for p in plugins] == ["gut"]

@@ -144,10 +144,16 @@ def _member(out: Emitter, node: Any) -> None:
         out.call("end()")
         return
 
+    origin = getattr(node.value, "line", 0)
+    if isinstance(node.value, Series) and isinstance(node.key, Lit):
+        out.call("series_key(%d, %s, %d)"
+                 % (out.name_index(node.key.value), node.value.expr,
+                    out.const_index(_series_options(node.value))), origin)
+        return
+
     text = _expression(out, node.value)
     precision = getattr(node.value, "precision", None)
     suffix = "" if precision is None else ", %d" % precision
-    origin = getattr(node.value, "line", 0)
     if isinstance(node.key, Lit):
         out.call("key(%d, %s%s)"
                  % (out.name_index(node.key.value), text, suffix), origin)
@@ -192,6 +198,12 @@ def _item(out: Emitter, node: Any) -> None:
             for item in node.items:
                 _item(out, item)
         out.call("end()")
+        return
+
+    if isinstance(node, Series):
+        out.call("series_item(%s, %d)"
+                 % (node.expr, out.const_index(_series_options(node))),
+                 getattr(node, "line", 0))
         return
 
     text = _expression(out, node)

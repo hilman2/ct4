@@ -242,3 +242,108 @@ def test_fehlermeldung_nennt_zeile_und_spalte():
 
 def test_kommentar_wie_in_cheetah():
     assert geladen('{\n## das hier ist weg\n"a": 1\n}') == {"a": 1}
+
+
+# -- Stroemen --------------------------------------------------------
+
+STROM_PROBEN = [
+    '#mode json\n{"a": 1, "b": $station, "c": $leer}',
+    '#mode json\n{"r": [#for $p in $zeilen\n{"t": $p.start}\n#end for]}',
+    '#mode json\n{"r": [#for $p in []\n$p\n#end for]}',
+    '#mode json\n{"s": #series($zeilen, fields=["start","value"],'
+    ' precision=1)}',
+    '#mode json\n{"s": #series($zeilen, layout="pairs",'
+    ' fields=["start","value"])}',
+    '#mode json\n{"s": #series($zeilen, layout="columns",'
+    ' fields=["start","value"])}',
+    '#mode json\n{"s": #series($zeilen, layout="pairs",'
+    ' fields=["start","value"], gaps="omit")}',
+    '#mode json\n#missing omit\n{"a": $leer, "b": 1}',
+    '#mode json\n[1, [2, {"x": $station}], []]',
+    '#mode json\n{"kanal-$id": 1}',
+    '#mode json\n{\n#if $wahr\n"a": 1\n#else\n"b": 2\n#end if\n}',
+]
+
+
+@pytest.mark.parametrize("quelle", STROM_PROBEN)
+def test_stroemen_liefert_dieselben_bytes(quelle):
+    # Die Eigenschaft, an der der ganze zweite Weg haengt. Waere sie
+    # nicht da, muesste man sich fuer einen entscheiden.
+    import io
+
+    from ct4.jsonmode import compile_template
+
+    compiled = compile_template(quelle)
+    puffer = io.StringIO()
+    compiled.stream(puffer, KONTEXT)
+    assert puffer.getvalue() == compiled.render(KONTEXT)
+
+
+class Senke:
+    """Nimmt alles entgegen und behaelt nichts.
+
+    Ein StringIO wuerde die ganze Ausgabe sammeln, und dann maesse der
+    Test seinen eigenen Puffer statt den Bauplatz.
+    """
+
+    def write(self, text):
+        return len(text)
+
+
+QUELLE_REIHE = ('#mode json\n{"s": #series($punkte, layout="pairs",'
+                ' fields=["start","value"])}')
+
+
+def _spitze(compiled, anzahl, schreiben):
+    import tracemalloc
+
+    punkte = (Punkt(i, float(i)) for i in range(anzahl))
+    tracemalloc.start()
+    schreiben(compiled, punkte)
+    _, hoch = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    return hoch
+
+
+def test_stroemen_haelt_den_speicher_konstant():
+    # Der Punkt der Sache. Verglichen werden zwei Groessen, nicht eine
+    # absolute Zahl, und der erste Aufruf zaehlt nicht mit: er legt die
+    # uebersetzte Vorlage an, und das faellt nur einmal an.
+    from ct4.jsonmode import compile_template
+
+    compiled = compile_template(QUELLE_REIHE)
+
+    def schreiben(c, punkte):
+        c.stream(Senke(), [{"punkte": punkte}])
+
+    _spitze(compiled, 100, schreiben)
+    klein = _spitze(compiled, 10_000, schreiben)
+    gross = _spitze(compiled, 50_000, schreiben)
+    assert gross < klein * 2, "%d gegen %d Bytes" % (klein, gross)
+
+
+def test_sammelnder_weg_waechst_mit_der_reihe():
+    # Die Gegenprobe. Ohne sie sagt der Test darueber nichts: er koennte
+    # gruen sein, weil beide Wege konstant sind.
+    from ct4.jsonmode import compile_template
+
+    compiled = compile_template(QUELLE_REIHE)
+
+    def schreiben(c, punkte):
+        c.render([{"punkte": punkte}])
+
+    _spitze(compiled, 100, schreiben)
+    klein = _spitze(compiled, 10_000, schreiben)
+    gross = _spitze(compiled, 50_000, schreiben)
+    assert gross > klein * 3, "%d gegen %d Bytes" % (klein, gross)
+
+
+def test_einzelwert_als_wurzel_wird_nicht_gestroemt():
+    import io
+
+    from ct4.jsonmode import compile_template
+
+    compiled = compile_template('#mode json\n$id')
+    assert compiled.render(KONTEXT) == "42"
+    with pytest.raises(NotImplementedError):
+        compiled.stream(io.StringIO(), KONTEXT)

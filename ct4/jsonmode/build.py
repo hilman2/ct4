@@ -21,7 +21,7 @@ ERROR = "error"
 
 # Ein Wert, der nicht in die Ausgabe gehoert. Nicht None: None ist ein
 # gueltiges Ergebnis und wird zu null.
-_DROP = object()
+DROP = object()
 
 
 class MissingValue(ValueError):
@@ -39,7 +39,7 @@ class Builder:
         self.precisions = precisions or {}
         self.missing = missing
         self._stack: list[Any] = []
-        self._result: Any = _DROP
+        self._result: Any = DROP
 
     # -- Behaelter ------------------------------------------------
 
@@ -81,7 +81,7 @@ class Builder:
 
     @property
     def result(self) -> Any:
-        if self._result is _DROP:
+        if self._result is DROP:
             raise RuntimeError("die Vorlage hat nichts gebaut")
         return self._result
 
@@ -91,7 +91,7 @@ class Builder:
             precision: int | None = None) -> None:
         name = self.names[name_index]
         prepared = self.prepare(value, precision, name)
-        if prepared is _DROP:
+        if prepared is DROP:
             return
         self._stack[-1][name] = prepared
 
@@ -100,18 +100,28 @@ class Builder:
         """Wie ``key``, aber der Schluessel entsteht erst zur Laufzeit."""
         text = str(name)
         prepared = self.prepare(value, precision, text)
-        if prepared is _DROP:
+        if prepared is DROP:
             return
         self._stack[-1][text] = prepared
 
     def item(self, value: Any, precision: int | None = None) -> None:
         prepared = self.prepare(value, precision, None)
-        if prepared is _DROP:
+        if prepared is DROP:
             # In einer Liste laesst sich nichts weglassen, ohne die
             # Stellen zu verschieben. Ein fehlendes Element wird null,
             # auch wenn die Politik sonst omit heisst.
             prepared = None
         self._stack[-1].append(prepared)
+
+    def series_key(self, name_index: int, source: Iterable[Any],
+                   options_index: int) -> None:
+        """Eine Reihe unter einem Schluessel."""
+        self._stack[-1][self.names[name_index]] = self.series(
+            source, options_index)
+
+    def series_item(self, source: Iterable[Any],
+                    options_index: int) -> None:
+        self._stack[-1].append(self.series(source, options_index))
 
     def lit(self, const_index: int) -> Any:
         return self.consts[const_index]
@@ -162,7 +172,7 @@ class Builder:
         if self.missing == NULL:
             return None
         if self.missing == OMIT:
-            return _DROP
+            return DROP
         raise MissingValue(
             "%s hat keinen Wert" % (name or "ein Element"))
 

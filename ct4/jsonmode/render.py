@@ -58,6 +58,25 @@ class Compiled:
             schema_module.validate(value, self.schema)
         return dumps(value, indent=indent)
 
+    def stream(self, out: Any, search_list: Sequence[Any]) -> None:
+        """Schreibt die Struktur, ohne sie im Speicher zu halten.
+
+        Liefert dieselben Bytes wie ``render`` ohne ``indent``. Eine
+        Einrueckung gibt es hier nicht: sie waere nur Zierde und kostete
+        den Vorteil.
+        """
+        from ct4.jsonmode.stream import StreamBuilder
+
+        builder = StreamBuilder(out, self.names, self.consts,
+                                precisions=self.document.precisions,
+                                missing=self.document.missing)
+        template = self.template_class(searchList=list(search_list))
+        try:
+            with self._pointing_at_the_template():
+                getattr(template, METHOD_NAME)(builder)
+        finally:
+            template.shutdown()
+
     def check(self) -> list[Any]:
         """Haelt die Vorlage statisch gegen ihr Schema."""
         if self.schema is None:

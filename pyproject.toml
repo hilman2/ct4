@@ -54,6 +54,12 @@ cheetah-compile = "Cheetah.CheetahWrapper:_cheetah_compile"
 cheetah-analyze = "Cheetah.DirectiveAnalyzer:main"
 ct4 = "ct4.cli:main"
 
+[project.entry-points."ct4.plugins"]
+# Das erste Plugin. Es gehoert eigentlich in ein eigenes Paket
+# ct4-weewx; solange es das nicht gibt, liegt es hier und meldet sich
+# nur an, wenn weewx installiert ist.
+weewx = "ct4.plugins.weewx_adapter"
+
 [tool.setuptools.dynamic]
 version = { attr = "Cheetah.Version.Version" }
 
