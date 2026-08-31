@@ -1139,8 +1139,9 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 **Fertig, wenn:** Korpus byte-identisch mit dem neuen Backend, Tracebacks zeigen
 in die Vorlage.
 
-Stand 31-Aug-2026: **teilweise.** Drei der fünf Punkte stehen, der Umbau von
-Parser und Codegen ist nicht angefangen.
+Stand 31-Aug-2026: **teilweise.** Die drei Schichten des Kerns stehen und
+tragen 1.317 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
+hängen weiter daran.
 
 | | |
 |---|---|
@@ -1148,8 +1149,47 @@ Parser und Codegen ist nicht angefangen.
 | Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
 | Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
-| Lexer, CST, AST, Codegen über `ast` | **nicht angefangen** |
+| Lexer, CST, AST, Codegen über `ast` | **1.317 von 1.636**, siehe unten |
 | Direktiven-Plugins auf AST-Ebene | hängt daran |
+
+**Die drei Schichten.** `ct4/lang/lex.py` zerlegt eine Vorlage verlustfrei in
+einen Tokenbaum: jedes Byte der Quelle steht in genau einem Token, und
+Zusammenfügen ergibt wieder die Quelle. `ct4/lang/tree.py` baut daraus die
+Blockstruktur und liest, welche Direktiven schliessen müssen, aus einem echten
+ct3-Parser statt aus einer Liste im Code. `ct4/lang/codegen.py` erzeugt Python
+über das `ast`-Modul, nicht über Zeichenkettenverkettung, und was dabei
+herauskommt ist eine Unterklasse von ct3s `Template`.
+
+**Die Regel: unvollständig und nie falsch.** Die Schicht sagt, was sie kann,
+lehnt alles andere ab, und was sie annimmt, muss byte für byte dasselbe
+rendern wie ct3. Gemessen wird das am Korpus, und eine Untergrenze im Test
+hält es fest.
+
+**Wie die Regel einmal gebrochen war.** Zwischendurch stand die Zahl bei 1.359,
+und 24 dieser Fälle rendeten anders als ct3: der Generator las keine einzige
+Compiler-Einstellung und nahm die Vorlagen trotzdem. Der eine Test, der das
+gemerkt hätte, übersprang genau die Fälle mit Einstellungen. Beide Hälften
+zusammen ergaben eine Lücke, die keine Zahl der Suite zeigte. Einstellungen
+werden jetzt abgelehnt statt ignoriert, der Test überspringt nichts mehr, und
+die 42 Fälle, die das kostet, sind der Preis für die Regel.
+
+**Was noch fehlt, nach Kosten geordnet und gezählt.** Der Kopf von `#def` und
+`#block`, 64 Fälle, wo hinter dem Namen ein Kommentar oder eine Parameterliste
+steht, die die Schicht nicht liest. ct3s Ausdrucks-Platzhalter `$(...)` und
+`$[...]`, 46 Fälle, für den der Lexer keine Regel hat. Die
+Compiler-Einstellungen, 52. Danach `c'...'`-Zeichenketten, die Einzeiler-Form
+mit Doppelpunkt und ein gutes Dutzend Direktiven mit je zwölf Fällen oder
+weniger.
+
+**Was der Korpus nicht zeigt.** Ein differenzieller Fuzzer über 12.627
+angenommene Vorlagen fand 1.863, die andere Bytes liefern als ct3. Alle gehen
+auf fünf Whitespace-Regeln zurück, die der Korpus nicht enthält: ein `#end`,
+das sich eine Zeile mit Ausgabe teilt, 1.093; ein öffnendes Tag mit Text davor,
+436; `#echo` hinter Text, 189; `#stop` hinter Text, 104; ein eingerückter
+Blockkommentar, 41. Das ist keine Regression, dieselben Formen liefen schon
+vorher falsch. Es ist die Entscheidung, die ansteht: entweder ct3s
+Chunk-Modell nachbauen, `handleWSBeforeDirective` mit ausstehendem Chunk, oder
+die fünf Formen ablehnen. Die Regel verlangt eines von beiden.
 
 **Geltungsbereiche.** Der Compiler führt einen Stapel der Namen, die er selbst
 gebunden hat, und löst Platzhalter darauf ohne die SearchList auf. Zahlen und

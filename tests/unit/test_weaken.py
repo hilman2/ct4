@@ -36,14 +36,26 @@ def clean():
 
     Without this the order of the cases would decide their result:
     OVERRIDES is state of the module, and weaken.apply only ever adds.
+
+    The "locals" mechanism is not a setting. It replaces
+    valueFromFrameOrSearchList in the NameMapper module, and that
+    replacement outlives the case that made it. Undoing it belongs
+    here too: a serial run put the control case behind the one that
+    patches, and the control then failed with NotFound on a loop
+    variable, which is the patch working rather than the shortcut
+    breaking.
     """
-    saved = dict(checker.OVERRIDES), checker.WEAKENED
+    import Cheetah.NameMapper as mapper
+
+    saved = (dict(checker.OVERRIDES), checker.WEAKENED,
+             mapper.valueFromFrameOrSearchList)
     checker.OVERRIDES.clear()
     checker.WEAKENED = ""
     yield
     checker.OVERRIDES.clear()
     checker.OVERRIDES.update(saved[0])
     checker.WEAKENED = saved[1]
+    mapper.valueFromFrameOrSearchList = saved[2]
 
 
 def render_case(mark, expected="Ada\n"):

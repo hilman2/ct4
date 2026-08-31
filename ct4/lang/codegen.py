@@ -13,23 +13,55 @@ give a traceback a real line number, and why every generated construct
 has to be re-escaped by hand.
 
 What it can do today: text, comments, escapes, placeholders with their
-call and subscript chains, and #for, #if, #while, #unless, #repeat,
-#try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
-#from, #def and #block, in their block form and in the colon short
-form, plus #attr, #raise, #set global and the #unicode line ct3
-cuts out before it parses, and #stop where it stands at the top
-level. That is 1023 of the 1636 render cases.
+call and subscript chains, with whatever Python those carry inside
+them, and with the silence and cache tokens in front of them, and
+#for, #if, #while, #unless, #repeat, #try, #set, #silent, #echo,
+#slurp, #break, #continue, #pass, #import #from, #def and #block, in
+their block form and in the colon short form, plus #attr, #raise,
+#set global and the #unicode line ct3 cuts out before it parses,
+#stop where it stands at the top level, #raw, whose body is written
+out with nothing done to it, #include, #extends and #implements, the
+three regions that redirect the output, #filter, #call and #cache, the
+#encoding line, which writes nothing and is a no-op before parsing for
+every codec that reads ASCII the way ASCII does, and PSP, the second
+block structure, whose body is spliced as the raw Python it is.
+That is 1317 of the 1636 render cases.
 
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
 resolve, and both need the instance that ct3 puts in the template's
-own search list.
+own search list. #extends replaces that base and renames the main
+method to writeBody; #implements names it whatever it says. An
+#include is one runtime call and nothing more: the nested template is
+compiled where the render reaches it, by ct3's own Template, which is
+what shares the search list and the globalSetVars and copies the
+filter across.
 
-What it turns away, in the order the corpus says it costs most: the
-cache token; PSP; #include and #extends, which need a template to
-include into; #filter and #call, which change how the output is
-written; and the chained short form, where an #else on the next line
-joins an #if that has already closed.
+What it turns away, in the order the corpus says it costs most, and
+counted rather than estimated: the head of a #def or #block, 64 cases,
+where the name is followed by a comment or by a parameter list this
+layer cannot read; ct3's expression placeholder, 46; any template that
+sets a compiler setting, 52, on which see below; the c'...' string, 20;
+the one-line form that puts a directive's body behind a colon, 20, for
+#if and #errorCatcher; and then #compiler-settings, #breakpoint,
+#compiler, #@, #i18n, #return, #assert, an #elif whose #if closed on
+the line before, and a #stop inside a block, 12 or fewer each.
+
+A compiler setting is refused rather than ignored. This layer reads
+none of them, and two of them change what ct3 renders: with
+gobbleWhitespaceAroundMultiLineComments off a block comment leaves its
+whitespace behind, and with allowWhitespaceAfterDirectiveStartToken on
+"# if" is a directive instead of text. Until the settings arrive here,
+taking such a template is guessing, and guessing was what it did: for a
+while it took 24 of them and rendered them differently from ct3.
+
+Two of its refusals are there because the lexer and ct3 disagree about
+how much source a placeholder covers, rather than because a rule is
+missing. ct3's expression placeholder, "$(6)" and "$[1,2]" and "$*{1}",
+where the enclosure holds an expression instead of a name, has no rule
+in the lexer at all and would come out as literal text; and a token
+that stops short of what ct3 read, "$a[\n1]" and "$f(1)upper", is
+turned away rather than read half. Both are refusals and not guesses.
 """
 
 from __future__ import annotations
@@ -37,6 +69,7 @@ from __future__ import annotations
 import ast
 import re
 from dataclasses import dataclass
+from tokenize import PseudoToken
 from typing import Any, Sequence
 
 from ct4.lang import lex, tree
@@ -51,17 +84,11 @@ WRITE = "write"
 CLASS = "_Ct4Template"
 MAIN = "respond"
 
-# A placeholder this layer understands: a dollar, then a dotted name,
-# optionally wrapped in one of the three enclosures. ct3 generates the
-# same single VFFSL for "$a.b" and for "${a.b}", so the enclosure costs
-# nothing to accept.
-#
-# What is still turned away: the silence token, the cache token, and
-# any call or subscript in the chain. The last of those is not a
-# detail. ct3 stops treating the path as one name the moment a call
-# appears and walks it step by step instead, so "$a.b(1)" becomes
-# VFN(VFFSL(SL,"a",True),"b",False)(1). That is a rule of its own and
-# gets added when its cases are ready to be measured.
+# A placeholder that is a plain dotted name, optionally wrapped in one
+# of the three enclosures. Used where a placeholder is a target rather
+# than a lookup, in "#set $a" and in the head of a "#for": ct3 writes
+# the bare name there, so anything with a call or a subscript in it has
+# to be turned away.
 NAME = r"[A-Za-z_][A-Za-z_0-9]*"
 PLAIN = re.compile(
     r"^\$(?:"
@@ -80,8 +107,73 @@ def _plain_path(text: str) -> str | None:
     return path
 
 
-# What a placeholder starts with and this layer does not read yet.
+# The silence and cache tokens, which belong to a top-level placeholder
+# and nowhere else: ct3 raises a ParseError for "#set $a = $*x" and for
+# "#if $!x". _piece takes them off before it reads the chain behind
+# them, and every other reader here refuses them.
 MODIFIERS = re.compile(r"^\$[!*]")
+
+# ct3's identRE, asked of a token that has already been read.
+IDENT_RE = re.compile(r"[a-zA-Z_][a-zA-Z_0-9]*")
+
+# One Python token. The same expression the tokenize module builds and
+# ct3's getPyToken matches with, and not one of my own: where a string
+# literal ends, whether "==" is one token or two, and what a backslash
+# in front of a line ending is all have to be decided exactly as ct3
+# decides them, or what comes out is not the same Python.
+PY_TOKEN = re.compile(PseudoToken)
+
+# The triple-quoted string starts ct3 knows, each with the expression
+# that reads the whole string. tokenize's own pattern matches the three
+# opening quotes alone, and ct3 puts the rest back with a second match.
+TRIPLE = {prefix + quote:
+          re.compile(re.escape(prefix + quote) + ".*?" + re.escape(quote),
+                     re.S)
+          for prefix in ("", "r", "R", "u", "U", "ur", "uR", "Ur", "UR")
+          for quote in ("'''", '"""')}
+
+# Which bracket a closer belongs to.
+OPENING = {")": "(", "]": "[", "}": "{"}
+
+# The names ct3's generated module carries and this one does not, read
+# off the two module texts. A template can reach them: a bare
+# identifier in an expression is written out as itself, and VFFSL falls
+# back on the module globals where neither the frame nor the search
+# list holds the name. So "$time" writes the time module in ct3 and
+# raises NotFound here. No corpus case wants any of them, and
+# _refuse_preamble_names turns away the templates that would.
+#
+# The five __CHEETAH_ names and the six Python gives a real module are
+# in the list for the same reason, and a PSP body is what reaches them:
+# it is spliced as plain Python, so "<% write(__file__) %>" writes a
+# path in ct3 and raises NameError here. ct3 execs its code into a
+# module and this layer execs into a bare dict, so the module
+# attributes are a difference too.
+#
+# test_the_preamble_lists_what_ct3_actually_carries computes both sets
+# from a compiled template of each engine and holds this list to them.
+# Written by hand it went stale within one working day.
+PREAMBLE = frozenset((
+    "CacheRegion", "DummyResponse", "DummyResponseFailure",
+    "DynamicallyCompiledCheetahTemplate",
+    "ErrorCatchers", "Filters", "RequiredCheetahVersion",
+    "RequiredCheetahVersionTuple", "TransformerResponse",
+    "TransformerTransaction", "VFSL", "builtin", "exists", "getmtime",
+    "logging", "os", "sys", "templateAPIClass", "time", "types",
+    "unicode", "valueForName", "valueFromFrameOrSearchList",
+    "valueFromSearchList",
+    "__CHEETAH_docstring__", "__CHEETAH_src__",
+    "__CHEETAH_srcLastModified__", "__CHEETAH_version__",
+    "__CHEETAH_versionTuple__",
+    "__doc__", "__file__", "__loader__", "__name__", "__package__",
+    "__spec__"))
+
+# The other direction, and the shorter one. A name this layer's module
+# carries and ct3's does not resolves here and raises NotFound there,
+# which is the same defect with the engines swapped. Today that is the
+# class the skeleton declares: "$_Ct4Template" would write a class.
+OURS_ONLY = frozenset((CLASS,))
+
 
 @dataclass(frozen=True)
 class Chunk:
@@ -89,7 +181,8 @@ class Chunk:
 
     ``name`` is a dotted run, ``autocall`` says whether NameMapper may
     call what it finds, and ``remainder`` is the call or subscript
-    hanging off it as Python source.
+    hanging off it, as Python with every placeholder inside it already
+    resolved.
     """
 
     name: str
@@ -97,72 +190,413 @@ class Chunk:
     remainder: str
 
 
-def chunks_of(text: str) -> list[Chunk] | None:
+class _Reader:
+    """ct3's placeholder readers, over one placeholder's text.
+
+    Mirrors four functions of Cheetah/Parser.py: getPlaceholder reads a
+    placeholder, getCheetahVarNameChunks splits it into a chain, and
+    getCallArgString and getExpressionParts read what hangs off the
+    chain. The last two are kept apart here as they are there, because
+    they do not agree: a line ending inside a call is copied and the
+    same line ending inside a subscript is dropped, and the "$kw ="
+    rewrite that turns an argument into a Python keyword argument
+    exists in the call reader alone.
+
+    The work happens on the token's own text and never on its children.
+    lex.inner() scans the whole argument range for a dollar byte by
+    byte with no idea of Python strings, so it invents nested
+    placeholders that ct3 never resolves: in "$getVar('$anInt')" the
+    child has to stay the six characters it is, and a corpus case says
+    so.
+
+    Everything it cannot read raises Unsupported, ct3's own ParseErrors
+    included. Where ct3 would read on past the end of the token the
+    reader simply stops, and the caller refuses what is left over.
+    """
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.at = 0
+        # ct3 turns useNameMapper off while it reads the target of a
+        # "for" inside an expression, and back on after. It does that
+        # with a setting rather than an argument, so it reaches every
+        # reader that runs while it is off.
+        self.name_mapper = True
+
+    # -- position ----------------------------------------------------
+
+    def done(self) -> bool:
+        return self.at >= len(self.text)
+
+    def peek(self, ahead: int = 0) -> str:
+        """The character at the position, or "" past the end."""
+        index = self.at + ahead
+        return self.text[index] if 0 <= index < len(self.text) else ""
+
+    def whitespace(self) -> str:
+        """getWhiteSpace: blanks and tabs, never a line ending."""
+        start = self.at
+        while self.peek() and self.peek() in " \f\t":
+            self.at += 1
+        return self.text[start:self.at]
+
+    def dotted_name(self) -> str:
+        """getDottedName: names joined by dots, and no trailing dot."""
+        start = self.at
+        while not self.done():
+            char = self.text[self.at]
+            if char in lex.IDENT:
+                self.at += 1
+                continue
+            if char == "." and self.peek(1) in lex.IDENT_START:
+                self.at += 1
+                continue
+            break
+        return self.text[start:self.at]
+
+    def py_token(self) -> str:
+        """getPyToken: one Python token, tokenize's own expression."""
+        match = PY_TOKEN.match(self.text, self.at)
+        if match is None or match.end() == self.at:
+            raise Unsupported("cannot read Python at %r"
+                              % self.text[self.at:self.at + 20])
+        token = match.group()
+        if token in TRIPLE:
+            whole = TRIPLE[token].match(self.text, self.at)
+            if whole is None:
+                raise Unsupported("malformed triple-quoted string")
+            self.at = whole.end()
+            return whole.group()
+        self.at = match.end()
+        return token
+
+    def transform(self, token: str) -> str:
+        """transformToken, which has one case and it is refused.
+
+        ct3 turns a c'...' string into a join of its parts, with every
+        placeholder inside it resolved and every constant put back
+        through repr. That is a rule of its own, 24 corpus cases wide,
+        and it is not measured yet.
+        """
+        if token == "c" and self.peek() and self.peek() in "'\"":
+            raise Unsupported("a c'...' placeholder string")
+        return token
+
+    # -- the readers -------------------------------------------------
+
+    def chunks(self) -> list[Chunk]:
+        """getCheetahVarNameChunks: the chain, from behind the dollar.
+
+        The name carrying a bracket becomes a chunk of its own, so
+        "$a.b.c[1]" splits into "a.b" and "c[1]" and not into
+        "a.b.c[1]". Autocalling is off for a chunk that is called and
+        on for one that is only subscripted.
+
+        The loop head is ct3's ``self.peek() not in identchars + '.'``,
+        and identchars holds no digits: a bare letter after a bracket
+        opens another chunk, "$f(1)upper" included, while a digit ends
+        the chain.
+        """
+        found: list[Chunk] = []
+        while not self.done():
+            remainder = ""
+            autocall = True
+            char = self.text[self.at]
+            if char not in lex.IDENT_START and char != ".":
+                break
+            if char == ".":
+                # The period goes: NameMapper does not need it.
+                if self.peek(1) in lex.IDENT_START:
+                    self.at += 1
+                else:
+                    break
+            name = self.dotted_name()
+            if not self.done() and self.text[self.at] in "([":
+                if self.text[self.at] == "(":
+                    remainder = self.call_arguments()
+                else:
+                    remainder = self.expression(enclosed=True)
+                period = max(name.rfind("."), 0)
+                if period:
+                    found.append(Chunk(name[:period], autocall, ""))
+                    name = name[period + 1:]
+                if remainder.startswith("("):
+                    autocall = False
+            found.append(Chunk(name, autocall, remainder))
+        return found
+
+    def cheetah_var(self, plain: bool = False) -> str:
+        """getCheetahVar: the dollar and the chain behind it.
+
+        Only reached where a name follows the dollar. An enclosure and
+        the two modifiers are a ParseError inside an expression, and
+        the callers refuse them before they get here.
+        """
+        self.at += 1
+        found = self.chunks()
+        if not found:
+            raise Unsupported("a dollar with no name behind it")
+        if plain or not self.name_mapper:
+            return _plain_expression(found)
+        return _expression(found)
+
+    def call_arguments(self) -> str:
+        """getCallArgString: what a "(" opens, as Python.
+
+        Whitespace and line endings are copied verbatim, a string
+        literal is copied and never scanned for placeholders, a bare
+        identifier is copied and not looked up, and a "$name" becomes a
+        chain of its own.
+        """
+        if self.peek() != "(":
+            raise Unsupported("expected a call argument list")
+        self.at += 1
+        bits = ["("]
+        while True:
+            if self.done():
+                raise Unsupported("the call argument list does not close")
+            char = self.text[self.at]
+            if char in ")}]":
+                # Only the bracket that opened it: ct3 raises for the
+                # others, and a nested group never gets here because
+                # the branch below hands it to the expression reader.
+                if char != ")":
+                    raise Unsupported("a %r closes a call argument list"
+                                      % char)
+                self.at += 1
+                bits.append(")")
+                break
+            if char in " \t\f\r\n":
+                self.at += 1
+                bits.append(char)
+            elif char == "$" and self.peek(1) in lex.IDENT_START:
+                bits.append(self.keyword_or_lookup())
+            elif char == "$":
+                raise Unsupported("%r inside an expression"
+                                  % self.text[self.at:self.at + 3])
+            else:
+                token = self.py_token()
+                if token in ("{", "(", "["):
+                    # A bracket that opens a value inside the argument
+                    # list goes to the expression reader, which has no
+                    # "$kw =" rewrite of its own. The asymmetry is
+                    # ct3's, and it is why "$a(f($x=1))" generates
+                    # Python that does not compile.
+                    self.at -= 1
+                    token = self.expression(enclosed=True)
+                bits.append(self.transform(token))
+        return "".join(bits)
+
+    def keyword_or_lookup(self) -> str:
+        """A "$name" in an argument list, and ct3's "$kw =" rewrite.
+
+        A single "=" behind the name makes it a Python keyword
+        argument: the dollar and the whole NameMapper call go and the
+        dotted name is written on its own. A "==" is not that case, and
+        the value behind the "=" is resolved as usual, so
+        "$aFunc($arg=$aMeth(1))" keeps the lookup on the right. The
+        whitespace between the name and the "=" is read once and
+        written once, which is what ct3's WS = self.getWhiteSpace()
+        does.
+        """
+        start = self.at
+        code = self.cheetah_var()
+        blanks = self.whitespace()
+        if self.peek() != "=":
+            return code + blanks
+        token = self.py_token()
+        if token == "=":
+            end = self.at
+            self.at = start
+            code = self.cheetah_var(plain=True)
+            self.at = end
+        return code + blanks + token
+
+    def expression(self, enclosed: bool = False,
+                   enclosures: list[str] | None = None,
+                   break_at: tuple[str, ...] = ()) -> str:
+        """getExpressionParts: what a "[" opens, and an enclosure's tail.
+
+        Five things it does differently from the call reader. A line
+        ending inside a bracket is dropped rather than copied, and a
+        backslash in front of one takes both away. A bare identifier
+        followed by a "(" pulls the call in through the call reader.
+        The names between a "for" and its "in" are written plainly. And
+        it keeps reading across a bracket group that closes back to
+        nothing, because the branch that opens a bracket is tested
+        before the one that ends the expression: that is why the
+        remainder of "$a[1](2)" is the whole "[1](2)".
+        """
+        if enclosures is None:
+            enclosures = []
+        bits: list[str] = []
+        while True:
+            if self.done():
+                if enclosures:
+                    raise Unsupported("the expression does not close")
+                break
+            char = self.text[self.at]
+            if char in "{([":
+                self.at += 1
+                enclosures.append(char)
+                bits.append(char)
+            elif enclosed and not enclosures:
+                break
+            elif char in "])}":
+                if not enclosures or enclosures[-1] != OPENING[char]:
+                    raise Unsupported("a %r closes nothing" % char)
+                self.at += 1
+                enclosures.pop()
+                bits.append(char)
+            elif char in " \f\t":
+                bits.append(self.whitespace())
+            elif char == "#" and not enclosures \
+                    and (self.at == 0 or self.text[self.at - 1] != "\\"):
+                # The token that ends a directive. Inside a placeholder
+                # it means the token holds more than ct3 read, and the
+                # caller refuses what is left over.
+                break
+            elif char == "\\" and self.at + 1 < len(self.text):
+                match = lex.EOL.match(self.text, self.at + 1)
+                if match is None:
+                    raise Unsupported("a backslash with no line ending")
+                # Both the backslash and the ending go.
+                self.at = match.end()
+            elif char in "\r\n":
+                if not enclosures:
+                    break
+                # Dropped and not copied: this is where the two readers
+                # part company, and a kept ending would leave a bare
+                # line break at the top level of the expression.
+                self.at += 1
+            elif char == "$" and self.peek(1) in lex.IDENT_START:
+                bits.append(self.cheetah_var())
+            elif char == "$":
+                raise Unsupported("%r inside an expression"
+                                  % self.text[self.at:self.at + 3])
+            else:
+                before = self.at
+                token = self.py_token()
+                if not enclosures and break_at and token in break_at:
+                    self.at = before
+                    break
+                bits.append(self.transform(token))
+                if IDENT_RE.match(token):
+                    if token == "for":
+                        bits.append(self.loop_targets())
+                    else:
+                        bits.append(self.whitespace())
+                        if self.peek() == "(":
+                            bits.append(self.call_arguments())
+        return "".join(bits)
+
+    def loop_targets(self) -> str:
+        """What stands between a "for" and its "in", written plainly.
+
+        ct3 reads it with useNameMapper off, so "$a([$y for $y in $b])"
+        binds a plain y and looks up only b.
+        """
+        keep = self.name_mapper
+        self.name_mapper = False
+        try:
+            return self.expression(break_at=("in",))
+        finally:
+            self.name_mapper = keep
+
+    def placeholder(self) -> str:
+        """getPlaceholder: a top-level placeholder, enclosure and all."""
+        self.at += 1
+        opener = ""
+        if self.peek() and self.peek() in "({[":
+            opener = self.text[self.at]
+            self.at += 1
+            self.whitespace()
+        if self.peek() not in lex.IDENT_START:
+            # ct3's other placeholder start, the one whose enclosure
+            # holds an expression instead of a name. The lexer has no
+            # rule for it, and _refuse_expression_placeholders turns
+            # the whole template away.
+            raise Unsupported("placeholder %r" % self.text)
+        found = self.chunks()
+        if not found:
+            raise Unsupported("placeholder %r" % self.text)
+        made = _expression(found)
+        if opener:
+            # The blanks behind the chain really do end up in the
+            # generated expression: "$( a + 1 )" ends in a space.
+            made += self.whitespace()
+            if self.peek() == ",":
+                # ct3 reads what follows as arguments for the filter
+                # and leaves the value the chain alone. There is no way
+                # to pass them here, and read as expression text the
+                # comma would quietly build a tuple.
+                raise Unsupported("filter arguments in a placeholder")
+            if self.peek() == lex.CLOSING[opener]:
+                self.at += 1
+            else:
+                rest = self.expression(enclosed=True, enclosures=[opener])
+                # Exactly one closer comes off, which is what ct3
+                # slices; anything else leaves the brackets unbalanced.
+                if rest.endswith(lex.CLOSING[opener]):
+                    rest = rest[:-1]
+                made += rest
+        return made
+
+
+def chunks_of(text: str) -> list[Chunk]:
     """A placeholder's chain, split the way ct3 splits it.
 
-    Called as ``chunks_of("$a.b.c[1].d().x")``. Returns None where the
-    text is not a chain this layer reads.
+    Called as ``chunks_of("$a.b.c[1].d().x.y.z")``. The rule is
+    measured off ct3 rather than taken from its docstring, which is out
+    of date.
 
-    The rule is measured off ct3 rather than taken from its docstring,
-    which is out of date. The name carrying a bracket becomes a chunk
-    of its own, so ``$a.b.c[1]`` splits into ``a.b`` and ``c[1]`` and
-    not into ``a.b.c[1]``. Autocalling is off for a chunk that is
-    called, and on for one that is only subscripted.
+    Raises:
+        Unsupported: where the text is not a chain and nothing else.
+            That includes the enclosure forms, the two modifiers, and a
+            text the chain does not reach the end of.
+    """
+    if not text.startswith("$") or text[1:2] not in lex.IDENT_START:
+        raise Unsupported("placeholder %r" % text)
+    reader = _Reader(text)
+    reader.at = 1
+    found = reader.chunks()
+    if not found or not reader.done():
+        raise Unsupported("placeholder %r" % text)
+    return found
+
+
+def placeholder_source(text: str) -> str:
+    """The Python ct3 writes for a placeholder where it stands.
+
+    Called as ``placeholder_source("$a.b($c)")`` with the raw text of a
+    PLACEHOLDER token, the modifiers already taken off.
+
+    Raises:
+        Unsupported: where ct3 reads the text differently, or not at
+            all. Text left over at the end is such a case: "$a(1)[2]"
+            is one token here and two things in ct3, a placeholder
+            "$a(1)" and the plain output text "[2]".
     """
     if MODIFIERS.match(text):
-        return None
-    inner = text[1:]
-    if inner[:1] in "{([":
-        closing = {"{": "}", "(": ")", "[": "]"}[inner[0]]
-        if not inner.endswith(closing):
-            return None
-        inner = inner[1:-1].strip()
-    found: list[Chunk] = []
-    names: list[str] = []
-    index = 0
-    while index < len(inner):
-        start = index
-        while index < len(inner) and inner[index] in lex.IDENT:
-            index += 1
-        if index == start:
-            return None
-        names.append(inner[start:index])
-        if index < len(inner) and inner[index] == "." \
-                and inner[index + 1:index + 2] and \
-                inner[index + 1] in lex.IDENT_START:
-            index += 1
-            continue
-        if index < len(inner) and inner[index] in "([":
-            remainder, index = _brackets(inner, index)
-            if remainder is None:
-                return None
-            if len(names) > 1:
-                found.append(Chunk(".".join(names[:-1]), True, ""))
-            found.append(Chunk(names[-1], not remainder.startswith("("),
-                               remainder))
-            names = []
-            if index < len(inner) and inner[index] == "." \
-                    and inner[index + 1:index + 2] and \
-                    inner[index + 1] in lex.IDENT_START:
-                index += 1
-                continue
-        break
-    if index != len(inner):
-        return None
-    if names:
-        found.append(Chunk(".".join(names), True, ""))
-    return found or None
+        raise Unsupported("placeholder %r" % text)
+    reader = _Reader(text)
+    made = reader.placeholder()
+    if not reader.done():
+        raise Unsupported("placeholder %r" % text)
+    return made
 
 
-def _brackets(text: str, index: int) -> tuple[str | None, int]:
-    """Every bracket group in a row from here, as source."""
-    start = index
-    while index < len(text) and text[index] in "([":
-        closed = lex._balanced(text, index, text[index])
-        if closed is None:
-            return None, index
-        index = closed
-    return text[start:index], index
+def argument_source(text: str) -> str:
+    """The Python ct3 writes for a placeholder in a directive argument.
+
+    A different reader, and it has to be one. ct3 reads a directive's
+    argument with getExpression and never with getPlaceholder, and
+    inside an expression a placeholder is a bare chain: an enclosure or
+    a modifier raises a ParseError there, so "#echo ${b}" is a template
+    ct3 refuses outright.
+    """
+    return _expression(chunks_of(text))
+
 
 # Node kinds that carry no output at all.
 SILENT_KINDS = frozenset({lex.COMMENT, lex.BLOCK_COMMENT})
@@ -174,7 +608,9 @@ SILENT_KINDS = frozenset({lex.COMMENT, lex.BLOCK_COMMENT})
 # because $self and $getVar resolve against the instance, which ct3
 # puts in the template's own search list.
 SKELETON = """\
+from time import time as currentTime
 from Cheetah.DummyTransaction import DummyTransaction
+from Cheetah.NameMapper import NotFound
 from Cheetah.NameMapper import valueForName as VFN
 from Cheetah.NameMapper import valueFromFrameOrSearchList as VFFSL
 from Cheetah.Template import Template
@@ -246,16 +682,38 @@ class Generated:
         return namespace[CLASS]
 
 
-def supports(source: str) -> bool:
+# Compiler settings this layer knows it does not honour. It reads
+# none of them, so any that is set has to be refused: two of them
+# change what ct3 renders and 24 corpus cases were coming out wrong
+# behind a skip in the test that was supposed to catch exactly that.
+def _refuse_settings(settings: Any) -> None:
+    """Turns away a template whose compiler settings change ct3.
+
+    Every setting, not a chosen few. gobbleWhitespaceAroundMultiLine-
+    Comments and allowWhitespaceAfterDirectiveStartToken are the two
+    the corpus exercises, and enumerating from a corpus is how a
+    blind spot becomes a rule. When a setting is honoured, take it off
+    this list and say which.
+
+    Raises:
+        Unsupported: where any setting is given.
+    """
+    if settings:
+        raise Unsupported(
+            "compiler settings change how ct3 parses and this layer "
+            "reads none of them: %s" % ", ".join(sorted(settings)))
+
+
+def supports(source: str, settings: Any = None) -> bool:
     """Whether this layer can generate code for the template."""
     try:
-        generate(source)
+        generate(source, settings)
     except (Unsupported, tree.StructureError):
         return False
     return True
 
 
-def generate(source: str) -> Generated:
+def generate(source: str, settings: Any = None) -> Generated:
     """Python for a template.
 
     Raises:
@@ -263,9 +721,14 @@ def generate(source: str) -> Generated:
             not understand yet.
         tree.StructureError: where the template is not well formed.
     """
+    _refuse_settings(settings)
     source = _preprocess(source)
     root = tree.parse(source)
-    hoisted: list[ast.stmt] = []
+    _refuse_expression_placeholders(source, root)
+    _refuse_raw_in_short_form(source, root)
+    shape = _class_shape(root)
+    # The imports #extends synthesises stand with the template's own.
+    hoisted: list[ast.stmt] = list(shape.imports)
     methods: list[ast.stmt] = []
     body = _statements(_pieces(root, source, hoisted, methods))
     module = ast.parse(SKELETON)
@@ -274,15 +737,59 @@ def generate(source: str) -> Generated:
     module.body[-1:-1] = hoisted
     made = module.body[-1]
     assert isinstance(made, ast.ClassDef)
-    made.body = methods + [_method(MAIN, "", body)]
+    made.bases = [_parsed(name) for name in shape.bases]
+    made.body = methods + [_method(shape.main, shape.arguments, body)]
     ast.fix_missing_locations(module)
+    _refuse_preamble_names(module)
+    _refuse_unbound_bases(module, shape.bases)
     return Generated(ast.unparse(module), module)
 
 
+def _refuse_preamble_names(module: ast.Module) -> None:
+    """Turns away a template that reaches a module name, either way.
+
+    Both namespaces, not just ct3's. A name only ct3's module has
+    resolves there and raises here; a name only this one has does the
+    reverse, and the reverse is worse, because the template renders
+    and the difference shows up as output.
+
+    Checked on the finished module rather than while it is built,
+    because that is the one place where both halves of the question are
+    answered: which names the code reaches for, and which ones the
+    template's own #import statements bind. ``#import os.path`` then
+    ``$os.path.exists('.')`` resolves the same in both and stays.
+
+    A local binding is not an exemption. ct3 looks in the frame first,
+    so a name bound in the method that uses it resolves the same
+    either way; a name bound in another method does not, and that is
+    the case this is here for.
+    """
+    bound: set[str] = set()
+    reached: set[str] = set()
+    for node in ast.walk(module):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                bound.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            reached.add(node.id)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == "VFFSL":
+            # The name a lookup starts at, which VFFSL resolves against
+            # the module globals when nothing else has it.
+            looked_up = node.args[1]
+            if isinstance(looked_up, ast.Constant):
+                reached.add(str(looked_up.value).split(".")[0])
+    for name in sorted(reached & PREAMBLE - bound):
+        raise Unsupported("%r is a name ct3's own module carries" % name)
+    for name in sorted(reached & OURS_ONLY - bound):
+        raise Unsupported(
+            "%r is a name this module carries and ct3's does not" % name)
+
+
 def render(source: str, search_list: Sequence[Any],
-           output_filter: Any = None) -> str:
+           output_filter: Any = None, settings: Any = None) -> str:
     """Generates, runs, and returns what the template produces."""
-    klass = generate(source).compile()
+    klass = generate(source, settings).compile()
     keywords = {"filter": output_filter} if output_filter else {}
     template = klass(searchList=list(search_list), **keywords)
     try:
@@ -299,12 +806,18 @@ def _preprocess(source: str) -> str:
     regular expression and cuts it out. The same pattern is used here,
     so the two cannot disagree about what counts as one.
 
-    ``#encoding`` is still turned away. With a str source ct3 puts it
-    back through repr, encodes it with backslashreplace and decodes it
-    again, and that can change what gets parsed.
+    ``#encoding`` is found by a regular expression as well, and its
+    line is *not* cut out: it reaches the parser a second time as a
+    real directive. The two mechanisms have different trigger
+    conditions, so a source can be put through the encoding step
+    without holding a directive at all. ``#  encoding : utf-8`` is such
+    a line, and ct3 writes it out as ordinary text.
 
     Raises:
-        Unsupported: where #encoding appears.
+        Unsupported: where #unicode and #encoding stand together, which
+            ct3 means to refuse and instead dies of a RecursionError
+            while it formats the error, and where the encoding step
+            would not leave the source as it is.
     """
     from Cheetah.Parser import encodingDirectiveRE, unicodeDirectiveRE
 
@@ -313,9 +826,81 @@ def _preprocess(source: str) -> str:
             raise Unsupported("#encoding and #unicode together")
         without: str = unicodeDirectiveRE.sub("", source)
         return without
-    if encodingDirectiveRE.search(source):
-        raise Unsupported("#encoding is applied before parsing")
+    found = encodingDirectiveRE.search(source)
+    if found is not None and not _encoding_is_transparent(source,
+                                                         found.group(1)):
+        raise Unsupported("#encoding %r changes the source"
+                          % found.group(1)[:40])
     return source
+
+
+def _encoding_is_transparent(source: str, name: str) -> bool:
+    """Whether ct3's #encoding step gives the source back unchanged.
+
+    Before it parses anything ct3 replaces the whole template with
+    ``eval(repr(source).encode("ascii", "backslashreplace")
+    .decode(name))`` (Cheetah/Compiler.py, ModuleCompiler.__init__).
+    The bytes handed to the decode are ASCII by construction and eval
+    undoes repr, so the decode is the only step that can change a
+    character. Where the codec reads those bytes the way ASCII does,
+    the whole round trip is the identity and ct4 can leave the source
+    alone; where it does not, ct3 goes on to parse something else and
+    this layer has nothing to be faithful to.
+
+    Decided by comparison and not by running ct3's eval, which would
+    evaluate whatever the codec made of the template: with
+    ``#encoding utf-7`` a decode can synthesise a quote and close the
+    string literal eval is given.
+
+    Against the ASCII reading of those bytes, and not against
+    ``repr(source)``: repr leaves a printable non-ASCII character where
+    it stands while backslashreplace escapes it, so the two differ for
+    a template holding one even though the round trip is the identity.
+    Seventeen corpus templates would be refused for nothing.
+    """
+    raw = repr(source).encode("ascii", "backslashreplace")
+    try:
+        return raw.decode(name) == raw.decode("ascii")
+    except (LookupError, UnicodeError):
+        # An unknown name, a codec that is not a text codec at all, and
+        # one that cannot read ASCII. ct3 raises the same two.
+        return False
+
+
+# ct3's expressionPlaceholderStartRE: a dollar, an optional cache
+# token, one of the three enclosures, blanks, and then anything that is
+# not a closer. It is ct3's second placeholder start, and the only one
+# whose enclosure holds an expression rather than a name.
+EXPRESSION_PLACEHOLDER = re.compile(
+    r"(?<!\\)\$(?:\*[0-9.]+[smhdw]?\*|\*|)[{(\[][ \t\f]*(?=[^)}\]])")
+
+
+def _refuse_expression_placeholders(source: str, root: tree.Node) -> None:
+    """Turns away the placeholder start the lexer does not know.
+
+    ct3's parser tries the name-led placeholder first and this one
+    second, and then reads the whole enclosure as an expression:
+    ``$("%.3f" % $almanac.sun.alt)`` resolves the name and formats it.
+    lex.START requires a name behind the enclosure, so the same source
+    comes out as text, a placeholder and more text, and would be
+    written out literally. Doing nothing is not a refusal here, it is
+    wrong output, and weewx templates use the form.
+
+    Only a match standing in output text counts. Inside a comment ct3
+    looks for no placeholder either, and inside an expression the long
+    form is a ParseError the reader already raises.
+    """
+    if not EXPRESSION_PLACEHOLDER.search(source):
+        return
+    spans = [(token.start, token.end)
+             for node in root.walk() for token in lex.walk(node.tokens)
+             if token.kind == lex.TEXT]
+    for match in EXPRESSION_PLACEHOLDER.finditer(source):
+        for start, end in spans:
+            if start <= match.start() < end:
+                raise Unsupported(
+                    "the expression placeholder %r"
+                    % source[match.start():match.start() + 20])
 
 
 # -- What the template writes ----------------------------------------
@@ -330,6 +915,11 @@ VALUE_PIECE = "value"
 # A block already turned into statements. It carries no text, so the
 # whitespace rules never reach into it.
 STMT_PIECE = "stmt"
+# The body of a #raw. Written out like text, but kept apart from it,
+# because the whitespace rules must not reach into one: ct3 would
+# truncate a raw body like any other pending chunk, and this layer
+# refuses that case rather than working out where its chunks fall.
+RAW_PIECE = "raw"
 
 # Directives that only announce a branch of the block they sit in.
 BRANCHES = ("else", "elif")
@@ -349,6 +939,10 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
     A comment writes nothing, but it decides what happens to the
     whitespace around it, and the two kinds decide differently. Both
     rules are ct3's, read off eatComment and eatMultiLineComment.
+
+    Walked by index rather than by iteration, because a PSP block is
+    not a node: its opening token and its ``<%end%>`` are two siblings
+    in this list, and everything between them is the body.
     """
     out: list[tuple[str, Any]] = []
     # Set by a block comment: the whitespace up to the end of the line
@@ -357,7 +951,10 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
     # to the tree, because the tree has to stay what the layer below
     # built: it is the thing that writes back to the source.
     pending: bool | None = None
-    for node in nodes:
+    index = 0
+    while index < len(nodes):
+        node = nodes[index]
+        index += 1
         if pending is not None:
             gobble = pending
             pending = None
@@ -378,11 +975,16 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                     out.append((STMT_PIECE, call))
                 continue
             if node.name == "raw":
-                # More shapes than this layer reads: a colon short
-                # form, a line ending that belongs to the directive
-                # rather than the contents, and an indent rule that
-                # reaches back past the start of the line.
-                raise Unsupported("#raw")
+                # Read off the source from end to end, its own closing
+                # directive included, so its children are not walked.
+                _raw_block(node, source, out)
+                continue
+            if node.name in ("filter", "call", "cache"):
+                # Several statements around the body rather than one
+                # block, and the tags decide about their lines before
+                # any of them is written.
+                _region(node, source, hoisted, methods, out)
+                continue
             _eat_directive_line(node, source, out)
             out.append((STMT_PIECE, _block(node, source, hoisted, methods)))
         elif node.kind == lex.DIRECTIVE:
@@ -415,30 +1017,52 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                     raise Unsupported("#stop inside a block")
                 _eat_directive_line(node, source, out)
                 return out
+            elif node.name == "encoding":
+                # Not through _eat_directive_line: it is the one
+                # directive that leaves the whitespace in front of it
+                # alone.
+                _encoding_directive(node, source)
             elif node.name == "attr":
                 _eat_directive_line(node, source, out)
                 methods.append(_attr_statement(node))
             elif node.name in ("import", "from"):
                 _eat_directive_line(node, source, out)
                 hoisted.append(_import_statement(node))
+            elif node.name in ("extends", "implements"):
+                # Already read by _class_shape, which settled the base
+                # list and the main method before any of this ran. What
+                # is left is the line they stand on, which they decide
+                # about like every other directive.
+                _eat_directive_line(node, source, out)
+            elif node.name == "include":
+                _include(node, source, out)
             else:
                 _eat_directive_line(node, source, out)
                 for made in _simple_directive(node):
                     out.append((STMT_PIECE, made))
+        elif node.kind == lex.PSP:
+            index = _psp(nodes, index - 1, source, hoisted, methods, out)
         elif node.kind == lex.EOL_SLURP:
             # It writes nothing and has already taken its line ending
             # with it. What is left is the indent before it.
             if _line_is_clear(source, node.tokens[0].start):
                 _drop_indent(out)
         else:
-            _piece(node, out)
+            _piece(node, source, out)
     return out
 
 
-def _piece(node: tree.Node, out: list[tuple[str, Any]]) -> None:
-    if node.kind in (lex.TEXT, lex.RAW):
+def _piece(node: tree.Node, source: str,
+           out: list[tuple[str, Any]]) -> None:
+    if node.kind == lex.TEXT:
         out.append((TEXT_PIECE, node.text()))
         return
+    if node.kind == lex.RAW:
+        # A raw body outside the block that owns it: lex.raw_end and
+        # _raw_block disagree about where the block stopped, and what
+        # is left over here is source ct3 parses. Written out as text
+        # it would put an unresolved placeholder in the output.
+        raise Unsupported("a #raw body the block does not cover")
     if node.kind == lex.ESCAPE:
         # "\$" stands for a dollar. What Cheetah writes is the
         # character behind the backslash, not both.
@@ -446,19 +1070,209 @@ def _piece(node: tree.Node, out: list[tuple[str, Any]]) -> None:
         return
     if node.kind == lex.PLACEHOLDER:
         token = node.tokens[0]
-        # A nested placeholder means the chain carries another lookup
-        # inside its arguments, and those are not read yet.
-        chunks = None if token.children else chunks_of(token.text)
-        if chunks is None:
-            raise Unsupported("placeholder %r" % token.text)
-        out.append((VALUE_PIECE, _expression(chunks)))
+        _refuse_a_short_token(token, source)
+        marked = lex.START.match(token.text)
+        if marked is not None and (marked.group("silent")
+                                   or marked.group("cache")):
+            _modified_placeholder(token, marked, out)
+            return
+        out.append((VALUE_PIECE, placeholder_source(token.text)))
         return
     raise Unsupported("no code for a %s node" % node.kind)
 
 
-def _eat_directive_line(node: tree.Node, source: str,
-                        out: list[tuple[str, Any]]) -> None:
-    """A directive writes nothing, and decides about its own line.
+def _refuse_a_short_token(token: lex.Token, source: str) -> None:
+    """Where ct3 reads further than the placeholder token reaches.
+
+    Two ways that happens, and neither leaves anything inside the token
+    to notice. lex._balanced gives up at a line ending inside a "[" or
+    a "{", so ``$a[\\n1]`` is the token ``$a`` while ct3 reads the
+    subscript and writes VFFSL(SL,"a",True)[1]. And ct3's chunk loop
+    carries on over a bare letter after a bracket, where the lexer
+    stops: ``$f(1)upper`` is one chain there, and a placeholder
+    followed by the text ``upper`` here.
+
+    The enclosure forms end where ct3 ends them, so they are left
+    alone: ``${f(1)}upper`` writes the same bytes either way.
+    """
+    marked = lex.START.match(token.text)
+    if marked is not None and marked.group("enclosure"):
+        return
+    following = source[token.end:token.end + 1]
+    if following in ("(", "[") or (
+            following in lex.IDENT_START and token.text.endswith((")", "]"))):
+        raise Unsupported("placeholder %r followed by %r"
+                          % (token.text, following))
+
+
+def _modified_placeholder(token: lex.Token, marked: re.Match[str],
+                          out: list[tuple[str, Any]]) -> None:
+    """A placeholder carrying a silence token, a cache token, or both.
+
+    ct3 reads them between the dollar and the name, the silence token
+    first and at most one of each, and turns each into a wrapper around
+    the two statements the placeholder would write anyway. The pieces
+    are statements and carry no text, so the whitespace rules stop at
+    them exactly as they do at a block.
+
+    The nesting order is ct3's and it is not free: addPlaceholder
+    starts the cache region, applies the silence inside it, and closes
+    the region last. Wrapped the other way round a NotFound escapes
+    before the region puts ``trans`` and ``write`` back, and everything
+    written after that lands in the dead collector. The corpus says so:
+    Placeholders.test20, ``$!aStr$!nonExistant$!*nonExistant$!{...}``,
+    renders empty instead of ``blarg``.
+    """
+    # Only the two tokens come off. marked.end() would be past the
+    # enclosure and the blanks behind it, and "$*( aStr   )" would be
+    # rebuilt as "$aStr   )", which costs 32 corpus cases.
+    body = _placeholder(
+        placeholder_source("$" + token.text[marked.end("cache"):]))
+    if marked.group("silent"):
+        body = [_silenced(body)]
+    if marked.group("cache"):
+        body = _cache_region(token, body, _interval(marked.group("cache")))
+    for statement in body:
+        out.append((STMT_PIECE, statement))
+
+
+def _silenced(body: list[ast.stmt]) -> ast.stmt:
+    """``$!x``: the placeholder's statements, and NotFound swallowed.
+
+    Both statements go inside the try, which is where ct3 puts them, so
+    a NotFound raised by the lookup and one raised by the filter or by
+    a called function are equally swallowed. NotFound exactly and not
+    LookupError: NotFound is a LookupError subclass, and ct3 lets a
+    plain KeyError out of user code.
+    """
+    made = _framed("try:\n    pass\nexcept NotFound:")
+    assert isinstance(made, ast.Try)
+    made.body = body
+    return made
+
+
+def _interval(cache: str) -> float | None:
+    """The seconds a ``$*5m*x`` cache token stands for, or None.
+
+    None where there is no interval at all, which is ``$*x``. ct3's
+    GenUtils.genTimeInterval: a trailing s, m, h, d or w scales the
+    number, and a bare number is minutes.
+
+    Raises:
+        Unsupported: where the number is not a float. ct3's regular
+            expression takes "$*1.2.3*x" and "$*.*x" and then dies at
+            compile time, and where ct3 does not compile this layer has
+            nothing to be faithful to.
+    """
+    inner = cache[1:-1]
+    if not inner:
+        return None
+    try:
+        if inner.endswith("s"):
+            return float(inner[:-1])
+        if inner.endswith("m"):
+            return float(inner[:-1]) * 60
+        if inner.endswith("h"):
+            return float(inner[:-1]) * 60 * 60
+        if inner.endswith("d"):
+            return float(inner[:-1]) * 60 * 60 * 24
+        if inner.endswith("w"):
+            return float(inner[:-1]) * 60 * 60 * 24 * 7
+        return float(inner) * 60
+    except ValueError:
+        raise Unsupported("cache interval %r" % inner) from None
+
+
+# The cache region ct3 wraps a cached placeholder in, read off
+# Compiler.startCacheRegion and endCacheRegion. Everything written
+# while the placeholder runs is collected into a throwaway transaction
+# and stored on the region's cache item; on every later evaluation of
+# the same region on the same instance the stored text is written and
+# the placeholder is not evaluated again. That is the only place the
+# cache is observable, and the corpus never gets there: a loop over a
+# cached counter is what tells the two apart.
+#
+# Parsed rather than assembled, and the placeholder's own statements go
+# where the lone "pass" stands, the way a method body goes into the
+# prologue.
+CACHE_REGION = """\
+_ct4_recache%(id)s = False
+_ct4_region%(id)s = self.getCacheRegion(regionID=%(region)r,
+                                        cacheInfo=%(info)r)
+if _ct4_region%(id)s.isNew():
+    _ct4_recache%(id)s = True
+_ct4_item%(id)s = _ct4_region%(id)s.getCacheItem(%(region)r)
+if _ct4_item%(id)s.hasExpired():
+    _ct4_recache%(id)s = True
+if (not _ct4_recache%(id)s) and _ct4_item%(id)s.getRefreshTime():
+    try:
+        _ct4_output%(id)s = _ct4_item%(id)s.renderOutput()
+    except KeyError:
+        _ct4_recache%(id)s = True
+    else:
+        write(_ct4_output%(id)s)
+        del _ct4_output%(id)s
+if _ct4_recache%(id)s or not _ct4_item%(id)s.getRefreshTime():
+    _ct4_orig_trans%(id)s = trans
+    trans = _ct4_collector%(id)s = DummyTransaction()
+    write = _ct4_collector%(id)s.response().write
+%(expiry)s    pass
+    trans = _ct4_orig_trans%(id)s
+    write = trans.response().write
+    _ct4_data%(id)s = _ct4_collector%(id)s.response().getvalue()
+    _ct4_item%(id)s.setData(_ct4_data%(id)s)
+    write(_ct4_data%(id)s)
+    del _ct4_data%(id)s
+    del _ct4_collector%(id)s
+    del _ct4_orig_trans%(id)s
+"""
+
+# ct3's STATIC_CACHE and REFRESH_CACHE. getCacheRegion never reads the
+# cacheInfo it is handed, but a template may be given a cacheRegionClass
+# of its own, so it is passed on as ct3 builds it.
+STATIC_CACHE = 1
+REFRESH_CACHE = 2
+
+
+def _cache_region(token: lex.Token, body: list[ast.stmt],
+                  interval: float | None) -> list[ast.stmt]:
+    """``$*x``: the placeholder's statements inside a cache region.
+
+    Every cache token in a module needs a region of its own, because
+    the regions are kept per instance under their ID. ct3 draws a fresh
+    random one for each; naming it after where the placeholder stands
+    keeps them apart just as well and gives the same code twice over.
+    Two of them sharing an ID would share a cache item, and the second
+    would write the first one's text.
+    """
+    identifier = "_%d_%d" % (token.line, token.column)
+    # ct3 builds the ID this way, quotes stripped off a repr, and it
+    # keeps the modifiers on: cacheInfo['ID'] = repr(rawPlaceholder)[1:-1].
+    info: dict[str, Any] = {"type": STATIC_CACHE}
+    if interval is not None:
+        info = {"type": REFRESH_CACHE, "interval": interval}
+    info["ID"] = repr(token.text)[1:-1]
+    expiry = ""
+    if interval:
+        # ct3 guards the line with a plain "if interval:", so an
+        # interval of 0 emits nothing at all and the item never
+        # expires. "$*0*x" behaves exactly like "$*x".
+        expiry = ("    _ct4_item%s.setExpiryTime(currentTime() + %r)\n"
+                  % (identifier, interval))
+    made = ast.parse(CACHE_REGION % {
+        "id": identifier, "region": "_ct4_cache" + identifier,
+        "info": info, "expiry": expiry}).body
+    branch = made[-1]
+    assert isinstance(branch, ast.If)
+    at = [i for i, statement in enumerate(branch.body)
+          if isinstance(statement, ast.Pass)][0]
+    branch.body[at:at + 1] = body
+    return made
+
+
+def _directive_line_ending(node: tree.Node, source: str,
+                           out: list[tuple[str, Any]]) -> str:
+    """A directive decides about its own line. Returns what it kept.
 
     Two conditions, both ct3's, and the second is easy to miss.
     _eatRestOfDirectiveTag removes the whitespace before a directive
@@ -467,19 +1281,608 @@ def _eat_directive_line(node: tree.Node, source: str,
     ends at the hash in the middle of the line, so the two spaces stay
     and a corpus case says so.
 
+    A third condition sits on top of them and does not read like one:
+    a "##" comment on the tag's own line can keep the indent alive.
+    _eatRestOfDirectiveTag eats that comment first, and most comments
+    reach addChunk, which commits the pending text before
+    handleWSBeforeDirective ever gets to truncate it. So the indent of
+    ``  #if 1 ## note`` survives while the indent of ``  #if 1``
+    does not. The line ending is gobbled either way.
+
     The line ending is inside the directive's own tokens where it took
-    one, so keeping it means writing it out again.
+    one, so keeping it means writing it out again. It is returned
+    rather than written, because a directive that writes something has
+    to put its own output in front of it: ct3 adds the chunk and only
+    then commits the text that follows.
     """
     own = "".join(t.text for t in node.tokens)
     ending = _trailing_eol(own)
     past_its_line = bool(ending) or node.tokens[-1].end >= len(source)
     if _line_is_clear(source, node.tokens[0].start):
-        if past_its_line:
+        if past_its_line and not _tag_comment_commits(node):
             _drop_indent(out)
-        return
+        return ""
+    return ending
+
+
+# The comment forms addComment returns from without writing a chunk: a
+# bar comment, the "name@" special variable, and the five docstring and
+# header forms. Everything else reaches addMethComment.
+DOC_COMMENTS = ("doc:", "doc-method:", "doc-module:", "doc-class:",
+                "header:")
+BAR_COMMENT = re.compile(r"#+$")
+
+
+def _tag_comment_commits(node: tree.Node) -> bool:
+    """Whether a comment on the tag's line flushes the pending text.
+
+    Read off Compiler.addComment. What it writes is a Python comment
+    inside the generated method, which is nothing at all in the output
+    -- but it goes through addChunk, and addChunk commits the string
+    constant that was still pending. That is the whole effect: the
+    whitespace before the directive is already written out by the time
+    handleWSBeforeDirective would have removed it.
+    """
+    return any(token.kind == lex.COMMENT and _comment_commits(token.text)
+               for token in node.tokens)
+
+
+def _comment_commits(text: str) -> bool:
+    """Whether ct3's addComment turns one comment into a chunk."""
+    from Cheetah.Parser import specialVarRE
+
+    # Past the "##", and without the line ending readToEOL leaves off.
+    text = text[2:]
+    text = text[:len(text) - len(_trailing_eol(text))]
+    if not text.splitlines():
+        # "for line in comm.splitlines()" never runs for an empty one.
+        return False
+    if BAR_COMMENT.match(text) or specialVarRE.match(text):
+        return False
+    return not text.startswith(DOC_COMMENTS)
+
+
+def _encoding_directive(node: tree.Node, source: str) -> None:
+    """``#encoding``: nothing written, and the rest of its line eaten.
+
+    The odd one out. eatEncoding (Cheetah/Parser.py) calls
+    readToEOL(gobble=True) and neither _eatRestOfDirectiveTag nor
+    handleWSBeforeDirective, so unlike every other directive it leaves
+    what stands in front of it on the line alone: ct3 renders
+    ``  #encoding utf-8\\n1234`` as ``  1234`` and
+    ``x #encoding utf-8\\ny`` as ``x y``. No corpus case has one
+    anywhere but at the start of a line.
+
+    Which codec it names has already been settled by _preprocess,
+    which reads it off the source with ct3's own regular expression and
+    not off this node. The two disagree: for
+    ``#encoding utf-8 junk here`` the directive carries the whole
+    string while the expression does not match at all, and ct3 then
+    does no preprocessing. Nothing else reaches the generated module
+    either, because setModuleEncoding only stores the name and nothing
+    ever reads it.
+
+    Raises:
+        Unsupported: where the directive's tokens stop before a line
+            ending. readToEOL always reaches one; the lexer stops a
+            directive's arguments at a bare hash, so the ending of
+            ``#encoding utf-8#\\n1234`` is left behind as text and
+            writing it out would put a blank line in the output.
+    """
+    own = "".join(t.text for t in node.tokens)
+    if not _trailing_eol(own) and node.tokens[-1].end < len(source):
+        raise Unsupported("a #encoding that stops before its line ends")
+
+
+def _eat_directive_line(node: tree.Node, source: str,
+                        out: list[tuple[str, Any]]) -> None:
+    """A directive that writes nothing, and its own line with it."""
+    ending = _directive_line_ending(node, source, out)
     if ending:
         out.append((TEXT_PIECE, ending))
 
+
+# -- PSP -------------------------------------------------------------
+#
+# A second block structure over the same source, and ct3 runs it
+# through the same indentation counter as the directives: addPSP
+# (Cheetah/Compiler.py line 811) writes the body out one source line at
+# a time and calls indent() or dedent() itself. What an ast can express
+# of that is an opener and its <%end%> standing among the same
+# siblings; the shapes that cross a directive block are refused.
+#
+# Nothing here touches the whitespace. eatPSP (Cheetah/Parser.py line
+# 1635) calls neither handleWSBeforeDirective nor
+# _eatRestOfDirectiveTag, so the indent in front of a PSP and the line
+# ending behind it are ordinary text: ct3 renders "a\n   <%= 1 %>\nb"
+# as "a\n   1\nb".
+
+# The name put where the body of a block goes, so that Python's own
+# parser decides what the header opened: "for i in x:" with an indented
+# marker under it parses to a For whose body is the marker, and
+# "if 1:\n    pass\nelse:" to an If whose orelse is. ct3 indents by
+# four spaces (Compiler.indentationStep), so a body whose own
+# continuation lines are indented by anything else fails to parse here
+# exactly as it fails to compile there.
+PSP_MARKER = "__ct4_psp_body__"
+
+# The four arms of addPSP, in the order it tests them.
+PSP_VALUE = "value"
+PSP_END = "end"
+PSP_OPEN = "open"
+PSP_STATEMENTS = "statements"
+
+
+def _psp_body(node: tree.Node) -> str:
+    """What stands between the two PSP tokens, stripped.
+
+    Raises:
+        Unsupported: where the token does not close, which is a
+            ParseError in ct3, and where nothing is left after the
+            strip, where addPSP subscripts an empty string and dies of
+            an IndexError.
+    """
+    text = node.tokens[0].text
+    if len(text) < 4 or not text.startswith("<%") or not text.endswith("%>"):
+        raise Unsupported("a PSP that does not close")
+    body = text[2:-2].strip()
+    if not body:
+        raise Unsupported("an empty PSP")
+    return body
+
+
+def _psp_kind(body: str) -> str:
+    """Which arm of addPSP a body takes."""
+    if body[0] == "=":
+        return PSP_VALUE
+    if body.lower() == "end":
+        # Case and blanks do not matter, and nothing else in the token
+        # is looked at.
+        return PSP_END
+    if body[-1] in ":$":
+        return PSP_OPEN
+    return PSP_STATEMENTS
+
+
+def _psp(nodes: Sequence[tree.Node], at: int, source: str,
+         hoisted: list[ast.stmt], methods: list[ast.stmt],
+         out: list[tuple[str, Any]]) -> int:
+    """One PSP, and the block it opens where it opens one.
+
+    Returns the index just past what was taken, which for a block is
+    everything up to and including its ``<%end%>``.
+
+    A PSP body is raw Python and is spliced as it stands: a dollar in
+    it is no placeholder, and the six names it is likely to reach for
+    -- write, _filter, SL, trans, _dummyTrans and self -- are bound by
+    this layer's prologue under ct3's own spelling. The names only
+    ct3's generated module carries are refused by
+    _refuse_preamble_names once the module is built.
+    """
+    body = _psp_body(nodes[at])
+    kind = _psp_kind(body)
+    if kind == PSP_OPEN:
+        return _psp_block(nodes, at, body, source, hoisted, methods, out)
+    if kind == PSP_END:
+        raise Unsupported("a PSP end token that closes nothing")
+    if kind == PSP_VALUE:
+        made = _psp_write(body[1:].strip())
+    else:
+        made = _psp_statements(body)
+    # Never nothing at all. addPSP commits the pending text before it
+    # looks at the body, so whatever a "<%=%>" or a body that is all
+    # comment writes -- which is nothing -- the whitespace in front of
+    # it can no longer be reached backwards into.
+    for statement in made or [ast.Pass()]:
+        out.append((STMT_PIECE, statement))
+    return at + 1
+
+
+def _psp_write(expression: str) -> list[ast.stmt]:
+    """``<%= x %>``: the value written through the filter.
+
+    One statement and not the two a placeholder gets: addPSP writes
+    ``write(_filter(x))`` with no ``_v`` and no ``is not None`` guard.
+    The two agree under the default filter, where None renders empty,
+    and part company under one that renders it as something.
+
+    The expression is stripped first. addPSP takes only the ``=`` off,
+    so the blank ct3 leaves behind sits harmlessly inside the call
+    brackets where ast.parse would call it an indent.
+    """
+    if not expression:
+        return []
+    return [_write(ast.Call(func=ast.Name(id=FILTER, ctx=ast.Load()),
+                            args=[_parsed(expression)], keywords=[]))]
+
+
+def _psp_statements(text: str) -> list[ast.stmt]:
+    """A run of Python out of a PSP body, as statements.
+
+    Refused where indenting it changes what it means, because that is
+    what ct3 does to it: addPSP walks PSP.splitlines() and addChunk
+    puts the method's indentation in front of every one, so a line
+    ending inside a string literal silently gains eight spaces.
+    ``<% x = \"\"\"a\\nb\"\"\"\\nwrite(x) %>`` renders ``a\\n        b``
+    there. An ast splice cannot reproduce that, so the body is turned
+    away rather than rendered without the spaces.
+
+    Raises:
+        Unsupported: where the body is not Python, or is Python that
+            reads differently once indented.
+    """
+    try:
+        parsed = ast.parse(text)
+        indented = ast.parse("if True:\n" + "\n".join(
+            "    " + line for line in text.splitlines()))
+    except SyntaxError as error:
+        raise Unsupported("cannot read a PSP body: %s" % error) from None
+    branch = indented.body[0]
+    assert isinstance(branch, ast.If)
+    if [ast.dump(one) for one in parsed.body] \
+            != [ast.dump(one) for one in branch.body]:
+        raise Unsupported("a PSP body the indentation would change")
+    return parsed.body
+
+
+def _psp_block(nodes: Sequence[tree.Node], at: int, body: str, source: str,
+               hoisted: list[ast.stmt], methods: list[ast.stmt],
+               out: list[tuple[str, Any]]) -> int:
+    """A PSP body that ends in ``:`` or ``$``, and what it encloses.
+
+    The ``$`` is a marker and comes off; a ``:`` is Python and stays.
+    Everything the header parses to above the block stands where the
+    PSP stands, which is what ct3's line-by-line write does with a body
+    like ``x = 1\\nif x:``.
+    """
+    if body[-1] == "$":
+        body = body[:-1]
+    closer = _psp_closer(nodes, at)
+    made = _psp_statements(body + "\n    " + PSP_MARKER)
+    inner = _statements(_pieces_of(nodes[at + 1:closer], source,
+                                   hoisted, methods))
+    if not inner:
+        # ct3 writes the header, then dedents on the <%end%>, and a
+        # header with nothing under it does not compile.
+        raise Unsupported("a PSP block with no body")
+    if not _fill_marker(made, inner):
+        raise Unsupported("a PSP body that opens no block")
+    for statement in made:
+        out.append((STMT_PIECE, statement))
+    return closer + 1
+
+
+def _psp_closer(nodes: Sequence[tree.Node], at: int) -> int:
+    """Where the ``<%end%>`` closing the PSP at ``at`` stands.
+
+    Among the siblings and nowhere else. ct3 shares one indentation
+    counter between the directives and PSP, so an opener inside an #if
+    can be closed by an <%end%> outside it, and what that nests is
+    something no ast can hold: ``#if 1\\n<% if 1:%>\\n#end if\\nx<%end%>``
+    renders ``\\nx`` there, with the write inside the #if and outside
+    the PSP's if. Refused rather than read as either.
+
+    Raises:
+        Unsupported: where no sibling closes it.
+    """
+    depth = 0
+    for index in range(at + 1, len(nodes)):
+        node = nodes[index]
+        if node.kind != lex.PSP:
+            continue
+        kind = _psp_kind(_psp_body(node))
+        if kind == PSP_OPEN:
+            depth += 1
+        elif kind == PSP_END:
+            if not depth:
+                return index
+            depth -= 1
+    raise Unsupported("a PSP block no sibling closes")
+
+
+def _is_marker(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Expr) and isinstance(node.value, ast.Name)
+            and node.value.id == PSP_MARKER)
+
+
+def _fill_marker(statements: list[ast.stmt], body: list[ast.stmt]) -> bool:
+    """Puts the block's statements where the marker stands.
+
+    Returns whether it found one. The parse cannot hold two, because
+    only one was written.
+    """
+    for statement in statements:
+        for node in ast.walk(statement):
+            for _, value in ast.iter_fields(node):
+                if not isinstance(value, list):
+                    continue
+                for index, item in enumerate(value):
+                    if _is_marker(item):
+                        value[index:index + 1] = body
+                        return True
+    return False
+
+
+# -- #raw ------------------------------------------------------------
+#
+# Everything below is measured off the source and not off the tree,
+# because every rule in ct3's eatRaw is about absolute offsets: which
+# line the tag started on, where that line ends, and how far the tag
+# ran past it. The tree keeps none of that. What the tree is used for
+# is the check at the end: where this stops at an offset other than the
+# one the tree handed over, the two read the template differently, and
+# then it is refused rather than guessed at.
+
+# ct3's WSchars. A line ending is not whitespace to getWhiteSpace.
+BLANKS = " \f\t"
+
+# What a tag can leave behind of its own line: one line ending, in any
+# of the three spellings, or nothing at all.
+ENDINGS = ("\r\n", "\n", "\r", "")
+
+
+def _find_eol(source: str, at: int) -> int:
+    """findEOL: the first line ending at or after here, or the end."""
+    match = lex.EOL.search(source, at)
+    return match.start() if match else len(source)
+
+
+def _find_bol(source: str, at: int) -> int:
+    """findBOL: just past the last line ending before here."""
+    return max(source.rfind("\n", 0, at) + 1,
+               source.rfind("\r", 0, at) + 1, 0)
+
+
+def _skip_blanks(source: str, at: int, limit: int | None = None) -> int:
+    """getWhiteSpace, as an offset rather than the text it read."""
+    stop = len(source) if limit is None else min(len(source), at + limit)
+    while at < stop and source[at] in BLANKS:
+        at += 1
+    return at
+
+
+def _directive_at(source: str, at: int, names: frozenset[str]) -> str | None:
+    """matchDirective: the directive starting here, by name, or None.
+
+    Two conditions besides the name, both from the regular expressions
+    _makeDirectiveREs builds. A backslash in front of the hash escapes
+    it, which is why ``\\#end raw`` does not close a raw block; and a
+    letter, an underscore or an ``@`` has to follow it.
+    """
+    if at and source[at - 1] == "\\":
+        return None
+    if source[at:at + 1] != "#":
+        return None
+    if source[at + 1:at + 2] not in lex.IDENT_START and \
+            source[at + 1:at + 2] != "@":
+        return None
+    return lex._directive_name(source, at + 1, names)
+
+
+def _raw_colon(source: str, at: int) -> tuple[int, bool]:
+    """Where the ``#raw`` tag's name and blanks end, and which form it is.
+
+    matchColonForSingleLineShortFormDirective decides the second part,
+    and the whole rest of the line is what it looks at, not the rest of
+    the directive: ``#raw: x#`` is a short form whose body is ``x#``.
+    Nothing there at all, or a comment, means the block form.
+
+    Raises:
+        Unsupported: where nothing but blanks follows. ct3 peeks past
+            the end of the source there and dies with an IndexError,
+            so there is no output to be faithful to.
+    """
+    p = _skip_blanks(source, at + len("#raw"))
+    if p >= len(source):
+        raise Unsupported("#raw at the end of the template")
+    if source[p] != ":":
+        return p, False
+    rest = source[p + 1:_find_eol(source, at)].strip()
+    return p, bool(rest) and not rest.startswith("##")
+
+
+def _raw_block(node: tree.Node, source: str,
+               out: list[tuple[str, Any]]) -> None:
+    """``#raw``: its body written out with nothing done to it.
+
+    ct3's eatRaw, with _eatRestOfDirectiveTag and _eatToThisEndDirective
+    behind it. The body reaches addRawText, which is addStrConst, so
+    unlike ordinary text it is not unescaped: ``\\$x`` inside a raw
+    block keeps its backslash, and a corpus case (RawDirective.test6)
+    says so. No filter runs over it and no placeholder in it resolves.
+
+    What is difficult is the whitespace, and both tags do their own.
+    The opening tag decides whether it eats its own line ending and
+    whether the indent before it goes; the closing tag decides the same
+    again, and its drop reaches back into the text that stood before
+    the ``#raw``.
+    """
+    names = lex.directive_names()
+    at = node.tokens[0].start
+    clear = _line_is_clear(source, at)
+    eol1 = _find_eol(source, at)
+    # getDirectiveStartToken, past the name, then blanks.
+    p, short = _raw_colon(source, at)
+
+    if short:
+        # The short form does none of the block form's whitespace work.
+        # The indent before it is written out, the line ending after it
+        # stays behind, and exactly one blank behind the colon is eaten.
+        p = _skip_blanks(source, p + 1, limit=1)
+        body = source[p:eol1]
+        p = eol1
+    else:
+        if source[p] == ":":
+            p += 1
+        p = _skip_blanks(source, p)
+        p = _raw_tag_end(source, p, clear, eol1, out)
+        body, p = _raw_body(source, p, names, out)
+    trailing = _check_raw_span(node, source, p)
+    out.append((RAW_PIECE, body))
+    if trailing:
+        # A line ending the block covers and ct3 did not eat. Written
+        # out here as the ordinary text ct3 parses it as.
+        out.append((TEXT_PIECE, trailing))
+
+
+def _raw_tag_end(source: str, p: int, clear: bool, eol1: int,
+                 out: list[tuple[str, Any]]) -> int:
+    """_eatRestOfDirectiveTag, for the opening tag of a raw block.
+
+    The body starts wherever this leaves the cursor, so whatever else
+    stands on the ``#raw`` line becomes body: ``#raw foo`` writes
+    ``foo``, and there is no such thing as an argument to #raw.
+    """
+    if source.startswith("##", p):
+        # Two readings, and which one it is depends on whether a
+        # directive name follows the two hashes. The comment reading
+        # also commits the pending text, which changes what a later
+        # drop finds. Neither shape is in the corpus.
+        raise Unsupported("a ## on the #raw line")
+    if source[p:p + 1] == "#":
+        # The directive end token. The tag stops here, so the line
+        # ending behind it stays and becomes output text.
+        p += 1
+    elif clear and p < len(source) and source[p] in "\r\n":
+        match = lex.EOL.match(source, p)
+        assert match is not None
+        p = match.end()
+    # Both conditions, and the second is the one to miss: a tag that
+    # stopped at a hash before its own line ending keeps its indent.
+    # RawDirective.test3 and test4 are the same template with and
+    # without that hash, and they pin it from both sides.
+    if clear and (p >= len(source) or p > eol1):
+        _drop_line_start(out)
+    return p
+
+
+def _raw_body(source: str, start: int, names: frozenset[str],
+              out: list[tuple[str, Any]]) -> tuple[str, int]:
+    """_eatToThisEndDirective: the body, and where parsing goes on.
+
+    The scan walks one character at a time looking for an ``#end``
+    whose whitespace is followed by ``raw``. That is a prefix test and
+    not a word test, so ``#end rawX`` closes the block and leaves ``X``
+    as text. Where nothing closes it the body runs to the end.
+    """
+    p = start
+    body_end = start
+    end_clear = False
+    closed = False
+    while p < len(source):
+        if source[p] == "#" and _directive_at(source, p, names) == "end":
+            hash_at = p
+            after = _skip_blanks(source, p + len("#end"))
+            if source.startswith("raw", after):
+                if _line_is_clear(source, hash_at):
+                    # The indent of the #end raw line is not body.
+                    end_clear = True
+                    body_end = _find_bol(source, hash_at)
+                else:
+                    body_end = hash_at
+                p = _skip_blanks(source, after + len("raw"))
+                closed = True
+                break
+            if after >= len(source):
+                # ct3 advances past the end of the stream and raises.
+                raise Unsupported("#end at the end of a #raw body")
+            # The scan goes on from behind the whitespace, so a hash
+            # inside what was skipped is never looked at again.
+            p = after + 1
+            body_end = p
+            continue
+        p += 1
+        body_end = p
+    body = source[start:body_end]
+    if not closed:
+        return body, p
+
+    eol2 = _find_eol(source, p)
+    if source.startswith("##", p):
+        # The tag eats one hash and what is left is a comment, or the
+        # EOL slurp token, or the start of a directive. Refused.
+        raise Unsupported("a ## behind #end raw")
+    if source[p:p + 1] == "#":
+        if _directive_at(source, p, names) is not None:
+            # ct3 eats it as the directive end token and reads the rest
+            # of the line as text; this layer's lexer sees a directive
+            # and builds a block out of it.
+            raise Unsupported("a directive behind #end raw")
+        p += 1
+    elif end_clear and p < len(source) and source[p] in "\r\n":
+        match = lex.EOL.match(source, p)
+        assert match is not None
+        p = match.end()
+    if end_clear and p > eol2:
+        # Reaches back onto the #raw line, because the body is not
+        # pending yet: addRawText comes after both drops.
+        _drop_line_start(out)
+    return body, p
+
+
+def _check_raw_span(node: tree.Node, source: str, p: int) -> str:
+    """Refuses where the tree read the raw block differently.
+
+    The catch-all for the lexer's raw_end, which finds ``#end raw`` as
+    a literal string: it misses ``#end   raw``, it accepts an escaped
+    ``\\#end raw``, and it knows nothing of the rescan rule. Every one
+    of those ends up as a disagreement about where the block stops, and
+    a disagreement is a refusal.
+
+    One line ending of slack, in both directions. Where a tag did not
+    eat its own line ending the tree still puts it inside the block:
+    tree._close_short pulls it in for the short form, and
+    _take_arguments for the ``#end raw`` tag of the block form. What
+    the block covers beyond where ct3 stopped is returned so the caller
+    can write it out.
+    """
+    end = node.tokens[0].start + len(node.text())
+    if end < p or source[p:end] not in ENDINGS:
+        # By line, not by offset. Whoever reads this is holding the
+        # template and comparing the two readers, and an offset into
+        # the whole source is a lookup they have to do by hand.
+        starts = lex.line_starts(source)
+        raise Unsupported(
+            "#raw: this layer ends the block on line %d, the tree on "
+            "line %d" % (lex.where(starts, p)[0],
+                         lex.where(starts, min(end, len(source)))[0]))
+    return source[p:end]
+
+
+def _refuse_raw_in_short_form(source: str, root: tree.Node) -> None:
+    """Turns away the block form of #raw inside a colon short form.
+
+    ct3 parses the body of every colon short form with
+    ``breakPoint=findEOL()``, and atEnd is measured against that break
+    point and not against the end of the source. An unterminated
+    ``#raw`` inside one therefore stops at the end of the host's line:
+    ``#def f: #raw q\\n$f`` gives f the body ``q`` and renders ``q``,
+    where reading to the end of the source would put the whole rest of
+    the file inside f. The tree reads it the same wrong way, so the
+    span check above cannot be the guard here.
+
+    Only the block form. The short form reads to its own line ending,
+    which is exactly where the host stops as well, so the two break
+    points cannot tell it apart.
+    """
+    def walk(node: tree.Node, inside: bool) -> None:
+        for child in node.children:
+            deeper = inside
+            if child.kind == tree.BLOCK:
+                if child.name == "raw":
+                    if inside and not _raw_colon(source,
+                                                 child.tokens[0].start)[1]:
+                        raise Unsupported(
+                            "the block form of #raw inside a short form")
+                elif not any(part.kind == lex.DIRECTIVE
+                             and part.name == "end"
+                             for part in child.children):
+                    # Nothing closes it, so it is the colon short form
+                    # and its body ends with the line it stands on.
+                    deeper = True
+            walk(child, deeper)
+
+    walk(root, False)
 
 
 def _import_statement(node: tree.Node) -> ast.stmt:
@@ -497,6 +1900,375 @@ def _import_statement(node: tree.Node) -> ast.stmt:
     if not isinstance(made, (ast.Import, ast.ImportFrom)):
         raise Unsupported("#%s that is not an import" % node.name)
     return made
+
+
+# -- #include, #extends and #implements ------------------------------
+#
+# The three that say what the generated class is rather than what it
+# writes. #include is one runtime call and nothing else; #extends and
+# #implements write nothing at all and instead settle the base list,
+# the main method's name and its arguments.
+
+# What ct3 renames the main method to as soon as a template extends
+# something: setting 'mainMethodNameForSubclasses', Cheetah/Compiler.py
+# line 92, applied by setBaseClass at line 1936.
+MAIN_FOR_SUBCLASS = "writeBody"
+
+# The names ModuleCompiler puts in _importedVarNames before it parses
+# anything (Cheetah/Compiler.py line 1861). #extends consults that set
+# to decide whether it has to synthesise an import, so these eleven
+# change what it does: "#extends Template" adds no import at all, and
+# "#extends os.path.Thing" stops its walk on the first chunk.
+CT3_IMPORTED = ("sys", "os", "os.path", "time", "types", "Template",
+                "DummyTransaction", "NotFound", "Filters",
+                "ErrorCatchers", "CacheRegion")
+
+# What getCommaSeparatedSymbols (Cheetah/Parser.py line 643) will read
+# whole. It skips blanks and tabs but not form feeds, takes a dot only
+# where an identifier character follows it, and breaks on anything
+# else without consuming it. A break leaves the rest of the line to be
+# written out as text, so anything that does not match end to end has
+# to be refused rather than read.
+SYMBOLS = re.compile(
+    r"^[ \f\t]*" + NAME + r"(?:[ \t]*\." + NAME + r")*"
+    r"(?:[ \t]*,[ \t]*" + NAME + r"(?:[ \t]*\." + NAME + r")*)*[ \t]*$")
+
+# ``#implements name`` and ``#implements name(args)``. ct3 reads the
+# name with getIdentifier and looks for the bracket at once, with no
+# whitespace between, and throws away whatever follows the arguments.
+# Here that trailing text is refused instead of dropped.
+IMPLEMENTS = re.compile(
+    r"^[ \f\t]*(?P<name>" + NAME + r")(?:\((?P<params>.*)\))?[ \f\t]*$",
+    re.S)
+
+
+@dataclass(frozen=True)
+class _ClassShape:
+    """What #extends and #implements make of the generated class."""
+
+    bases: list[str]
+    main: str
+    arguments: str
+    imports: list[ast.stmt]
+
+
+def _class_shape(root: tree.Node) -> _ClassShape:
+    """The base list, the main method and the imports #extends needs.
+
+    ct3 has no such pass: eatExtends and eatImplements call the
+    compiler as the single forward parse reaches them. Two things
+    follow from that and both are load-bearing. The last of the two in
+    source order decides the main method's name, because both call
+    setMainMethodName; and the arguments an #implements added survive a
+    later #extends, because setBaseClass renames the method compiler
+    that is already there instead of making a new one
+    (Cheetah/Compiler.py lines 1435 and 1936).
+    """
+    _refuse_nested_class_directives(root)
+    bases = ["Template"]
+    main = MAIN
+    arguments = ""
+    imports: list[ast.stmt] = []
+    known = list(CT3_IMPORTED)
+    for node in root.children:
+        if node.kind != lex.DIRECTIVE:
+            continue
+        if node.name in ("import", "from"):
+            known.extend(_ct3_imported_names(node))
+        elif node.name == "extends":
+            bases = _extends_bases(node, imports, known)
+            main = MAIN_FOR_SUBCLASS
+        elif node.name == "implements":
+            main, added = _implements(node)
+            arguments += added
+    return _ClassShape(bases, main, arguments, imports)
+
+
+def _refuse_nested_class_directives(root: tree.Node) -> None:
+    """#extends or #implements anywhere but the top level.
+
+    ct3 applies them to the whole class wherever they stand. This layer
+    reads them off the top-level nodes, so one inside a block would be
+    quietly ignored and the class would come out with the wrong base or
+    the wrong main method. Compared by identity, because a Node is a
+    plain dataclass.
+    """
+    top = {id(child) for child in root.children}
+    stack = list(root.children)
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.name in ("extends", "implements") and id(node) not in top:
+            raise Unsupported("#%s inside a block" % node.name)
+
+
+def _ct3_imported_names(node: tree.Node) -> list[str]:
+    """The names an #import or #from binds, as ct3 counts them.
+
+    addImportStatement (Cheetah/Compiler.py line 2056) cuts the
+    statement at the first ``import`` in it and takes the last word of
+    every comma-separated piece behind it, so ``#import a.b.c`` binds
+    the whole dotted name and ``#from x import y as z`` binds ``z``.
+    The names only ever feed the #extends auto-import, and they are
+    read the way that code reads them rather than the way Python binds
+    them.
+    """
+    # The same text _import_statement builds, so the two cannot
+    # disagree about what the statement is; that it is a real import
+    # is checked there.
+    arguments = "".join(t.text for t in node.tokens[1:])
+    statement = "%s %s" % (node.name, arguments.strip())
+    tail = statement[statement.find("import") + len("import"):]
+    names = []
+    for piece in tail.split(","):
+        words = piece.split()
+        if words and words[-1] != "*":
+            names.append(words[-1])
+    return names
+
+
+def _extends_bases(node: tree.Node, imports: list[ast.stmt],
+                   known: list[str]) -> list[str]:
+    """``#extends A.B, C`` as a base list, with the imports it implies.
+
+    ModuleCompiler.setBaseClass (Cheetah/Compiler.py line 1945) is
+    copied here step for step, the ``final != chunks[-2]`` correction
+    included: without it ``#extends Cheetah.Templates.SkeletonPage``
+    imports the module instead of the class and the class statement
+    raises a TypeError. Every name it imports is added to the set it
+    consults, so a second #extends of the same name adds nothing.
+
+    Appends to ``imports`` and ``known``, and returns the bases.
+    """
+    text = _class_directive_argument(node, "extends")
+    if SYMBOLS.match(text) is None:
+        raise Unsupported("#extends %r" % text.strip()[:40])
+    # getCommaSeparatedSymbols drops every blank and tab it walks over,
+    # so "A .B" is one name and "A B" would be the single name "AB".
+    names = re.sub(r"[ \f\t]", "", text).split(",")
+    if ", ".join(names) == "object" or ", ".join(names) in known:
+        # The whole argument, not one name of it: ct3 asks this
+        # question of the string it rejoined.
+        return names
+    bases = []
+    for klass in names:
+        chunks = klass.split(".")
+        if len(chunks) == 1:
+            bases.append(klass)
+            if klass not in known:
+                imports.append(_framed_statement("from %s import %s"
+                                                 % (klass, klass)))
+                known.append(klass)
+            continue
+        needed = True
+        module = chunks[0]
+        for chunk in chunks[1:-1]:
+            if module in known:
+                needed = False
+                bases.append(klass.replace(module + ".", ""))
+                break
+            module += "." + chunk
+        if needed:
+            module, final = ".".join(chunks[:-1]), chunks[-1]
+            if final != chunks[-2]:
+                # ct3 assumes the last chunk names the class and the
+                # one before it the module; where they are the same
+                # word the whole name is the module instead.
+                module = ".".join(chunks)
+            bases.append(final)
+            imports.append(_framed_statement("from %s import %s"
+                                             % (module, final)))
+            known.append(final)
+    return bases
+
+
+def _implements(node: tree.Node) -> tuple[str, str]:
+    """``#implements name(args)``: the main method's name and arguments.
+
+    ct3 drops an explicit ``self`` from the list (Cheetah/Parser.py
+    eatImplements line 2195) and appends the rest to whatever the
+    method already has. What it writes is
+    ``def respond(self, foo=1234, trans=None)`` where this layer's
+    prologue writes ``**KWS`` in place of the transaction; the two
+    render the same.
+    """
+    text = _class_directive_argument(node, "implements")
+    match = IMPLEMENTS.match(text)
+    if match is None:
+        raise Unsupported("#implements %r" % text.strip()[:40])
+    return match.group("name"), _implements_parameters(match.group("params"))
+
+
+def _implements_parameters(text: str | None) -> str:
+    """An #implements argument list as Python, ready for the frame."""
+    if text is None or not text.strip():
+        return ""
+    if "$" in text:
+        # getDefArgList reads a name and a default value, and neither
+        # is a placeholder there.
+        raise Unsupported("a placeholder in an #implements argument list")
+    parts = _split_arguments(text)
+    if parts and parts[0].partition("=")[0].strip() == "self":
+        del parts[0]
+    if not parts:
+        return ""
+    return ", ".join(part.strip() for part in parts) + ", "
+
+
+def _class_directive_argument(node: tree.Node, name: str) -> str:
+    """The first line of what #extends or #implements was given.
+
+    Cut on a bare ``\\r`` as well as on a newline: the MacEOL corpus
+    variants put the line ending inside the directive's own text token,
+    and it is not part of the argument either way. A comment is turned
+    away rather than skipped, because it changes what happens to the
+    line: addComment commits the pending text, so ct3 keeps the indent
+    of a directive line that ends in one where it would otherwise drop
+    it.
+    """
+    parts = []
+    for token in node.tokens[1:]:
+        if token.kind == lex.DIRECTIVE_END:
+            continue
+        if token.kind != lex.TEXT:
+            raise Unsupported("#%s with a %s in it" % (name, token.kind))
+        parts.append(token.text)
+    text = "".join(parts)
+    found = lex.EOL.search(text)
+    return text[:found.start()] if found else text
+
+
+def _refuse_unbound_bases(module: ast.Module, bases: list[str]) -> None:
+    """A base class whose name this module never binds.
+
+    ct3's generated module imports eleven names this one does not, and
+    #extends is the one place a template can name them without writing
+    a placeholder: ``#extends os.path.Thing`` adds no import there
+    because ``os`` is already in _importedVarNames, and the class
+    statement then reads a name that only ct3's preamble has.
+    """
+    bound = {"object"}
+    for statement in module.body:
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            for alias in statement.names:
+                bound.add(alias.asname or alias.name.split(".")[0])
+    for base in bases:
+        if base.split(".")[0] not in bound:
+            raise Unsupported("#extends %s, which nothing imports" % base)
+
+
+def _include(node: tree.Node, source: str,
+             out: list[tuple[str, Any]]) -> None:
+    """``#include``: one call, and the template compiled at render time.
+
+    ct3 generates nothing else (Cheetah/Compiler.py addInclude, line
+    677). Template._handleCheetahInclude (Cheetah/Template.py line
+    1629) compiles the nested template when the render reaches it,
+    hands it this template's search list and its globalSetVars, copies
+    the initial filter onto it, and caches it under the source
+    expression. Compiling it here and writing the result inline would
+    lose all four, and would not do the file form at all.
+
+    ``trans`` is bound by the prologue of every method this layer
+    generates, so an #include inside a #def needs nothing extra.
+    """
+    raw, from_string, expression = _include_argument(node)
+    made = _framed_statement(
+        "self._handleCheetahInclude(%s, trans=trans, includeFrom=%r, raw=%r)"
+        % (expression, "str" if from_string else "file", raw))
+    # The ending goes behind the call and not in front of it: this is
+    # the first directive here that both writes something and decides
+    # about its own line, and ct3 writes the call first.
+    ending = _directive_line_ending(node, source, out)
+    out.append((STMT_PIECE, made))
+    if ending:
+        out.append((TEXT_PIECE, ending))
+
+
+def _include_argument(node: tree.Node) -> tuple[bool, bool, str]:
+    """eatInclude's two flags and its expression.
+
+    Both words are tested with a plain startswith and not as words
+    (Cheetah/Parser.py line 2319), so ``#include rawsource=$a`` is a
+    raw include of a string and ``#include rawfoo`` a raw include of
+    the file ``foo``. The scan runs over the raw characters, and the
+    point it stops at always falls inside a text token because ``raw``
+    and ``source=`` are literals.
+    """
+    tokens = []
+    for token in node.tokens[1:]:
+        if token.kind == lex.DIRECTIVE_END:
+            continue
+        if token.kind in (lex.COMMENT, lex.BLOCK_COMMENT):
+            # A ## changes what happens to the line, and a #* is no
+            # comment at all to ct3: getExpressionParts breaks at the
+            # hash, the directive end token eats it, and the rest of
+            # the block comment is written out as template text.
+            raise Unsupported("a %s on the #include line" % token.kind)
+        tokens.append(token)
+    text = "".join(t.text for t in tokens)
+    at = _skip_blanks(text, 0)
+    raw = text.startswith("raw", at)
+    if raw:
+        at += len("raw")
+    at = _skip_blanks(text, at)
+    from_string = text.startswith("source", at)
+    if from_string:
+        at += len("source")
+        at = _skip_blanks(text, at)
+        if text[at:at + 1] != "=":
+            raise Unsupported("#include source without an =")
+        at += 1
+    expression = _resolved_from(tokens, at)
+    if not expression.strip():
+        # ct3 writes the call with an empty first argument and dies on
+        # its own SyntaxError. There is nothing to be faithful to.
+        raise Unsupported("#include without an expression")
+    return raw, from_string, expression
+
+
+def _resolved_from(tokens: list[lex.Token], at: int) -> str:
+    """The tokens from that offset on, as Python.
+
+    Refuses a placeholder that stands inside a string literal. The
+    lexer does not skip strings in a directive's arguments, so
+    ``#include raw source='This is my $Source '*2`` offers a
+    placeholder ct3 never sees, and resolving it would build a valid
+    expression that includes the wrong file. The test is positional, so
+    ``#include $webdir + "/header.tmpl"`` is untouched.
+    """
+    raw = "".join(t.text for t in tokens)
+    parts = []
+    offset = 0
+    for token in tokens:
+        end = offset + len(token.text)
+        if end <= at:
+            offset = end
+            continue
+        if offset < at:
+            if token.kind != lex.TEXT:
+                raise Unsupported("#include this layer cannot read")
+            parts.append(token.text[at - offset:])
+        elif token.kind == lex.PLACEHOLDER and _quote_is_open(raw, offset):
+            raise Unsupported("a placeholder inside a string in #include")
+        else:
+            parts.append(_token_source(token))
+        offset = end
+    return "".join(parts)
+
+
+def _quote_is_open(text: str, at: int) -> bool:
+    """Whether a Python string literal is still open at that offset."""
+    index = 0
+    while index < at:
+        if text[index] in "\"'":
+            end = lex._end_of_string(text, index)
+            if end > at:
+                return True
+            index = end
+            continue
+        index += 1
+    return False
 
 
 # A definition's header: a name, and optionally a parameter list.
@@ -617,6 +2389,435 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
         func=_attribute("self", name), args=[],
         keywords=[ast.keyword(arg="trans",
                               value=ast.Name(id="trans", ctx=ast.Load()))]))
+
+
+# -- #filter, #call and #cache ---------------------------------------
+#
+# Three regions in ct3's sense: setup statements, the body, teardown
+# statements. #filter swaps the local _filter for the length of the
+# region and puts the old one back. #call and #cache point trans and
+# write at a throwaway DummyTransaction and then do something with what
+# was collected: hand it to a function, or store it on a cache item and
+# write it through. Nothing new is needed on the generated class,
+# because getCacheRegion, _CHEETAH__filters, _CHEETAH__filtersLib and
+# _CHEETAH__isBuffering are all ct3's own.
+#
+# The shapes below stand in Compiler.py line for line, which is why
+# they are parsed rather than assembled. The names are this layer's:
+# ct3 draws a random ID per region, so byte-equal code was never on the
+# table, and what has to hold is only that two regions in one method
+# stay apart and that two runs over one template agree.
+
+# ct3's setFilter, the three forms of its argument. The plain local
+# "filterName" is ct3's and it is not noise: VFFSL searches the calling
+# frame before the search list, so a template that writes $filterName
+# inside the region sees the filter's name.
+FILTER_SETUP = """\
+_ct4_orig_filter%(id)s = _filter
+filterName = %(name)r
+if %(name)r in self._CHEETAH__filters:
+    _filter = self._CHEETAH__currentFilter = self._CHEETAH__filters[filterName]
+else:
+    _filter = self._CHEETAH__currentFilter = \
+self._CHEETAH__filters[filterName] = \
+getattr(self._CHEETAH__filtersLib, filterName)(self).filter
+"""
+
+# "#filter None" is the one form that does not touch
+# _CHEETAH__currentFilter on the way in, and that is observable: a
+# method called from inside the region filters with what the attribute
+# still holds, not with the local.
+FILTER_NONE = """\
+_ct4_orig_filter%(id)s = _filter
+_filter = self._CHEETAH__initialFilter
+"""
+
+FILTER_CLOSE = """\
+_filter = self._CHEETAH__currentFilter = _ct4_orig_filter%(id)s
+"""
+
+# ct3's startCallRegion. The restore order in CALL_CLOSE is not free:
+# write is recovered from the restored trans rather than from a saved
+# copy, and the collected string is read after the restore, which is
+# what makes a #call inside a #call come out right.
+CALL_OPEN = """\
+_ct4_orig_trans%(id)s = trans
+_ct4_was_buffering%(id)s = self._CHEETAH__isBuffering
+self._CHEETAH__isBuffering = True
+trans = _ct4_call_collector%(id)s = DummyTransaction()
+write = _ct4_call_collector%(id)s.response().write
+"""
+
+CALL_CLOSE = """\
+trans = _ct4_orig_trans%(id)s
+write = trans.response().write
+self._CHEETAH__isBuffering = _ct4_was_buffering%(id)s
+del _ct4_was_buffering%(id)s
+del _ct4_orig_trans%(id)s
+_ct4_call_arg%(id)s = _ct4_call_collector%(id)s.response().getvalue()
+del _ct4_call_collector%(id)s
+"""
+
+CALL_DELETE = """\
+del _ct4_call_arg%(id)s
+"""
+
+# ct3's startCacheRegion for the directive form. Two branches at the
+# level of the surrounding code: the first writes the stored output
+# where there is one, the second holds the whole body. What the body
+# collects is stored with setData and written through unfiltered.
+CACHE_OPEN = """\
+_ct4_recache%(id)s = False
+_ct4_region%(id)s = self.getCacheRegion(regionID=%(region)r,
+                                        cacheInfo=%(info)r)
+if _ct4_region%(id)s.isNew():
+    _ct4_recache%(id)s = True
+_ct4_item%(id)s = _ct4_region%(id)s.getCacheItem(%(region)r)
+if _ct4_item%(id)s.hasExpired():
+    _ct4_recache%(id)s = True
+if (not _ct4_recache%(id)s) and _ct4_item%(id)s.getRefreshTime():
+    try:
+        _ct4_output%(id)s = _ct4_item%(id)s.renderOutput()
+    except KeyError:
+        _ct4_recache%(id)s = True
+    else:
+        write(_ct4_output%(id)s)
+        del _ct4_output%(id)s
+if _ct4_recache%(id)s or not _ct4_item%(id)s.getRefreshTime():
+    pass
+"""
+
+CACHE_BODY_OPEN = """\
+_ct4_orig_trans%(id)s = trans
+trans = _ct4_collector%(id)s = DummyTransaction()
+write = _ct4_collector%(id)s.response().write
+"""
+
+CACHE_EXPIRY = """\
+_ct4_item%(id)s.setExpiryTime(currentTime() + %(interval)r)
+"""
+
+CACHE_BODY_CLOSE = """\
+trans = _ct4_orig_trans%(id)s
+write = trans.response().write
+_ct4_data%(id)s = _ct4_collector%(id)s.response().getvalue()
+_ct4_item%(id)s.setData(_ct4_data%(id)s)
+write(_ct4_data%(id)s)
+del _ct4_data%(id)s
+del _ct4_collector%(id)s
+del _ct4_orig_trans%(id)s
+"""
+
+# A filter is named by a bare identifier, which is what getIdentifier
+# reads. The $-class form is turned away: ct3 reads it with
+# getExpression, which is more than a placeholder, and no corpus case
+# has one.
+FILTER_NAME = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
+
+# A #cache key, and the timer value genTimeInterval can read.
+CACHE_KEY = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
+TIMER = re.compile(r"^[0-9.]+[smhdw]?$")
+
+# The name a #call calls, where it is written as plain Python rather
+# than as a placeholder. ct3 reads it with getCheetahVar(plain=True),
+# which stops at the first character that is not part of a dotted name.
+CALL_NAME = re.compile(r"^\s*([A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_0-9]+)*)")
+
+
+def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
+            methods: list[ast.stmt],
+            out: list[tuple[str, Any]]) -> None:
+    """``#filter``, ``#call`` and ``#cache``, which redirect the output.
+
+    Not through _block, which returns one statement: a region is
+    several, and where they fall decides what lands in the collector.
+    Both tags are eaten before the code around them is written, so the
+    line ending the opening tag leaves behind is parsed *inside* the
+    region and the one the #end tag leaves behind lands outside it.
+    """
+    # The colon short form is the one whose opening tag stops before
+    # the end of its line. Every other tag ends at a line ending, at a
+    # bare hash, or at the end of the file.
+    own = "".join(t.text for t in node.tokens)
+    short = not (_trailing_eol(own)
+                 or node.tokens[-1].kind == lex.DIRECTIVE_END
+                 or node.tokens[-1].end >= len(source))
+    children = list(node.children)
+    closed = any(child.kind == lex.DIRECTIVE and child.name == "end"
+                 for child in children)
+    if short and closed:
+        # "#call int: 10#end call" is a ParseError in ct3: the short
+        # form closed at the line ending and the #end closes nothing.
+        raise Unsupported("#end inside the short form of #%s" % node.name)
+    if not children:
+        raise Unsupported("#%s with no body" % node.name)
+    if any(child.kind == lex.DIRECTIVE and child.name == "arg"
+           for child in children):
+        # The colon form of #arg puts its value where the tree keeps a
+        # directive's arguments, and text between the #call tag and the
+        # first #arg silently joins the first argument. No corpus case
+        # needs either.
+        raise Unsupported("#arg")
+    leading = ""
+    end = None
+    if not short:
+        leading = _eat_region_line(node, source, out)
+        if children[-1].kind == lex.DIRECTIVE and children[-1].name == "end":
+            end = children.pop()
+    pieces = _pieces_of(children, source, hoisted, methods)
+    if leading:
+        pieces.insert(0, (TEXT_PIECE, leading))
+    trailing = ""
+    if end is not None:
+        trailing = _eat_region_line(end, source, pieces)
+    if short and node.name in ("call", "filter"):
+        # ct3 parses these two short forms with findEOL(gobble=False),
+        # so the line ending stays outside the region. #cache uses
+        # gobble=True and keeps it inside. CallDirective.test1#3,
+        # "#call int: 10\n$aStr", is the case that says so.
+        trailing = _take_trailing_eol(pieces)
+        covered = source[:children[-1].tokens[-1].end]
+        if not trailing and _trailing_eol(covered):
+            # Something in the body swallowed the ending, a #slurp or a
+            # nested block. Where it belongs cannot be worked out from
+            # here without guessing.
+            raise Unsupported("the short form of #%s whose line ending is"
+                              " not the last thing in its body" % node.name)
+    body = _statements(pieces)
+    identifier = "_%d_%d" % (node.line, node.column)
+    if node.name == "filter":
+        made = _filter_region(node, identifier, body)
+    elif node.name == "call":
+        made = _call_region(node, identifier, body)
+    else:
+        made = _cache_block(node, identifier, body)
+    for statement in made:
+        out.append((STMT_PIECE, statement))
+    if trailing:
+        out.append((TEXT_PIECE, trailing))
+
+
+def _eat_region_line(node: tree.Node, source: str,
+                     out: list[tuple[str, Any]]) -> str:
+    """_eat_directive_line, with the line ending handed back instead.
+
+    A region's tags are eaten at a different point in ct3 than the code
+    they stand for is written, so a line ending either of them leaves
+    behind belongs on the other side of the region from the tag.
+    """
+    own = "".join(t.text for t in node.tokens)
+    ending = _trailing_eol(own)
+    past_its_line = bool(ending) or node.tokens[-1].end >= len(source)
+    if _line_is_clear(source, node.tokens[0].start):
+        if past_its_line and not _tag_comment_commits(node):
+            _drop_indent(out)
+        return ""
+    return ending
+
+
+def _region_argument(node: tree.Node) -> str:
+    """The raw text of a region tag's argument, comments dropped.
+
+    Raw and not resolved: what a #filter names is a class in the filter
+    library rather than a lookup, and a #cache argument list is not
+    Python at all.
+    """
+    parts = []
+    for token in node.tokens[1:]:
+        if token.kind in (lex.DIRECTIVE_END, lex.COMMENT):
+            continue
+        if token.kind == lex.BLOCK_COMMENT:
+            # _eatRestOfDirectiveTag matches "##" and nothing else, so
+            # a "#* *#" on the tag line stays in the stream and ct3
+            # parses it inside the region. The tree puts it here.
+            raise Unsupported("a block comment on a #%s tag" % node.name)
+        parts.append(token.text)
+    return "".join(parts)
+
+
+def _region_head(node: tree.Node) -> str:
+    """A region tag's argument, stripped of its blanks and its colon."""
+    raw = _region_argument(node).strip()
+    if raw.endswith(":"):
+        raw = raw[:-1].strip()
+    return raw
+
+
+def _filter_region(node: tree.Node, identifier: str,
+                   body: list[ast.stmt]) -> list[ast.stmt]:
+    """``#filter``: the body with another filter in force.
+
+    Two forms taken, both read off Parser.eatFilter, which calls
+    getIdentifier: the bare word None, compared without regard to case,
+    restores the initial filter, and any other plain identifier names a
+    class in the filter library. Text after the identifier is turned
+    away, because ct3 leaves it in the stream and writes it out as
+    output while the tree keeps it here.
+    """
+    name = _region_head(node)
+    if name.lower() == "none":
+        opening = ast.parse(FILTER_NONE % {"id": identifier}).body
+    elif FILTER_NAME.match(name):
+        opening = ast.parse(FILTER_SETUP % {"id": identifier,
+                                            "name": name}).body
+    else:
+        raise Unsupported("#filter %r" % name[:40])
+    return opening + body \
+        + ast.parse(FILTER_CLOSE % {"id": identifier}).body
+
+
+def _call_region(node: tree.Node, identifier: str,
+                 body: list[ast.stmt]) -> list[ast.stmt]:
+    """``#call f``: the body collected and handed to f as its first argument.
+
+    What comes back is written through the placeholder shape, filtered
+    like any other value. The filter is not part of the redirect, so a
+    #call inside a #filter escapes its body once on the way in and the
+    function's result a second time on the way out. That is ct3's, and
+    a corpus-shaped probe says so.
+    """
+    function, arguments = _call_target(node)
+    made = ast.parse(CALL_OPEN % {"id": identifier}).body + body \
+        + ast.parse(CALL_CLOSE % {"id": identifier}).body
+    call = "%s(_ct4_call_arg%s%s)" % (
+        function, identifier, ", " + arguments if arguments else "")
+    made += _placeholder_value(_parsed(call))
+    return made + ast.parse(CALL_DELETE % {"id": identifier}).body
+
+
+def _call_target(node: tree.Node) -> tuple[str, str]:
+    """The function a ``#call`` calls, and what stands after its name.
+
+    eatCall turns useAutocalling off around the name and back on for
+    the arguments, so ``#call $meth`` resolves to VFFSL(SL,"meth",False)
+    and is called once, by the region and not by NameMapper. With True
+    NameMapper would call meth() with no arguments and the region would
+    then call whatever came back.
+    """
+    tokens = [t for t in node.tokens[1:]
+              if t.kind not in (lex.DIRECTIVE_END, lex.COMMENT)]
+    if any(t.kind == lex.BLOCK_COMMENT for t in tokens):
+        raise Unsupported("a block comment on a #call tag")
+    if tokens and tokens[0].kind == lex.TEXT and not tokens[0].text.strip():
+        tokens = tokens[1:]
+    if not tokens:
+        raise Unsupported("#call without a function")
+    first, rest_tokens = tokens[0], tokens[1:]
+    if first.kind == lex.PLACEHOLDER:
+        chunks = chunks_of(first.text)
+        if len(chunks) != 1 or chunks[0].remainder:
+            raise Unsupported("#call %r" % first.text)
+        function = 'VFFSL(%s,"%s",False)' % (SEARCH_LIST, chunks[0].name)
+        rest = ""
+    elif first.kind == lex.TEXT:
+        match = CALL_NAME.match(first.text)
+        if match is None:
+            raise Unsupported("#call %r" % first.text[:40])
+        function = match.group(1)
+        rest = first.text[match.end():]
+    else:
+        raise Unsupported("#call %s" % first.kind)
+    # The arguments are read with autocalling back on, so a placeholder
+    # among them goes through the ordinary reader. That reader refuses
+    # the enclosure forms, which is what ct3's getExpression does too:
+    # "#call $rec ${sep}" is a ParseError there.
+    rest += "".join(_token_source(t) for t in rest_tokens)
+    rest = rest.strip()
+    if rest.endswith(":"):
+        rest = rest[:-1].strip()
+    if rest.startswith(("(", "[")):
+        # "#call getattr(self, 'x')": the argument list belongs to the
+        # name and ct3 reads it as part of the name, not as extra
+        # arguments. Not read here.
+        raise Unsupported("#call with a call in its function name")
+    if rest:
+        _parsed("f(%s)" % rest)
+    return function, rest
+
+
+def _cache_block(node: tree.Node, identifier: str,
+                 body: list[ast.stmt]) -> list[ast.stmt]:
+    """``#cache``: the body written once and served from a cache after.
+
+    The region ID is what makes two blocks share a cache, so a custom
+    ``id=`` has to survive into it. ct3 splices that same id straight
+    into the names of its own locals, which is why one that is not an
+    identifier is turned away: ct3 generates a SyntaxError there.
+    """
+    info = _cache_info(node)
+    region = str(info.get("id", "_ct4_cache" + identifier))
+    if not CACHE_KEY.match(region):
+        # ct3 writes "_RECACHE_a-b = False" for id='a-b'.
+        raise Unsupported("#cache id=%r" % region)
+    # Named after the region and not after the position, so that two
+    # blocks sharing an id share their locals exactly as ct3's do.
+    own = "_" + region
+    interval = info.get("interval")
+    made = ast.parse(CACHE_OPEN % {"id": own, "region": region,
+                                   "info": info}).body
+    inner = ast.parse(CACHE_BODY_OPEN % {"id": own}).body
+    if interval:
+        # ct3 guards the line with a plain "if interval:", so timer=0
+        # emits nothing and the item never expires.
+        inner += ast.parse(CACHE_EXPIRY % {"id": own,
+                                           "interval": interval}).body
+    inner += body + ast.parse(CACHE_BODY_CLOSE % {"id": own}).body
+    guard = made[-1]
+    assert isinstance(guard, ast.If)
+    guard.body = inner
+    return made
+
+
+def _cache_info(node: tree.Node) -> dict[str, Any]:
+    """``#cache id='x', timer=150m`` as ct3's cacheInfo dict.
+
+    getDefArgList splits on the top-level commas and strips both sides;
+    genCacheInfoFromArgList takes the first and last character off a
+    value that starts with a quote and turns timer into interval.
+    Only "id" reaches the generated code, and only in lower case:
+    startCacheRegion reads cacheInfo.get('id'), so an "ID=" is inert
+    and CacheDirective.test4 has one.
+    """
+    raw = _region_head(node)
+    info: dict[str, Any] = {"type": REFRESH_CACHE}
+    if raw.startswith("("):
+        # getDefArgList reads a parenthesised list to its closing
+        # bracket instead of to the end of the line.
+        raise Unsupported("#cache with a bracketed argument list")
+    for part in _split_arguments(raw):
+        key, assigned, value = part.partition("=")
+        key = key.strip().lstrip("$")
+        value = value.strip()
+        if not assigned or not value:
+            # genCacheInfoFromArgList subscripts a None default for a
+            # bare argument and dies at compile time.
+            raise Unsupported("#cache %r" % part.strip()[:40])
+        if not CACHE_KEY.match(key):
+            raise Unsupported("#cache key %r" % key[:40])
+        if value[0] in "\"'":
+            value = value[1:-1]
+        if key == "timer":
+            if not TIMER.match(value):
+                raise Unsupported("#cache timer=%r" % value[:40])
+            info["interval"] = _timer_interval(value)
+            continue
+        if key not in ("id", "ID"):
+            # startCacheRegion also reads test and varyBy and splices
+            # both into the generated Python as expressions. Neither
+            # has a corpus case and both have real behaviour, so there
+            # is nothing here to measure an acceptance against.
+            raise Unsupported("#cache %s=" % key)
+        info[key] = value
+    return info
+
+
+def _timer_interval(text: str) -> float:
+    """genTimeInterval, for the ``timer=`` of a #cache."""
+    scale = {"s": 1, "m": 60, "h": 60 * 60,
+             "d": 60 * 60 * 24, "w": 60 * 60 * 24 * 7}
+    if text[-1] in scale:
+        return float(text[:-1]) * scale[text[-1]]
+    return float(text) * 60
 
 
 def _try_block(node: tree.Node, source: str,
@@ -936,10 +3137,7 @@ def _without_trailing_colon(text: str, name: str) -> str:
 def _token_source(token: lex.Token) -> str:
     """One argument token as Python source."""
     if token.kind == lex.PLACEHOLDER:
-        chunks = None if token.children else chunks_of(token.text)
-        if chunks is None:
-            raise Unsupported("placeholder %r" % token.text)
-        return _expression(chunks)
+        return argument_source(token.text)
     if token.kind == lex.TEXT:
         return token.text
     if token.kind in (lex.DIRECTIVE_END, lex.COMMENT, lex.BLOCK_COMMENT):
@@ -1029,6 +3227,12 @@ def _drop_indent(out: list[tuple[str, Any]]) -> None:
     """
     while out:
         kind, text = out[-1]
+        if kind == RAW_PIECE:
+            # ct3 has no such thing as a piece that may not be touched:
+            # a raw body is a pending chunk like any other, and this is
+            # where it would be cut. Refused rather than stopped short
+            # of, which would keep text ct3 removes.
+            raise Unsupported("an indent drop that reaches a #raw body")
         if kind != TEXT_PIECE:
             return
         match = lex.EOL.search(text[::-1])
@@ -1043,12 +3247,49 @@ def _drop_indent(out: list[tuple[str, Any]]) -> None:
         out.pop()
 
 
+def _drop_line_start(out: list[tuple[str, Any]]) -> None:
+    """handleWSBeforeDirective as ct3 really wrote it, for #raw.
+
+    _drop_indent above carries two ``strip()`` guards that ct3 does not
+    have. They are harmless for its own callers, which all ask
+    _line_is_clear first, so what they remove is whitespace by
+    construction. The closing tag of a raw block is the case where that
+    does not hold: its drop fires on a position that can be on another
+    line than the pending text, and ct3 then deletes text that is not
+    whitespace at all. ``A $v BBB#raw\\nX\\n  #end raw\\nC\\n`` renders
+    ``A V\\nX\\nC\\n`` there, with the BBB gone.
+
+    Reproducing that needs ct3's chunk boundaries rather than this
+    layer's pieces, which fall in different places: a run of text with
+    an escape in it is one chunk in ct3 and three pieces here. So where
+    what would go is not whitespace, the template is refused.
+    """
+    while out:
+        kind, text = out[-1]
+        if kind == RAW_PIECE:
+            raise Unsupported("a #raw indent drop that reaches a #raw body")
+        if kind != TEXT_PIECE:
+            return
+        match = lex.EOL.search(text[::-1])
+        if match is not None:
+            keep = len(text) - match.start()
+            if text[keep:].strip():
+                raise Unsupported("a #raw indent drop that removes %r"
+                                  % text[keep:][:20])
+            out[-1] = (TEXT_PIECE, text[:keep])
+            return
+        if text.strip():
+            raise Unsupported("a #raw indent drop that removes %r"
+                              % text[:20])
+        out.pop()
+
+
 # -- Statements ------------------------------------------------------
 
 def _statements(pieces: list[tuple[str, Any]]) -> list[ast.stmt]:
     out: list[ast.stmt] = []
     for kind, value in pieces:
-        if kind == TEXT_PIECE:
+        if kind in (TEXT_PIECE, RAW_PIECE):
             if value:
                 out.append(_write(ast.Constant(value)))
             continue
@@ -1076,9 +3317,26 @@ def _expression(chunks: list[Chunk]) -> str:
     return text
 
 
+def _plain_expression(chunks: list[Chunk]) -> str:
+    """The Python ct3 writes where the name is not looked up at all.
+
+    Compiler.genPlainVar: the chain is written back as the dotted name
+    it came from. That is what a keyword argument needs, and what the
+    target of a "for" inside an expression needs.
+    """
+    return ".".join(chunk.name + chunk.remainder for chunk in chunks)
+
+
 def _placeholder(expression: str) -> list[ast.stmt]:
-    """The two statements ct3 writes for a placeholder."""
-    return _placeholder_value(ast.parse(expression, mode="eval").body)
+    """The two statements ct3 writes for a placeholder.
+
+    Through _parsed, because ct3 does emit Python that does not
+    compile: "$a(f($x=1))" becomes f(VFFSL(SL,"x",True)=1) and "$(not
+    a)" becomes VFFSL(SL,"not",True) a. Where ct3 does not compile
+    there is nothing to be faithful to, and a SyntaxError out of this
+    layer would crash a caller that only expects Unsupported.
+    """
+    return _placeholder_value(_parsed(expression))
 
 
 def _placeholder_value(lookup: ast.expr) -> list[ast.stmt]:

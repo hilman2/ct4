@@ -263,10 +263,15 @@ class _Lexer:
                 index = text_from = index + 2
                 continue
 
-            if char == "<" and source.startswith("<%", index):
+            # A backslash in front of it means it is no PSP at all:
+            # Parser._makePspREs builds both PSP tokens with
+            # escCharLookBehind. The backslash is not removed the way
+            # the one in front of a "$" is, so "a\\<%= 1 %>b" comes out
+            # as itself.
+            if char == "<" and source.startswith("<%", index) \
+                    and not (index and source[index - 1] == "\\"):
+                end = _psp_end(source, index)
                 flush(index)
-                end = source.find("%>", index + 2)
-                end = len(source) if end < 0 else end + 2
                 found.append(self.make(PSP, index, end))
                 index = text_from = end
                 continue
@@ -450,6 +455,25 @@ def _directive_name(source: str, index: int,
         if name in possible and following not in NAME_CHARS:
             return name
     return None
+
+
+def _psp_end(source: str, index: int) -> int:
+    """Past the ``%>`` that closes the PSP starting at this position.
+
+    The closing token carries the same escape look-behind as the
+    opening one, so a ``%>`` with a backslash in front of it closes
+    nothing and eatPSP reads on: ``<% write('a') #\\%> junk %>`` is one
+    PSP whose body ends at the second one. Runs to the end of the
+    source where nothing closes it, and the layer above refuses that.
+    """
+    at = index + 2
+    while True:
+        found = source.find("%>", at)
+        if found < 0:
+            return len(source)
+        if source[found - 1] != "\\":
+            return found + 2
+        at = found + 1
 
 
 def _end_of_block_comment(source: str, index: int) -> int:
