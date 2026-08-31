@@ -14,6 +14,7 @@ from __future__ import annotations
 import difflib
 import multiprocessing
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,19 @@ from ct4.corpus.case import COMPILE, Case, decode, read_jsonl
 # between two Cheetah revisions fail without saying anything about the
 # template.
 VOLATILE_LINES = ("__CHEETAH_version__", "__CHEETAH_versionTuple__")
+
+# The one place where ct4 deliberately generates other code than ct3:
+# where the compiler bound a name itself, it starts the lookup at that
+# local instead of walking the search list. The rewrite is undone here
+# so that the compile cases keep comparing against ct3. Undoing it,
+# rather than recording ct4's own output as the expectation, is what
+# keeps the 136 third-party skins worth anything: they have no context
+# to render with, so the generated code is the only evidence that ct4
+# still does what ct3 did, and a baseline taken from ct4 would only
+# prove that ct4 agrees with itself. Every other difference still
+# shows up as a finding.
+LOCAL_LOOKUP = re.compile(
+    r'VFN\(\{"(\w+)":\1\},"([^"]+)",(True|False)\)')
 
 # Below this many cases, starting the worker processes costs more than
 # the distribution brings in.
@@ -64,9 +78,10 @@ class Mismatch:
 
 def normalize_code(code: str) -> str:
     """Strips from generated code what says nothing about the template."""
-    return "\n".join(
+    kept = "\n".join(
         line for line in code.splitlines()
         if not line.startswith(VOLATILE_LINES))
+    return LOCAL_LOOKUP.sub(r'VFFSL(SL,"\2",\3)', kept)
 
 
 def compile_code(case: Case) -> str:

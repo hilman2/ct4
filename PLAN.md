@@ -769,16 +769,94 @@ Gemessen: 0,393 ms mit Frames gegen 0,527 ms ohne. Abschalten kostet 34 Prozent.
 **Hebel 4 gibt es schon.** `DummyResponse` sammelt in `_outputChunks` und fügt am
 Ende mit `join` zusammen. Da ist nichts zu holen.
 
-### Was wirklich hilft
+### Wo die Grenze wirklich liegt
 
-jinja2 ist nahe an der Handschrift, weil sein Compiler weiss, dass `r` eine
-Schleifenvariable ist, und direkten Attributzugriff erzeugt. ct4 schlägt für
-dieselbe Stelle den Pfad `"r.name"` zur Laufzeit nach.
+Dieselbe Tabelle, aber der Rumpf einmal von Hand ausgeschrieben, so wie ein
+Compiler ihn erzeugen könnte, der die Schleifenvariable kennt:
 
-Daran hängt alles: **die Hälfte der Zeit ist erst zu holen, wenn der Compiler
-Geltungsbereiche kennt.** Das ist die Arbeit aus P4, nicht eine Einstellung, die
-man umlegt. P5 kann seine Performanceziele ohne P4 nicht erreichen, und der Plan
-sagte das bisher nicht.
+| | je Render | zu jinja2 |
+|---|---|---|
+| ct4, ganze Maschinerie | 0,402 ms | 5,9x |
+| nur der Rumpf, mit NameMapper | 0,253 ms | 3,7x |
+| nur der Rumpf, direkter Zugriff | 0,031 ms | **0,46x** |
+| jinja2 | 0,068 ms | 1x |
+
+Damit zerfällt der Aufwand in drei Teile:
+
+| | ms | Anteil |
+|---|---|---|
+| Template-Maschinerie (`respond()`, Transaction, Filter, SearchList) | 0,149 | 37 % |
+| NameMapper | 0,222 | 55 % |
+| die eigentliche Arbeit | 0,031 | 8 % |
+
+**Acht Prozent der Zeit ist Arbeit, zweiundneunzig sind Apparat.** Und die
+0,031 ms sind bereits schneller als jinja2. Das Ziel liegt nicht über uns.
+
+Daraus folgt, was für Parität nötig ist, und es sind zwei Dinge, nicht eines:
+
+1. **Der NameMapper muss aus dem heissen Pfad.** Der Compiler schreibt `r.name`
+   statt `VFFSL(SL,"r.name",True)`. Das kostet zwei ct3-Zusagen: die
+   vereinheitlichte Punktschreibweise (`$r.name` findet auch `r["name"]`) und
+   das Autocalling der ersten Komponente. Beides ist gemessen
+   verhaltensändernd, festgehalten in `tests/unit/test_local_lookup.py`. Also
+   nur im **Strict-Modus** aus W2, opt-in, nie als Voreinstellung.
+2. **Die Maschinerie je Render muss weg.** jinja2 rendert über eine
+   Modulfunktion mit Generator. ct4 baut je Aufruf ein Objekt, eine Transaction
+   und einen Filter auf. Ohne diesen Posten bleiben 0,149 ms stehen, und damit
+   ist Parität allein über Punkt 1 unerreichbar.
+
+### Was davon umgesetzt ist
+
+`resolveKnownLocals`, Voreinstellung an. Der Compiler führt über `indent()` und
+`dedent()` einen Stapel der Namen, die er selbst gebunden hat, und lässt die
+Suche bei einem solchen Namen dort anfangen:
+
+```python
+_v = VFN({"r":r},"r.name",True)      # statt VFFSL(SL,"r.name",True)
+```
+
+Gemessen 0,400 gegen 0,246 ms, **Faktor 1,62**. Byte-identisch: VFFSL sieht
+ohnehin zuerst in die Frame-Locals, die Abkürzung überspringt nur den Weg
+dorthin und behält jede Regel, Autocalling der ersten Komponente eingeschlossen.
+
+Das Korpus vergleicht `compile`-Fälle weiter gegen ct3. Die eine beabsichtigte
+Abweichung wird in `normalize_code` vor dem Vergleich zurückgerechnet, statt die
+Baseline auf ct4 neu zu ziehen. Sonst würden die 136 fremden Skins nur noch
+beweisen, dass ct4 mit sich selbst übereinstimmt.
+
+Dieselbe Buchführung braucht der Strict-Modus später ohnehin. Sie ist damit
+nicht nur der schnelle Zwischenschritt, sondern die Voraussetzung für Punkt 1.
+
+### Warum Python und nicht Rust
+
+Die Antwort steht in der Tabelle oben: **die 0,031 ms sind reines CPython.**
+Liegt der Boden in Python unter dem Ziel, ist die Sprache nicht der Engpass.
+jinja2 ist selbst reines Python und belegt es.
+
+Dazu drei Gründe, die auch für ein tieferes Ziel gelten:
+
+- **Der heisse Pfad liegt in fremden Python-Objekten.**
+  `$day.outTemp.max.formatted` ist kein Datenzugriff, sondern vier Aufrufe in
+  `ValueHelper` und `TimespanBinder`, zwei davon über `__getattr__`. Eine
+  Rust-Engine muss für jeden davon nach CPython zurück, und der Grenzübertritt
+  kostet ungefähr so viel wie der Zugriff.
+- **Cheetah kompiliert nach Python-Quelltext, und das ist Teil der Zusage.**
+  `#set`, `#call` und jeder Ausdruck in `#if` sind Python und werden als Python
+  eingebettet. Eine ct3-kompatible Rust-Engine müsste einen Python-Interpreter
+  mitbringen.
+- **Die Kompatibilität ist prüfbar, weil beide Seiten dieselbe Semantik
+  ausführen.** `isInstanceOrClass` in `_namemapper.c` entscheidet das
+  Autocalling über Sondierungen an `__func__`, `__code__`, `__self__` und der
+  MRO. In Rust nachgebaut müsste jede dieser Feinheiten neu entdeckt werden, und
+  jede Abweichung fiele erst bei einem Nutzer auf.
+
+Dazu die Verteilung: weewx läuft auf Raspberry Pi, ARM und alten Debians. Reines
+Python plus eine optionale C-Erweiterung installiert sich dort überall.
+
+**Wo Rust sich lohnt:** die Serialisierung im JSON-Modus. Sobald die Werte
+extrahiert sind, ist der Rest Daten zu Bytes ohne fremde Objekte im heissen
+Pfad. Dafür gibt es `orjson`, und das ist Rust. Dann optional einbinden, nicht
+selbst schreiben.
 
 Der zweitgrösste Posten, der Ausgabefilter mit 21 Prozent, ist im JSON-Modus
 ohnehin weg: dort gibt es keinen Filter, weil keine Zeichenkette zusammengesetzt

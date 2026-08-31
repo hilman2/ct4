@@ -21,6 +21,13 @@ from typing import Any, Iterator
 # and the searchList, VFSL only through the searchList.
 LOOKUP = re.compile(r'VFF?SL\(SL,"([^"]+)",\s*(?:True|False)\)')
 
+# A lookup the compiler shortened because it bound the name itself, as
+# it does for a #for target. It reads the same value as a VFFSL would;
+# the only difference is where the search starts. The backreference is
+# what tells this generated form apart from a VFN somebody wrote by
+# hand: only the compiler builds a namespace of the name for itself.
+LOCAL = re.compile(r'VFN\(\{"(\w+)":\1\},"([^"]+)",\s*(?:True|False)\)')
+
 # The origin note Cheetah writes behind the expression.
 ORIGIN = re.compile(r"(?:on|from) line (\d+), col (\d+)")
 
@@ -64,12 +71,15 @@ def _scan(code: str) -> Iterator[Placeholder]:
         if origin is None:
             continue
         line, column = int(origin.group(1)), int(origin.group(2))
-        # Only the lookups in the searchList. A VFN stands for an
-        # attribute on an already resolved value; no declaration knows
-        # which ones exist there, and guessing would turn into a false
-        # finding. If several expressions stand on one line, they share
-        # its position.
+        # Lookups in the searchList, plus the ones the compiler
+        # shortened to a local it bound itself. Any other VFN stands
+        # for an attribute on an already resolved value; no declaration
+        # knows which ones exist there, and guessing would turn into a
+        # false finding. If several expressions stand on one line, they
+        # share its position.
         for path in LOOKUP.findall(text):
+            yield Placeholder(path, line, column)
+        for _, path in LOCAL.findall(text):
             yield Placeholder(path, line, column)
 
 
