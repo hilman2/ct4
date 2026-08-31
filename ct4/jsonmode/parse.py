@@ -40,10 +40,16 @@ class Lit:
 
 @dataclass
 class Expr:
-    """Ein Platzhalter. ``precision`` kommt aus einem angehaengten ``@``."""
+    """Ein Platzhalter. ``precision`` kommt aus einem angehaengten ``@``.
+
+    ``line`` ist die Zeile in der Vorlage. Sie wird gebraucht, damit ein
+    Fehler beim Rendern dorthin zeigt und nicht in die erzeugte
+    Definition.
+    """
 
     text: str
     precision: int | None = None
+    line: int = 0
 
 
 @dataclass
@@ -124,6 +130,9 @@ class _Parser:
         column = self.pos - (self.src.rfind("\n", 0, self.pos) + 1) + 1
         return JsonTemplateError("Zeile %d, Spalte %d: %s"
                                  % (line, column, message))
+
+    def line_at(self, position: int) -> int:
+        return self.src.count("\n", 0, position) + 1
 
     def at_end(self) -> bool:
         return self.pos >= len(self.src)
@@ -256,6 +265,7 @@ class _Parser:
             raise self.error("kein Wert: %r" % text) from None
 
     def expr(self) -> Expr:
+        line = self.line_at(self.pos)
         text = self.placeholder()
         precision = None
         save = self.pos
@@ -271,7 +281,7 @@ class _Parser:
             precision = int(self.src[start:self.pos])
         else:
             self.pos = save
-        return Expr(text, precision)
+        return Expr(text, precision, line)
 
     def placeholder(self) -> str:
         """Grenzt einen Platzhalter ab, ohne ihn zu deuten.

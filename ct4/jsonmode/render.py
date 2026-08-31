@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ct4.jsonmode.build import Builder
-from ct4.jsonmode.emit import METHOD_NAME, emit
+from ct4.jsonmode.emit import METHOD_NAME, emit_with_origins
 from ct4.jsonmode.parse import Document, parse
 
 # Feste Trennzeichen, damit zwei Laeufe dieselben Bytes liefern. Die
@@ -25,6 +25,8 @@ class Compiled:
     names: Sequence[Any]
     consts: Sequence[Any]
     schema: Any = None
+    origins: dict[int, int] | None = None
+    file: str = "<vorlage>"
 
     def build(self, search_list: Sequence[Any]) -> Any:
         """Baut die Struktur, ohne sie zu serialisieren."""
@@ -33,9 +35,16 @@ class Compiled:
                           missing=self.document.missing)
         template = self.template_class(searchList=list(search_list))
         try:
-            return getattr(template, METHOD_NAME)(builder)
+            with self._pointing_at_the_template():
+                return getattr(template, METHOD_NAME)(builder)
         finally:
             template.shutdown()
+
+    def _pointing_at_the_template(self) -> Any:
+        """Sorgt dafuer, dass ein Fehler die Zeile der Vorlage nennt."""
+        from ct4 import trace
+
+        return trace.mapped_via(self.origins or {}, self.file)
 
     def render(self, search_list: Sequence[Any],
                indent: int | None = None, validate: bool = False) -> str:
@@ -70,7 +79,8 @@ def dumps(value: Any, indent: int | None = None) -> str:
                       separators=SEPARATORS if indent is None else None)
 
 
-def compile_template(source: str, base_dir: Path | None = None) -> Compiled:
+def compile_template(source: str, base_dir: Path | None = None,
+                     file: str = "<vorlage>") -> Compiled:
     """Uebersetzt eine JSON-Vorlage.
 
     ``base_dir`` sagt, wovon ein ``#schema`` seinen Pfad aus zaehlt.
@@ -79,7 +89,7 @@ def compile_template(source: str, base_dir: Path | None = None) -> Compiled:
     from Cheetah.Template import Template
 
     document = parse(source)
-    code, names, consts = emit(document)
+    code, names, consts, origins = emit_with_origins(document)
     schema = None
     if document.schema is not None:
         path = Path(document.schema)
@@ -87,7 +97,7 @@ def compile_template(source: str, base_dir: Path | None = None) -> Compiled:
             path = base_dir / path
         schema = json.loads(path.read_text(encoding="utf-8"))
     return Compiled(document, Template.compile(source=code), names, consts,
-                    schema)
+                    schema, origins, file)
 
 
 def render(source: str, search_list: Sequence[Any],

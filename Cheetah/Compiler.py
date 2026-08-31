@@ -86,7 +86,10 @@ _DEFAULT_COMPILER_SETTINGS = [
     ('initialMethIndentLevel', 2, ''),
     ('monitorSrcFile', False, ''),
     ('outputMethodsBeforeAttributes', True, ''),
-    ('addTimestampsToCompilerOutput', True, ''),
+    # Aus: gleiche Eingabe, gleiche Bytes. Ein Zeitstempel im
+    # erzeugten Modul macht jedes Artefakt einmalig, und dann
+    # laesst sich weder etwas vergleichen noch zwischenspeichern.
+    ('addTimestampsToCompilerOutput', False, ''),
 
     # Customizing the #extends directive
     ('autoImportForExtendsDirective', True, ''),

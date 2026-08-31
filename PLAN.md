@@ -880,6 +880,59 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 **Fertig, wenn:** Korpus byte-identisch mit dem neuen Backend, Tracebacks zeigen
 in die Vorlage.
 
+Stand 31-Aug-2026: **teilweise.** Drei der fünf Punkte stehen, der Umbau von
+Parser und Codegen ist nicht angefangen.
+
+| | |
+|---|---|
+| Deterministische Ausgabe | steht |
+| Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
+| Persistenter Compile-Cache | steht, 1,45x warm gemessen |
+| Lexer, CST, AST, Codegen über `ast` | **nicht angefangen** |
+| Direktiven-Plugins auf AST-Ebene | hängt daran |
+
+**Determinismus.** `addTimestampsToCompilerOutput` steht jetzt auf `False`.
+Zwei Übersetzungen derselben Vorlage liefern dieselben Bytes. Das ist die
+Voraussetzung für alles Weitere: ohne sie lässt sich weder etwas vergleichen
+noch zwischenspeichern.
+
+**Tracebacks.** Die Zuordnung stand schon da und wurde weggeworfen: Cheetah
+schreibt hinter jede erzeugte Anweisung, aus welcher Zeile und Spalte sie
+stammt. `ct4.trace` liest das und hängt es an die Ausnahme. Aus einem Traceback
+auf `DynamicallyCompiledCheetahTemplate.py:87` wird zusätzlich
+`Vorlage: bericht.tmpl, Zeile 3, Spalte 1`. Angehängt, nicht ersetzt.
+
+Im JSON-Modus zeigen die Herkunftsangaben auf die erzeugte Definition, nicht
+auf die Vorlage des Autors. Die Brücke baut der Emitter: er merkt sich zu jeder
+Zeile, die er schreibt, aus welcher Zeile der Vorlage sie stammt.
+
+**Compile-Cache, mit ehrlicher Zahl.** Eingehängt an
+`Template._CHEETAH_compilerClass`, also an der Stelle, die ct3 dafür vorsieht.
+Gemessen an den 136 Skin-Vorlagen:
+
+| | |
+|---|---|
+| nur `__init__` | 0,17 s |
+| Parser | 0,87 s |
+| Codegenerierung | 1,40 s |
+| Pythons eigenes `compile()` | 0,70 s |
+| end-to-end ohne Cache, bestes von drei | 1,44 s |
+| end-to-end mit warmem Cache | 0,99 s |
+
+Also **1,45x**, nicht mehr. Der Cache überspringt Parser und Codegenerierung;
+was bleibt, ist Pythons eigenes `compile()` und `exec()`, und das sind zwei
+Drittel der verbleibenden Zeit. Um da heranzukommen, bräuchte es eine Stelle
+zum Einhängen, die ct3 nicht hat. Das ist einer der Gründe für den eigenen
+Compiler.
+
+**Was nicht angefangen ist und warum.** Ein verlustfreies CST plus Codegen über
+das `ast`-Modul, das 1.772 Korpusfälle byte-identisch reproduziert, ist ein
+Vorhaben für sich und nicht der nächste sinnvolle Schritt, solange der
+Schwerpunkt JSON heisst. Der JSON-Modus übersetzt heute über eine
+Cheetah-`#def`; ihn auf eigenen Codegen umzustellen hiesse, einen zweiten
+Ausdrucksparser zu bauen, und genau das verbietet der Entwurf aus gutem Grund.
+Der Umbau lohnt erst, wenn er beiden Modi dient.
+
 ### P5 — `strict`-Modus und Performance
 
 - Kein Autocalling, keine Frame-Auflösung, kontextabhängiges Escaping im

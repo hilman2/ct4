@@ -27,6 +27,10 @@ class Emitter:
         self.lines: list[str] = []
         self.names: list[Any] = []
         self.consts: list[Any] = []
+        # Zeile in der Definition auf Zeile in der Vorlage. Ohne die
+        # zeigt ein Fehler beim Rendern in die Definition, und die hat
+        # nie jemand geschrieben.
+        self.origins: dict[int, int] = {}
 
     def name_index(self, value: Any) -> int:
         self.names.append(value)
@@ -36,24 +40,39 @@ class Emitter:
         self.consts.append(value)
         return len(self.consts) - 1
 
-    def add(self, line: str) -> None:
+    def add(self, line: str, origin: int = 0) -> None:
         self.lines.append(line)
+        if origin:
+            self.origins[len(self.lines)] = origin
 
-    def call(self, text: str) -> None:
+    def call(self, text: str, origin: int = 0) -> None:
         # #silent wertet den Ausdruck aus und schreibt nichts. Genau das
         # soll passieren: die Ausgabe der Definition ist ihr Rueckgabe-
         # wert, nicht ihr Text.
-        self.lines.append("#silent $B.%s" % text)
+        self.add("#silent $B.%s" % text, origin)
 
 
 def emit(document: Document) -> tuple[str, list[Any], list[Any]]:
     """Gibt Quelltext, Namen und feste Werte zurueck."""
+    code, names, consts, _ = emit_with_origins(document)
+    return code, names, consts
+
+
+def emit_with_origins(
+        document: Document,
+        ) -> tuple[str, list[Any], list[Any], dict[int, int]]:
+    """Wie ``emit``, dazu Definitionszeile auf Vorlagenzeile.
+
+    Die Zuordnung braucht ``ct4.trace``: ein Fehler beim Rendern soll auf
+    die Zeile der Vorlage zeigen, nicht auf eine Zeile der Definition,
+    die nie jemand geschrieben hat.
+    """
     out = Emitter()
     out.add("#def %s($B)" % METHOD_NAME)
     _value(out, document.root, holder=None)
     out.add("#return $B.result")
     out.add("#end def")
-    return "\n".join(out.lines) + "\n", out.names, out.consts
+    return ("\n".join(out.lines) + "\n", out.names, out.consts, out.origins)
 
 
 def _value(out: Emitter, node: Any, holder: str | None,
@@ -128,12 +147,13 @@ def _member(out: Emitter, node: Any) -> None:
     text = _expression(out, node.value)
     precision = getattr(node.value, "precision", None)
     suffix = "" if precision is None else ", %d" % precision
+    origin = getattr(node.value, "line", 0)
     if isinstance(node.key, Lit):
         out.call("key(%d, %s%s)"
-                 % (out.name_index(node.key.value), text, suffix))
+                 % (out.name_index(node.key.value), text, suffix), origin)
     else:
         out.call("key_at(%s, %s%s)"
-                 % (_expression(out, node.key), text, suffix))
+                 % (_expression(out, node.key), text, suffix), origin)
 
 
 def _open_key(out: Emitter, key: Any, kind: str) -> str:
@@ -177,7 +197,7 @@ def _item(out: Emitter, node: Any) -> None:
     text = _expression(out, node)
     precision = getattr(node, "precision", None)
     suffix = "" if precision is None else ", %d" % precision
-    out.call("item(%s%s)" % (text, suffix))
+    out.call("item(%s%s)" % (text, suffix), getattr(node, "line", 0))
 
 
 def _expression(out: Emitter, node: Any) -> str:

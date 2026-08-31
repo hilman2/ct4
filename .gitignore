@@ -16,3 +16,4 @@ __pycache__/
 corpus/*.harvested.jsonl
 ct4.egg-info/
 wheelhouse/
+.ct4-cache/
