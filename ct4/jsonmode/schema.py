@@ -89,12 +89,12 @@ def _check_object(node: Obj, schema: dict[str, Any], path: str,
         if name in sometimes or (name in always and not certain):
             found.append(Diagnostic(
                 "CT4201", WARNING,
-                "das Schema verlangt das Feld, die Vorlage baut es nur "
-                "unter einer Bedingung", path="%s.%s" % (path, name)))
+                "das Schema verlangt %r, die Vorlage baut es nur unter "
+                "einer Bedingung" % name, path="%s.%s" % (path, name)))
         else:
             found.append(Diagnostic(
                 "CT4200", ERROR,
-                "das Schema verlangt das Feld, die Vorlage baut es nicht",
+                "das Schema verlangt %r, die Vorlage baut es nicht" % name,
                 path="%s.%s" % (path, name)))
 
     if schema.get("additionalProperties") is False:
@@ -102,8 +102,8 @@ def _check_object(node: Obj, schema: dict[str, Any], path: str,
             if name not in properties:
                 found.append(Diagnostic(
                     "CT4202", ERROR,
-                    "das Schema kennt das Feld nicht und laesst keine "
-                    "weiteren zu", path="%s.%s" % (path, name)))
+                    "das Schema kennt %r nicht und laesst keine weiteren "
+                    "Felder zu" % name, path="%s.%s" % (path, name)))
 
     for member, sure in _members_of(node, certain):
         if not isinstance(member.key, Lit):

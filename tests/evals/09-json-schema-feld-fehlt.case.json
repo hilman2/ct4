@@ -1,0 +1,11 @@
+{
+ "id": "09-json-schema-feld-fehlt",
+ "task": "Das Schema verlangt ein Feld, die Vorlage baut es nicht.",
+ "file": "probe.json.tmpl",
+ "broken": "#mode json\n#schema \"eval.schema.json\"\n{\"da\": 1}\n",
+ "fixed": "#mode json\n#schema \"eval.schema.json\"\n{\"da\": 1, \"pflicht\": \"x\"}\n",
+ "expect": {
+  "code": "CT4200",
+  "mentions": "pflicht"
+ }
+}

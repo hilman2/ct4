@@ -4,6 +4,7 @@
 #   lint     ruff und mypy
 #   unit     Tests des Werkzeugs
 #   cheetah  die Testsuite, die ct3 mitbringt
+#   evals    die Aufgaben zur Diagnostik
 #   corpus   den Pruefstand
 #   all      alles (Vorgabe)
 #
@@ -13,7 +14,8 @@
 set -eu
 
 cp -r /repo/Cheetah /repo/ct4 /repo/tests /repo/bin /repo/setup.py \
-      /repo/pyproject.toml /repo/README.rst /repo/LICENSE /work/
+      /repo/pyproject.toml /repo/README.rst /repo/LICENSE \
+      /repo/declarations /work/
 cd /work
 
 python setup.py build_ext --inplace >/dev/null 2>&1
@@ -55,7 +57,15 @@ run_cheetah() {
 # Werkzeug zu ignorieren.
 run_check() {
     echo "== ct4 check ueber die Skins des Korpus =="
-    python -m ct4.corpus --impl fork check-templates \n        /repo/corpus/skins.jsonl --expect 1
+    python -m ct4.corpus --impl fork check-templates /repo/corpus/skins.jsonl --expect 1
+}
+
+# "AI ready" ist pruefbar oder es ist Marketing. Gemessen wird nicht ein
+# Sprachmodell, sondern die Diagnostik: ob aus einer Meldung die
+# Korrektur folgt.
+run_evals() {
+    echo "== Aufgaben: folgt aus der Meldung die Korrektur? =="
+    python -c "import sys; from ct4 import evals; r = evals.run(); print(evals.report(r)); sys.exit(1 if evals.failed(r) else 0)"
 }
 
 run_corpus() {
@@ -73,7 +83,8 @@ case "$WHAT" in
     cheetah) run_cheetah ;;
     corpus)  run_corpus ;;
     check)   run_check ;;
+    evals)   run_evals ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
-             run_check; echo; run_corpus ;;
+             run_check; echo; run_evals; echo; run_corpus ;;
     *)       echo "Unbekannt: $WHAT" >&2; exit 2 ;;
 esac

@@ -51,6 +51,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     declare = sub.add_parser("declare", help="Anmeldungen anzeigen")
     declare.add_argument("--json", action="store_true")
 
+    sub.add_parser("mcp", help="als MCP-Server ueber stdio sprechen")
+
     args = parser.parse_args(argv)
     if args.command == "check":
         return _check(args)
@@ -58,6 +60,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _context(args)
     if args.command == "reference":
         return _reference(args)
+    if args.command == "mcp":
+        from ct4.mcp import serve
+
+        return serve()
     return _declare(args)
 
 

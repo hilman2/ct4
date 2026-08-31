@@ -1,0 +1,12 @@
+{
+ "id": "01-aggregat-vertippt",
+ "task": "Ein Skin liest $day.outTemp.mx statt .max.",
+ "broken": "Heute hoechstens $day.outTemp.mx Grad.\n",
+ "fixed": "Heute hoechstens $day.outTemp.max Grad.\n",
+ "expect": {
+  "code": "CT4103",
+  "suggests": "max",
+  "line": 1,
+  "mentions": "day.outTemp"
+ }
+}

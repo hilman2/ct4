@@ -840,6 +840,35 @@ Bauplatz hält die Struktur bisher ganz im Speicher.
 dass weewx läuft, und die Eval-Suite mit veröffentlichter Erfolgsquote in CI
 durchläuft.
 
+Stand 31-Aug-2026: erfüllt.
+
+| | |
+|---|---|
+| `ct4 check` über die 136 Skin-Vorlagen | 1 Befund, und das ist weewx' eigener Testfall |
+| Aufgaben zur Diagnostik | 10 von 10 |
+| Kommandos | `check`, `context`, `reference`, `declare`, `mcp` |
+| Ausgabeformen | Text, JSON, SARIF |
+
+**Woher die Platzhalter kommen.** Nicht aus einem zweiten Parser, sondern aus
+dem Code, den Cheetah ohnehin erzeugt: dort steht jeder Nachschlagevorgang als
+Pfad mit Zeile und Spalte. Das ist die genaueste Quelle, die es gibt, weil es
+das ist, was zur Laufzeit wirklich nachgeschlagen wird.
+
+**Was die Anmeldung nicht darf: zu viel melden.** Ein Falschbefund ist
+schlimmer als ein übersehener Tippfehler, weil er Leute dazu bringt, das
+Werkzeug abzuschalten. Der erste Entwurf behandelte `$trend` wie einen Zeitraum
+und meldete den unveränderten Seasons-Skin an. Jetzt sind nur die zehn Namen
+geschlossen, die wirklich einen Zeitraum liefern; alles andere ist offen, und
+dort wird nicht geprüft statt falsch. Der Docker-Lauf hält die erwartete Zahl
+der Befunde fest.
+
+**Was die Evals messen.** Nicht ein Sprachmodell, sondern die Diagnostik: ob
+aus einer Meldung die Korrektur folgt, ohne die Vorlage zu kennen. Jeder Fall
+prüft zusätzlich, dass die richtige Fassung *keinen* Befund erzeugt. Die zweite
+Hälfte ist die wichtigere. Eine Aufgabe hat sofort etwas gefunden: die
+Schema-Meldung nannte das fehlende Feld nur im Pfad, nicht im Meldungstext.
+Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
+
 ### P4 — Compiler-Kern
 
 - Lexer, CST, AST, Codegen über `ast`

@@ -1,0 +1,11 @@
+{
+ "id": "04-errorcatcher-verdeckt-nichts",
+ "task": "Auch mit #errorCatcher wird der Tippfehler gefunden.",
+ "broken": "#errorCatcher Echo\n$day.rain.sm\n",
+ "fixed": "#errorCatcher Echo\n$day.rain.sum\n",
+ "expect": {
+  "code": "CT4103",
+  "suggests": "sum",
+  "line": 2
+ }
+}

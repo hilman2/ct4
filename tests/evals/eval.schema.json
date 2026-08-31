@@ -1,0 +1,14 @@
+{
+ "type": "object",
+ "required": [
+  "pflicht"
+ ],
+ "properties": {
+  "pflicht": {
+   "type": "string"
+  },
+  "da": {
+   "type": "integer"
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "id": "10-json-schema-falscher-typ",
+ "task": "Ein fester Wert widerspricht dem Typ im Schema.",
+ "file": "probe.json.tmpl",
+ "broken": "#mode json\n#schema \"eval.schema.json\"\n{\"pflicht\": 42}\n",
+ "fixed": "#mode json\n#schema \"eval.schema.json\"\n{\"pflicht\": \"x\"}\n",
+ "expect": {
+  "code": "CT4212",
+  "mentions": "string"
+ }
+}
