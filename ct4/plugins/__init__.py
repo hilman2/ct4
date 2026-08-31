@@ -1,5 +1,5 @@
-"""Anbindungen an fremde Anwendungen.
+"""Bindings to foreign applications.
 
-Jede meldet Wissen an, das der Kern von ct4 nicht hat, und rechnet
-nichts. Siehe PLAN.md, Abschnitt 6.
+Each one registers knowledge that the ct4 core does not have, and
+computes nothing. See PLAN.md, section 6.
 """

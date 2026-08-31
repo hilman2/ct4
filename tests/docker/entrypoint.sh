@@ -1,16 +1,16 @@
 #!/bin/sh
-# Laesst Pruefungen, Tests und Korpus-Pruefstand laufen.
+# Runs the checks, the tests and the corpus test bench.
 #
-#   lint     ruff und mypy
-#   unit     Tests des Werkzeugs
-#   cheetah  die Testsuite, die ct3 mitbringt
-#   evals    die Aufgaben zur Diagnostik
-#   corpus   den Pruefstand
-#   all      alles (Vorgabe)
+#   lint     ruff and mypy
+#   unit     tests of the tool
+#   cheetah  the test suite that ct3 brings along
+#   evals    the diagnostics tasks
+#   corpus   the test bench
+#   all      everything (default)
 #
-# Gearbeitet wird in /work, einer tmpfs. Das Repo haengt schreibgeschuetzt
-# unter /repo: der Lauf soll nichts auf der Arbeitsmaschine hinterlassen,
-# und der gebaute C-NameMapper landet neben den Quellen.
+# Work happens in /work, a tmpfs. The repo is mounted read-only under
+# /repo: the run must leave nothing behind on the work machine, and the
+# built C NameMapper lands next to the sources.
 set -eu
 
 cp -r /repo/Cheetah /repo/ct4 /repo/tests /repo/bin /repo/setup.py \
@@ -26,54 +26,53 @@ CORPUS="$CORPUS /repo/corpus/weewx-render.jsonl"
 WHAT="${1:-all}"
 
 run_lint() {
-    echo "== ruff und mypy =="
+    echo "== ruff and mypy =="
     ruff check .
     mypy
 }
 
 run_unit() {
-    echo "== Tests des Werkzeugs =="
-    # -n auto verteilt auf alle zugeteilten Kerne. Das Zeitlimit soll
-    # einen haengenden Test benennen, statt den Lauf abzuwuergen.
+    echo "== Tool tests =="
+    # -n auto spreads the work over all assigned cores. The time limit
+    # is there to name a hanging test instead of choking off the run.
     python -m pytest tests/unit -q -n auto
 }
 
 run_cheetah() {
-    echo "== Testsuite von ct3 =="
-    # Ueber deren eigenen Runner. Die Testklassen heissen nicht nach
-    # pytest-Muster, und install_eols() erzeugt die Varianten fuer die
-    # drei Zeilenenden erst zur Laufzeit.
+    echo "== ct3 test suite =="
+    # Through their own runner. The test classes are not named after the
+    # pytest pattern, and install_eols() creates the variants for the
+    # three line endings only at run time.
     #
-    # bin/ und PYTHONPATH gelten nur hier: die Tests von CheetahWrapper
-    # starten "cheetah" als Unterprozess, und der muss den Fork laden.
-    # Ausserhalb dieses Aufrufs bleibt das installierte ct3 erreichbar,
-    # sonst haette der Pruefstand keine Referenz mehr.
+    # bin/ and PYTHONPATH apply to this one call only: the CheetahWrapper
+    # tests start "cheetah" as a subprocess, and that one has to load the
+    # fork. Outside this call the installed ct3 stays reachable, or the
+    # test bench would have no reference left.
     PATH="/work/bin:$PATH" PYTHONPATH=/work python Cheetah/Tests/Test.py
 }
 
-# Ueber alle Vorlagen des Korpus. Erwartet wird genau ein Befund:
-# weewx' eigener Testfall fuer ein falsches Aggregat. Jeder weitere
-# waere ein Falschbefund, und ein Falschbefund bringt Leute dazu, das
-# Werkzeug zu ignorieren.
+# Over all templates of the corpus. Exactly one finding is expected:
+# weewx' own test case for a wrong aggregate. Any further one would be a
+# false finding, and a false finding gets people to ignore the tool.
 run_check() {
-    echo "== ct4 check ueber die Skins des Korpus =="
+    echo "== ct4 check over the corpus skins =="
     python -m ct4.corpus --impl fork check-templates /repo/corpus/skins.jsonl --expect 1
 }
 
-# "AI ready" ist pruefbar oder es ist Marketing. Gemessen wird nicht ein
-# Sprachmodell, sondern die Diagnostik: ob aus einer Meldung die
-# Korrektur folgt.
+# "AI ready" is checkable or it is marketing. What gets measured is not
+# a language model but the diagnostics: whether the correction follows
+# from the message.
 run_evals() {
-    echo "== Aufgaben: folgt aus der Meldung die Korrektur? =="
+    echo "== Evals: does the message imply the fix? =="
     python -c "import sys; from ct4 import evals; r = evals.run(); print(evals.report(r)); sys.exit(1 if evals.failed(r) else 0)"
 }
 
 run_corpus() {
-    echo "== Referenz gegen den eingecheckten Korpus =="
+    echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
 
     echo
-    echo "== Fork gegen den eingecheckten Korpus =="
+    echo "== Fork against the checked-in corpus =="
     python -m ct4.corpus --impl fork check $CORPUS
 }
 
@@ -86,5 +85,5 @@ case "$WHAT" in
     evals)   run_evals ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
              run_check; echo; run_evals; echo; run_corpus ;;
-    *)       echo "Unbekannt: $WHAT" >&2; exit 2 ;;
+    *)       echo "Unknown: $WHAT" >&2; exit 2 ;;
 esac

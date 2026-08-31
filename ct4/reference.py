@@ -1,11 +1,11 @@
-"""Die Sprache, maschinenlesbar.
+"""The language, machine readable.
 
-Direktiven und Einstellungen kommen aus den Tabellen, aus denen der
-Parser und der Compiler selbst lesen. Eine abgeschriebene Liste liefe
-auseinander, und dann stuende in der Referenz etwas anderes als im Code.
+Directives and settings come from the tables the parser and the compiler
+read from themselves. A copied list would drift apart, and then the
+reference would say something other than the code.
 
-Wozu: wer an einer Vorlage arbeitet, Mensch oder Agent, soll nachsehen
-koennen, ohne ins Web zu gehen oder den Quelltext zu durchsuchen.
+What for: whoever works on a template, human or agent, should be able to
+look things up without going to the web or searching the source.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 
 def directives() -> list[dict[str, Any]]:
-    """Alle Direktiven, mit der Angabe, ob sie ein ``#end`` brauchen."""
+    """All directives, with a note whether they need an ``#end``."""
     from Cheetah.Parser import (directiveNamesAndParsers,
                                 endDirectiveNamesAndHandlers)
 
@@ -24,7 +24,7 @@ def directives() -> list[dict[str, Any]]:
 
 
 def settings() -> list[dict[str, Any]]:
-    """Alle Compiler-Einstellungen mit Vorgabe und Beschreibung."""
+    """All compiler settings with default and description."""
     from Cheetah.Compiler import _DEFAULT_COMPILER_SETTINGS
 
     return [{"name": name, "default": _describe(default),
@@ -33,7 +33,7 @@ def settings() -> list[dict[str, Any]]:
 
 
 def _describe(value: Any) -> Any:
-    """Bringt eine Vorgabe in eine Form, die JSON ablegen kann."""
+    """Brings a default into a form that JSON can store."""
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
     if isinstance(value, (list, tuple)):
@@ -44,35 +44,34 @@ def _describe(value: Any) -> Any:
 
 
 def json_modes() -> list[dict[str, Any]]:
-    """Was der JSON-Modus zusaetzlich kennt.
+    """What JSON mode knows on top of that.
 
-    Steht hier von Hand, weil es dafuer noch keine Tabelle im Code gibt,
-    aus der sich das ableiten liesse. Sobald es eine gibt, kommt es von
-    dort.
+    Written by hand here, because there is no table in the code yet to
+    derive it from. As soon as there is one, it comes from there.
     """
     return [
         {"name": "precision",
-         "where": "Kopf",
-         "syntax": "#precision NAME = ZAHL",
-         "description": "Nachkommastellen fuer ein Ausgabefeld; NAME "
-                        "'default' gilt fuer alle uebrigen"},
+         "where": "header",
+         "syntax": "#precision NAME = NUMBER",
+         "description": "decimal places for an output field; the NAME "
+                        "'default' applies to all the rest"},
         {"name": "missing",
-         "where": "Kopf",
+         "where": "header",
          "syntax": "#missing omit|null|error",
-         "description": "was mit einem Feld ohne Wert geschieht"},
+         "description": "what happens to a field without a value"},
         {"name": "schema",
-         "where": "Kopf",
-         "syntax": '#schema "pfad.json"',
-         "description": "JSON Schema, gegen das geprueft wird"},
+         "where": "header",
+         "syntax": '#schema "path.json"',
+         "description": "JSON Schema to check against"},
         {"name": "series",
-         "where": "Wertposition",
-         "syntax": "#series(AUSDRUCK, layout=..., fields=[...], "
+         "where": "value position",
+         "syntax": "#series(EXPRESSION, layout=..., fields=[...], "
                    "precision=N, gaps=...)",
-         "description": "eine Reihe als records, columns oder pairs"},
+         "description": "a series as records, columns or pairs"},
         {"name": "@",
-         "where": "hinter einem Platzhalter",
-         "syntax": "$pfad @ N",
-         "description": "Nachkommastellen fuer diesen einen Wert"},
+         "where": "after a placeholder",
+         "syntax": "$path @ N",
+         "description": "decimal places for this one value"},
     ]
 
 

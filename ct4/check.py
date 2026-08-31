@@ -1,14 +1,14 @@
-"""Eine Vorlage pruefen, ohne die Anwendung zu starten.
+"""Check a template without starting the application.
 
-Drei Fragen, in dieser Reihenfolge:
+Three questions, in this order:
 
-1. Laesst sie sich uebersetzen?
-2. Liest sie Namen, die es nicht gibt?
-3. Passt sie zu dem Schema, das sie nennt?
+1. Does it compile?
+2. Does it read names that do not exist?
+3. Does it fit the schema it names?
 
-Die zweite ist die, auf die es ankommt, und sie ist erst moeglich, seit
-eine Anwendung ihre Namen anmeldet. ``$day.outTemp.mx`` faellt hier auf,
-ohne dass weewx laeuft und ohne dass eine Datenbank antwortet.
+The second one is the one that matters, and it only became possible once
+an application declares its names. ``$day.outTemp.mx`` shows up here
+without weewx running and without a database answering.
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from ct4 import analyze
 from ct4.declare import Declaration, resolve
 from ct4.diagnostics import ERROR, WARNING, Diagnostic
 
-# Der JSON-Modus wird angesagt, nicht an der Dateiendung erraten.
-# weewx-Skins liefern seit jeher .json.tmpl aus, und das sind
-# Textvorlagen, die JSON von Hand zusammensetzen. Genau die soll ct4
-# weiter uebersetzen wie ct3, nicht als JSON-Dokument lesen.
+# JSON mode is announced, not guessed from the file extension. weewx
+# skins have always shipped .json.tmpl, and those are text templates
+# that assemble JSON by hand. Exactly those ct4 shall keep compiling
+# like ct3, not read as a JSON document.
 MODE_LINE = "#mode json"
 
 
 def is_json_template(source: str) -> bool:
-    """Ob die Vorlage den JSON-Modus ansagt.
+    """Whether the template announces JSON mode.
 
-    Die Ansage steht in der ersten Zeile, die kein Kommentar ist.
+    The announcement stands on the first line that is not a comment.
     """
     for line in source.splitlines():
         stripped = line.strip()
@@ -43,7 +43,7 @@ def is_json_template(source: str) -> bool:
 def check_source(source: str, file: str = "",
                  declarations: Sequence[Declaration] = (),
                  base_dir: Path | None = None) -> list[Diagnostic]:
-    """Prueft eine Vorlage und gibt die Befunde zurueck."""
+    """Checks a template and returns the findings."""
     if is_json_template(source):
         return _check_json(source, file, declarations, base_dir)
     return _check_text(source, file, declarations)
@@ -79,28 +79,28 @@ def _check_json(source: str, file: str, declarations: Sequence[Declaration],
         return [Diagnostic("CT4003", ERROR, str(error), file=file)]
     except FileNotFoundError as error:
         return [Diagnostic("CT4004", ERROR,
-                           "das Schema fehlt: %s" % error.filename,
+                           "the schema is missing: %s" % error.filename,
                            file=file)]
 
     found: list[Diagnostic] = []
     for entry in compiled.check():
         found.append(Diagnostic(entry.code, entry.severity, entry.message,
                                 file=file, path=entry.path))
-    # Der erzeugte Code der Definition traegt dieselben Herkunftsangaben
-    # wie eine gewoehnliche Vorlage, aber sie zeigen in die Definition,
-    # nicht in die Vorlage. Deshalb ohne Zeile.
+    # The generated code of the definition carries the same origin notes
+    # as an ordinary template, but they point into the definition, not
+    # into the template. Hence without a line.
     names = analyze.placeholders(_expression_probe(compiled))
     found.extend(_check_names(names, file, declarations, with_position=False))
     return found
 
 
 def _expression_probe(compiled: object) -> str:
-    """Eine Vorlage, die genau die Ausdruecke des Dokuments nachschlaegt.
+    """A template that looks up exactly the expressions of the document.
 
-    Der JSON-Modus uebersetzt in eine ``#def``; deren Zeilennummern
-    gehoeren zu ihr und nicht zur Vorlage des Autors. Zum Pruefen der
-    Namen reicht das trotzdem, denn geprueft wird der Pfad, nicht sein
-    Ort.
+    JSON mode compiles into a ``#def``; its line numbers belong to that
+    and not to the author's template. For checking the names it is
+    enough all the same, because what is checked is the path, not its
+    place.
     """
     from ct4.jsonmode.emit import emit
 
@@ -123,7 +123,7 @@ def _check_names(found: list[analyze.Placeholder], file: str,
             seen.add(marker)
             out.append(Diagnostic(
                 "CT4103", ERROR,
-                "%s kennt kein Feld %r auf %s"
+                "%s knows no field %r on %s"
                 % (declaration.name, unknown.name, unknown.prefix),
                 file=file,
                 line=item.line if with_position else 0,
@@ -134,13 +134,13 @@ def _check_names(found: list[analyze.Placeholder], file: str,
 
 
 def _parse_error(error: object, file: str) -> Diagnostic:
-    """Macht aus Cheetahs ParseError einen Befund mit Ort.
+    """Turns Cheetah's ParseError into a finding with a place.
 
-    ``lineno`` und ``col`` sind an der Ausnahme meistens None; die
-    Position steht im Datenstrom, aus dem Cheetah seinen Bericht baut.
-    Der Bericht selbst wandert nicht in die Meldung: er ist mehrzeilig
-    und wiederholt die Vorlage, was in einer Liste von Befunden nur
-    stoert.
+    ``lineno`` and ``col`` are mostly None on the exception; the position
+    stands in the stream Cheetah builds its report from. The report
+    itself does not go into the message: it spans several lines and
+    repeats the template, which only gets in the way in a list of
+    findings.
     """
     line = getattr(error, "lineno", None)
     column = getattr(error, "col", None)
@@ -157,9 +157,9 @@ def _parse_error(error: object, file: str) -> Diagnostic:
 
 def unresolved(source: str, declarations: Sequence[Declaration],
                ) -> list[Diagnostic]:
-    """Meldet Wurzeln, zu denen keine Anmeldung etwas sagt.
+    """Reports roots that no declaration says anything about.
 
-    Kein Fehler, sondern die ehrliche Auskunft, wo die Pruefung aufhoert.
+    Not an error, but the honest word on where the check stops.
     """
     known = {name for declaration in declarations
              for name in declaration.roots}
@@ -168,6 +168,6 @@ def unresolved(source: str, declarations: Sequence[Declaration],
         if root not in known:
             out.append(Diagnostic(
                 "CT4110", WARNING,
-                "zu $%s sagt keine Anmeldung etwas; hier wird nicht "
-                "geprueft" % root, path="$" + root))
+                "no declaration says anything about $%s; nothing is "
+                "checked here" % root, path="$" + root))
     return out

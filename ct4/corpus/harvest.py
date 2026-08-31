@@ -1,23 +1,23 @@
-"""Korpusfaelle aus der Testsuite von ct3 ernten.
+"""Harvest corpus cases from the test suite of ct3.
 
-Jeder Ausgabetest von ct3 laeuft durch ``OutputTest.verify()``. Statt die
-Testquellen zu zerlegen, haengt sich der Ernter dort ein und schreibt
-jeden Fall mit, der durchlaeuft. Was ct3 selbst als richtig behauptet,
-wird damit zum Massstab, und zwar in genau der Form, in der ct3 es
-behauptet.
+Every output test of ct3 runs through ``OutputTest.verify()``. Instead
+of taking the test sources apart, the harvester hooks in there and
+writes down every case that passes. What ct3 itself claims to be correct
+thereby becomes the yardstick, and in exactly the form in which ct3
+claims it.
 
-Aufgezeichnet wird erst nach dem Durchlauf. Ein Fall, der unter der
-laufenden Implementierung scheitert, kommt nicht in den Korpus. Er waere
-kein Massstab, sondern ein offener Befund.
+Recording happens only after the run. A case that fails under the
+running implementation does not get into the corpus. It would not be a
+yardstick but an open finding.
 
-Und er muss sich aus seiner eigenen Zeile rekonstruieren lassen. Einige
-ct3-Tests haengen an etwas ausserhalb der Vorlage: ``Backslashes`` und
-``IncludeDirective`` legen in ``setUp`` eine Datei an, die die Vorlage
-per ``#include`` liest, ``CGI`` setzt ``os.environ`` in der Testmethode.
-Solche Faelle wuerden im Pruefstand die Umgebung mitmessen statt die
-Vorlage. Der Ernter erkennt sie, indem er jeden Fall sofort ein zweites
-Mal rendert, in einem leeren Arbeitsverzeichnis. Was dort nicht dasselbe
-liefert, faellt raus und wird gezaehlt.
+And it has to be reconstructible from its own line. Some ct3 tests hang
+on something outside the template: ``Backslashes`` and
+``IncludeDirective`` create a file in ``setUp`` that the template reads
+via ``#include``, ``CGI`` sets ``os.environ`` in the test method. In the
+test bench such cases would measure the environment along with the
+template. The harvester spots them by rendering every case a second time
+right away, in an empty working directory. Whatever does not deliver the
+same there drops out and is counted.
 """
 
 from __future__ import annotations
@@ -33,17 +33,17 @@ from typing import Any
 from ct4.corpus.case import (CT3_DEFAULT, INLINE, Case, encode,
                              is_jsonable)
 
-# Testmodule, deren Faelle durch OutputTest.verify laufen. CheetahWrapper
-# fehlt mit Absicht: es startet die Kommandozeile in einem Unterprozess
-# und liefert keine Vorlage, die sich vergleichen liesse.
+# Test modules whose cases run through OutputTest.verify. CheetahWrapper
+# is missing on purpose: it starts the command line in a subprocess and
+# delivers no template that could be compared.
 MODULES = ("SyntaxAndOutput", "Regressions", "Unicode")
 
 
 class Report:
-    """Was bei einer Ernte herauskam.
+    """What came out of a harvest.
 
-    ``skipped`` zaehlt nach Grund, damit sichtbar bleibt, welcher Anteil
-    der Testsuite noch nicht im Korpus steckt und warum.
+    ``skipped`` counts by reason, so that it stays visible which share of
+    the test suite is not in the corpus yet, and why.
     """
 
     def __init__(self) -> None:
@@ -54,25 +54,24 @@ class Report:
 
     def summary(self) -> str:
         lines = [
-            "Tests gelaufen : %d" % self.tests_run,
-            "davon gefallen : %d" % self.tests_failed,
-            "Faelle geerntet: %d" % len(self.cases),
+            "tests run      : %d" % self.tests_run,
+            "of which failed: %d" % self.tests_failed,
+            "cases harvested: %d" % len(self.cases),
         ]
         for reason, count in sorted(self.skipped.items()):
-            lines.append("uebersprungen  : %-24s %d" % (reason, count))
+            lines.append("skipped        : %-24s %d" % (reason, count))
         return "\n".join(lines)
 
 
 def _effective_eols(test: Any, text: str, convert: Any, marker: Any) -> str:
-    """Wendet die Zeilenende-Ersetzung an, die verify vornimmt.
+    """Applies the line-ending replacement that verify performs.
 
-    ct3 erzeugt zu jeder Testklasse Varianten fuer LF, CRLF und CR und
-    stellt die Vorlage vor dem Vergleich um. ``verify`` gibt die
-    umgestellten Werte nicht heraus, deshalb steht die Regel hier ein
-    zweites Mal. Massgeblich bleibt ``OutputTest.verify``. Laufen beide
-    auseinander, faellt es sofort auf: der geerntete Fall passt dann
-    nicht mehr zu seiner erwarteten Ausgabe, und ``corpus check`` meldet
-    ihn.
+    ct3 creates variants of every test class for LF, CRLF and CR and
+    converts the template before comparing. ``verify`` does not hand out
+    the converted values, which is why the rule stands here a second
+    time. ``OutputTest.verify`` remains authoritative. If the two drift
+    apart, it shows up at once: the harvested case then no longer matches
+    its expected output, and ``corpus check`` reports it.
     """
     replacement = test._EOLreplacement
     if not replacement:
@@ -85,18 +84,17 @@ def _effective_eols(test: Any, text: str, convert: Any, marker: Any) -> str:
 
 
 def _reproduces(case: Case, empty_dir: str) -> bool:
-    """Ob der Fall auch ohne die Testumgebung dieselbe Ausgabe liefert.
+    """Whether the case delivers the same output without the test setup.
 
-    Gerendert wird in einem leeren Arbeitsverzeichnis. Damit fallen die
-    Faelle auf, die eine Datei neben sich brauchen. Umgebungsvariablen
-    bleiben stehen; die mitten im laufenden Testlauf zu verstellen waere
-    gefaehrlicher als der Gewinn, dafuer gibt es den Vergleich gegen
-    ``baseline_environ`` in ``_record``.
+    Rendering happens in an empty working directory. That exposes the
+    cases which need a file next to them. Environment variables are left
+    alone; changing them in the middle of a running test run would be
+    more dangerous than the gain, and for that there is the comparison
+    against ``baseline_environ`` in ``_record``.
 
-    Das Verzeichnis wird nicht hier angelegt und geloescht: unter
-    Windows laesst sich ein Verzeichnis nicht entfernen, solange es das
-    Arbeitsverzeichnis des Prozesses ist. Es lebt deshalb ueber den
-    ganzen Erntelauf.
+    The directory is not created and deleted here: under Windows a
+    directory cannot be removed as long as it is the working directory
+    of the process. It therefore lives for the whole harvest run.
     """
     from ct4.corpus.check import produce
 
@@ -111,10 +109,10 @@ def _reproduces(case: Case, empty_dir: str) -> bool:
 
 
 def _namespace_of(test: Any, default_ns: Any) -> tuple[str, list[Any]]:
-    """Bestimmt, wie sich der Kontext eines Falls ablegen laesst.
+    """Determines how the context of a case can be stored.
 
-    Gibt den Namen und den einzubettenden Kontext zurueck. Ein leerer
-    Name heisst: nicht ablegbar, der Fall faellt raus.
+    Returns the name and the context to embed. An empty name means: not
+    storable, the case drops out.
     """
     search_list = test.searchList() or test._searchList
     if len(search_list) == 1 and search_list[0] is default_ns:
@@ -125,15 +123,15 @@ def _namespace_of(test: Any, default_ns: Any) -> tuple[str, list[Any]]:
 
 
 def harvest() -> Report:
-    """Laesst die ct3-Testsuite laufen und sammelt ihre Ausgabefaelle."""
+    """Runs the ct3 test suite and collects its output cases."""
     from Cheetah.Tests import SyntaxAndOutput as syntax
 
     report = Report()
     seen: Counter[str] = Counter()
     original = syntax.OutputTest.verify
-    # Wie die Umgebung aussieht, bevor irgendein Test sie anfasst. Wer
-    # davon abweicht, hat os.environ gesetzt und rendert etwas, das der
-    # Pruefstand spaeter nicht wiederherstellen kann.
+    # What the environment looks like before any test touches it. A test
+    # that deviates from this has set os.environ and renders something
+    # the test bench cannot reproduce later.
     baseline_environ = dict(os.environ)
     empty_dir = tempfile.mkdtemp(prefix="ct4-corpus-")
 
@@ -163,7 +161,7 @@ def harvest() -> Report:
 def _record(test: Any, source: str, expected: str, convert: Any,
             syntax: Any, report: Report, seen: Counter[str],
             baseline_environ: dict[str, str], empty_dir: str) -> None:
-    """Legt einen durchgelaufenen Vergleich als Korpusfall ab."""
+    """Stores a comparison that passed as a corpus case."""
     settings = encode(test._getCompilerSettings())
     compile_kwargs = encode(test._extraCompileKwArgs or {})
     if not is_jsonable(settings):
@@ -196,13 +194,13 @@ def _record(test: Any, source: str, expected: str, convert: Any,
         origin=test.__class__.__module__,
     )
     if not _reproduces(case, empty_dir):
-        report.skipped["nicht reproduzierbar"] += 1
+        report.skipped["not reproducible"] += 1
         return
     report.cases.append(case)
 
 
 def _run(syntax: Any) -> unittest.TestResult:
-    """Laesst die Testmodule laufen, ohne ihre Ausgabe durchzureichen."""
+    """Runs the test modules without passing their output through."""
     loader = unittest.defaultTestLoader
     suites = [loader.loadTestsFromModule(syntax)]
     for name in MODULES[1:]:

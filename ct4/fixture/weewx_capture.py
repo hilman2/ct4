@@ -1,20 +1,20 @@
-"""Kontexte aus einem laufenden weewx mitschreiben.
+"""Record contexts from a running weewx.
 
-Als pytest-Plugin gedacht. weewx bringt in ``src/weewx/tests`` alles mit,
-was ein echter Report-Lauf braucht: erzeugte Messdaten, eine Datenbank,
-Skins und die Report-Engine. Statt das nachzubauen, haengt sich dieses
-Modul in den Lauf ein:
+Meant as a pytest plugin. In ``src/weewx/tests`` weewx brings along
+everything a real report run needs: generated measurements, a database,
+skins and the report engine. Instead of rebuilding that, this module
+hooks into the run:
 
     pytest src/weewx/tests/test_templates.py -p ct4.fixture.weewx_capture
 
-Eingehaengt wird ausschliesslich in weewx, nicht in Cheetah. Ein
-Unterschieben von ``Cheetah.Template.Template`` geht nicht:
-``Template.__init__`` schlaegt seinen eigenen Namen im Modul nach, und
-eine Ersetzung fuehrt in eine Endlosschleife.
+The hook goes into weewx only, never into Cheetah. Substituting
+``Cheetah.Template.Template`` does not work: ``Template.__init__`` looks
+up its own name in the module, and a replacement leads into an endless
+loop.
 
-Heraus kommt je erzeugter Seite eine Datei mit der Vorlage, dem
-aufgezeichneten Kontext und der Ausgabe, die weewx dabei geschrieben
-hat. Aus diesen drei Stuecken wird ein Korpusfall, der ohne weewx laeuft.
+What comes out is one file per generated page, holding the template, the
+recorded context and the output weewx wrote along the way. Those three
+pieces make a corpus case that runs without weewx.
 """
 
 from __future__ import annotations
@@ -28,20 +28,19 @@ from typing import Any
 
 from ct4.fixture.record import Recorder
 
-# Wohin die Aufzeichnungen gehen. Als Umgebungsvariable, weil das Plugin
-# von pytest geladen wird und keine eigene Kommandozeile hat.
+# Where the recordings go. An environment variable, because the plugin
+# is loaded by pytest and has no command line of its own.
 OUT_ENV = "CT4_FIXTURE_DIR"
 
-# Wenn gesetzt, wird zusaetzlich eine JSON-Vorlage gegen denselben
-# Kontext gerendert. Das ist die Probe aufs Exempel fuer den JSON-Modus:
-# echte weewx-Objekte, keine Aufzeichnung.
+# When set, a JSON template is additionally rendered against the same
+# context. That is the acid test for JSON mode: real weewx objects, not
+# a recording.
 JSON_TEMPLATE_ENV = "CT4_JSON_TEMPLATE"
 JSON_OUT_ENV = "CT4_JSON_OUT"
 
-# Was waehrend des Laufs zusammenkommt. Je erzeugter Seite ein Eintrag
-# mit Vorlage, Ausgabepfad und aufgezeichnetem Kontext. Die Ausgabe
-# selbst wird erst am Ende gelesen: waehrend des Laufs steht sie noch
-# nicht auf der Platte.
+# What accumulates during the run. One entry per generated page, with
+# template, output path and recorded context. The output itself is only
+# read at the end: during the run it is not on disk yet.
 _recorded: list[dict[str, Any]] = []
 _rendered: list[bool] = []
 
@@ -52,19 +51,19 @@ def pytest_configure(config: Any) -> None:
 
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
     written = write_all(Path(os.environ.get(OUT_ENV, "fixtures")))
-    print("\nct4: %d Aufzeichnungen geschrieben" % written)
+    print("\nct4: %d recordings written" % written)
 
 
 def install() -> None:
-    """Haengt den Mitschreiber in weewx' Cheetah-Generator ein."""
+    """Hooks the recorder into weewx' Cheetah generator."""
     import weewx.cheetahgenerator
     from weewx.cheetahgenerator import CheetahGenerator
 
-    # weewx faengt jeden Fehler beim Uebersetzen und Auswerten einer
-    # Vorlage, meldet ihn ins Log und macht weiter. Im Container geht
-    # das Log nach syslog, das es nicht gibt, und ein Lauf ohne eine
-    # einzige erzeugte Seite saehe erfolgreich aus. Deshalb bekommt
-    # dieser Logger einen Ausgang nach stderr.
+    # weewx catches every error while compiling and evaluating a
+    # template, reports it to the log and carries on. In the container
+    # the log goes to syslog, which does not exist, and a run without a
+    # single generated page would look successful. This logger
+    # therefore gets an outlet to stderr.
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("weewx: %(levelname)s %(message)s"))
     weewx.cheetahgenerator.log.addHandler(handler)
@@ -76,17 +75,17 @@ def install() -> None:
     def _prepGen(self: Any, report_dict: Any) -> tuple[Any, ...]:
         template, destination, encoding, binding = original_prep(
             self, report_dict)
-        # Beide Angaben braucht erst _getSearchList, das sie nicht
-        # bekommt. Der Generator ist der einzige Ort, an dem sie
-        # zwischen den beiden Aufrufen ueberleben koennen.
+        # Both of these are needed by _getSearchList, which does not
+        # get them passed. The generator is the only place where they
+        # can survive between the two calls.
         self._ct4_template = template
         self._ct4_destination = destination
-        # Die Ausgabe wird als UTF-8 geschrieben, egal was der Skin
-        # vorsieht. weewx kodiert die fertige Zeichenkette erst beim
-        # Schreiben: 'html_entities' macht aus dem Grad-Zeichen &#176;,
-        # 'strict_ascii' wirft Akzente weg. Das ist eine Eigenschaft des
-        # Schreibens, nicht der Vorlage. Ein Fixture, das sie mitnaehme,
-        # verlangte vom Pruefstand, weewx' Kodierer nachzubauen.
+        # The output is written as UTF-8, whatever the skin intends.
+        # weewx encodes the finished string only when writing:
+        # 'html_entities' turns the degree sign into &#176;,
+        # 'strict_ascii' throws accents away. That is a property of the
+        # writing, not of the template. A fixture that took it along
+        # would require the test rig to rebuild weewx' encoder.
         return template, destination, "utf8", binding
 
     def _getSearchList(self: Any, encoding: Any, timespan: Any,
@@ -114,11 +113,11 @@ def install() -> None:
 
 
 def _render_json(search_list: list[Any]) -> None:
-    """Rendert die JSON-Vorlage, falls eine verlangt ist.
+    """Renders the JSON template, if one is asked for.
 
-    Genommen wird die erste searchList des Laufs. Sie gehoert zu einer
-    beliebigen Seite; fuer die Tags, die die Vorlage benutzt, macht das
-    keinen Unterschied.
+    The first searchList of the run is taken. It belongs to some
+    arbitrary page; for the tags the template uses that makes no
+    difference.
     """
     source = os.environ.get(JSON_TEMPLATE_ENV)
     if not source or _rendered:
@@ -136,26 +135,26 @@ def _render_json(search_list: list[Any]) -> None:
     out = Path(os.environ.get(JSON_OUT_ENV, "day.json"))
     out.write_text(text, encoding="utf-8", newline="\n")
 
-    # Dieselbe Vorlage noch einmal, diesmal stroemend. Beide Wege muessen
-    # dieselben Bytes liefern; daran haengt der zweite Weg, und hier
-    # steht die Zusicherung gegen echte Daten statt gegen Testobjekte.
-    puffer = io.StringIO()
-    compiled.stream(puffer, search_list)
-    gerade = compiled.render(search_list)
-    if puffer.getvalue() != gerade:
+    # The same template once more, this time streaming. Both ways have
+    # to yield the same bytes; the second way rests on that, and here
+    # the assertion runs against real data instead of test objects.
+    buffer = io.StringIO()
+    compiled.stream(buffer, search_list)
+    collected = compiled.render(search_list)
+    if buffer.getvalue() != collected:
         raise AssertionError(
-            "stroemend und sammelnd liefern verschiedene Bytes")
-    print("ct4: stroemend und sammelnd gleich (%d Bytes)" % len(gerade))
+            "streaming and collecting yield different bytes")
+    print("ct4: streaming and collecting agree (%d bytes)" % len(collected))
     _rendered.append(True)
 
 
 def write_all(out_dir: Path) -> int:
-    """Legt die Aufzeichnungen des Laufs ab und gibt ihre Anzahl zurueck.
+    """Stores the run's recordings and returns how many there were.
 
-    Eine Aufzeichnung ohne Ausgabedatei faellt weg. Das passiert, wenn
-    weewx die Vorlage nicht uebersetzen konnte; dann hat der Lauf ein
-    anderes Problem, und ein Fixture ohne erwartete Ausgabe waere nur
-    Ballast.
+    A recording without an output file is dropped. That happens when
+    weewx could not compile the template; then the run has a different
+    problem, and a fixture without expected output would be nothing but
+    ballast.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     written = 0

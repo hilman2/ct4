@@ -1,8 +1,0 @@
-{
- "id": "07-json-komma-zu-viel-ist-kein-fehler",
- "task": "Im JSON-Modus ist ein Komma zu viel kein Fehler.",
- "broken": "#mode json\n{\"a\": 1, \"b\": 2,}\n",
- "expect": {
-  "clean": true
- }
-}

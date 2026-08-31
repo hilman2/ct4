@@ -1,19 +1,20 @@
-"""Ein Bauplatz, der schreibt statt zu sammeln.
+"""A building site that writes instead of collecting.
 
-Der gewoehnliche Bauplatz baut die ganze Struktur im Speicher und gibt
-sie danach an ``json.dumps``. Bei einer Zeitreihe ueber ein Jahr in
-Fuenf-Minuten-Schritten sind das hunderttausend Punkte, und sie liegen
-zweimal da: als Struktur und als Zeichenkette.
+The ordinary building site assembles the whole structure in memory and
+hands it to ``json.dumps`` afterwards. For a time series over a year in
+five-minute steps that is a hundred thousand points, and they are there
+twice: as a structure and as a string.
 
-Hier wird stattdessen sofort geschrieben. Das geht, weil der uebersetzte
-Code den Bauplatz in genau der Reihenfolge bedient, in der JSON die Teile
-erwartet. Kommas entstehen daraus, ob ein Behaelter schon etwas enthaelt,
-und koennen deshalb weder fehlen noch zu viel sein.
+Here they are written out at once instead. That works because the
+compiled code drives the building site in exactly the order in which
+JSON expects the parts. Commas arise from whether a container already
+holds something, and therefore can neither be missing nor be one too
+many.
 
-Byte fuer Byte dasselbe wie der andere Weg. Jeder einzelne Wert geht
-durch ``json.dumps``, damit Escaping, Zahlformat und die Behandlung von
-``null`` sich nicht unterscheiden koennen. Ein Test vergleicht beide Wege
-ueber alle Faelle.
+Byte for byte the same as the other way. Every single value goes
+through ``json.dumps``, so that escaping, number format and the
+handling of ``null`` cannot differ. A test compares both ways across
+all cases.
 """
 
 from __future__ import annotations
@@ -25,19 +26,19 @@ from ct4.adapters import round_to
 from ct4.jsonmode.build import DROP, NULL, OMIT, Builder
 from ct4.jsonmode.render import SEPARATORS
 
-# Aus derselben Quelle wie der sammelnde Weg. Zweimal hingeschrieben
-# waeren sie einmal falsch: json.dumps setzt ohne Angabe ', ' statt ','
-# und der Vergleich beider Wege scheiterte an einem Leerzeichen.
+# From the same source as the collecting way. Written down twice they
+# would be wrong once: without being told, json.dumps uses ', ' instead
+# of ',' and the comparison of both ways would fail over one space.
 COMMA, COLON = SEPARATORS
 
 
 def encode(value: Any) -> str:
-    """Ein einzelner Wert, so wie json.dumps ihn schreiben wuerde."""
+    """A single value, just as json.dumps would write it."""
     return json.dumps(value, ensure_ascii=False, separators=SEPARATORS)
 
 
 class StreamBuilder(Builder):
-    """Schreibt die Struktur, waehrend sie entsteht."""
+    """Writes the structure while it takes shape."""
 
     def __init__(self, out: TextIO, names: Sequence[Any],
                  consts: Sequence[Any],
@@ -45,15 +46,15 @@ class StreamBuilder(Builder):
                  missing: str = NULL):
         super().__init__(names, consts, precisions, missing)
         self.out = out
-        # Je offenem Behaelter: steht schon etwas darin? Daraus
-        # entstehen die Kommas.
+        # Per open container: does it already hold something? The
+        # commas arise from that.
         self._filled: list[bool] = []
-        # Welche Klammer zu schliessen ist. ``end()`` erfaehrt die Art
-        # des Behaelters nicht, also wird sie beim Oeffnen gemerkt.
+        # Which bracket has to be closed. ``end()`` never learns the
+        # kind of the container, so it is remembered when opening.
         self._closers: list[str] = []
         self._done = False
 
-    # -- Behaelter ------------------------------------------------
+    # -- Containers -----------------------------------------------
 
     def _before_value(self) -> None:
         if self._filled and self._filled[-1]:
@@ -88,7 +89,7 @@ class StreamBuilder(Builder):
         if not self._filled:
             self._done = True
 
-    # -- Werte ----------------------------------------------------
+    # -- Values ---------------------------------------------------
 
     def key(self, name_index: int, value: Any,
             precision: int | None = None) -> None:
@@ -112,16 +113,16 @@ class StreamBuilder(Builder):
 
     def take_first(self) -> None:
         raise NotImplementedError(
-            "ein Dokument aus einem einzelnen Wert wird nicht gestroemt; "
-            "dafuer gibt es render()")
+            "a document made of a single value is not streamed; "
+            "render() is there for that")
 
     @property
     def result(self) -> Any:
         if not self._done:
-            raise RuntimeError("die Vorlage hat nichts gebaut")
+            raise RuntimeError("the template built nothing")
         return None
 
-    # -- Reihen ---------------------------------------------------
+    # -- Series ---------------------------------------------------
 
     def series_key(self, name_index: int, source: Iterable[Any],
                    options_index: int) -> None:
@@ -136,12 +137,12 @@ class StreamBuilder(Builder):
 
     def _write_series(self, source: Iterable[Any],
                       options_index: int) -> None:
-        """Schreibt eine Reihe, ohne sie ganz im Speicher zu halten.
+        """Writes a series without holding all of it in memory.
 
-        ``columns`` bricht das: dort steht der erste Wert jeder Spalte
-        neben dem letzten, und dafuer muss die Reihe gesammelt werden.
-        Nur diese eine Form wird gesammelt, und sie ist als einzige
-        nicht stroembar.
+        ``columns`` breaks that: there the first value of every column
+        stands next to the last, and for that the series has to be
+        collected. Only this one form is collected, and it is the only
+        one that cannot be streamed.
         """
         options = self.consts[options_index]
         if options["layout"] == "columns":

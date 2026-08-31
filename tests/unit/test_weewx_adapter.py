@@ -1,6 +1,7 @@
-"""Der Typ-Adapter fuer weewx.
+"""The type adapter for weewx.
 
-Laeuft nur, wo weewx installiert ist, also im Aufzeichnungs-Container.
+Only runs where weewx is installed, that is, in the recording
+container.
 """
 
 from __future__ import annotations
@@ -17,35 +18,35 @@ units = pytest.importorskip("weewx.units")
 
 
 @pytest.fixture(autouse=True)
-def angemeldet():
+def installed():
     weewx_adapter.install()
 
 
-def helper(wert, einheit="degree_C", gruppe="group_temperature"):
-    return units.ValueHelper((wert, einheit, gruppe))
+def helper(value, unit="degree_C", group="group_temperature"):
+    return units.ValueHelper((value, unit, group))
 
 
-def test_rohwert_kommt_durch():
+def test_the_raw_value_comes_through():
     assert as_value(helper(12.3456)).value == 12.3456
 
 
-def test_fehlender_wert_bleibt_none():
+def test_a_missing_value_stays_none():
     assert as_value(helper(None)).value is None
 
 
-def test_wert_wird_zur_zahl_nicht_zur_zeichenkette():
-    ergebnis = json.loads(render('{"t": $t}', [{"t": helper(12.3456)}]))
-    assert isinstance(ergebnis["t"], float)
+def test_the_value_becomes_a_number_not_a_string():
+    result = json.loads(render('{"t": $t}', [{"t": helper(12.3456)}]))
+    assert isinstance(result["t"], float)
 
 
-def test_fehlender_wert_wird_null_nicht_der_text_na():
-    # Ohne Adapter stuende hier "N/A", weil das ValueHelpers str() ist.
+def test_a_missing_value_becomes_null_not_the_text_na():
+    # Without the adapter this would read "N/A", the ValueHelper str().
     assert json.loads(render('{"t": $t}', [{"t": helper(None)}])) == \
         {"t": None}
 
 
-def test_stellen_aus_dem_formatstring():
-    wert = helper(12.3456)
-    wert.formatter.unit_format_dict["degree_C"] = "%.1f"
-    assert as_value(wert).precision == 1
-    assert json.loads(render('{"t": $t}', [{"t": wert}])) == {"t": 12.3}
+def test_the_digits_come_from_the_format_string():
+    value = helper(12.3456)
+    value.formatter.unit_format_dict["degree_C"] = "%.1f"
+    assert as_value(value).precision == 1
+    assert json.loads(render('{"t": $t}', [{"t": value}])) == {"t": 12.3}

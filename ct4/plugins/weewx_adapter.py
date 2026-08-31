@@ -1,19 +1,19 @@
-"""weewx an ct4 anmelden.
+"""Register weewx with ct4.
 
-Das erste Plugin, und deshalb der Massstab fuer die uebrigen: es traegt
-Wissen ein, das ct4 nicht hat, und es rechnet nichts. Was ein Messwert
-ist, welche Einheit er traegt und wie aggregiert wird, bleibt in weewx.
-Hierher wandert nur die Auskunft darueber.
+The first plugin, and therefore the yardstick for the rest: it
+contributes knowledge that ct4 does not have, and it computes nothing.
+What an observation is, which unit it carries and how it is aggregated
+stays in weewx. Only the information about it moves here.
 
-Angemeldet wird ein Typ-Adapter auf ``ValueHelper``. Danach liefert
-``$day.outTemp.max`` im JSON-Modus eine Zahl mit der Rundung, die der
-Skin ohnehin vorsieht, und niemand muss mehr ``.raw`` schreiben oder
-``$jsonize`` bemuehen.
+What gets registered is a type adapter on ``ValueHelper``. After that
+``$day.outTemp.max`` yields a number in JSON mode, rounded the way the
+skin intends anyway, and nobody has to write ``.raw`` or reach for
+``$jsonize``.
 
-Solange ``ct4-weewx`` kein eigenes Paket ist, wird die Methode hier
-nachtraeglich an die Klasse gehaengt. Das ist der Zustand, nicht das
-Ziel: die Methode gehoert zu ``ValueHelper``, und dort sollte sie
-irgendwann auch stehen.
+As long as ``ct4-weewx`` is not a package of its own, the method is
+attached to the class here after the fact. That is the current state,
+not the goal: the method belongs to ``ValueHelper``, and that is where
+it should eventually live.
 """
 
 from __future__ import annotations
@@ -24,17 +24,17 @@ from typing import Any
 from ct4.adapters import Ct4Value
 from ct4.declare import Declaration, Node
 
-# Aus '%.1f' wird 1. weewx traegt die Nachkommastellen in Formatstrings,
-# weil es formatiert; ct4 braucht die Zahl, weil es rundet.
+# '%.1f' becomes 1. weewx carries the decimal places in format strings
+# because it formats; ct4 needs the number because it rounds.
 DIGITS = re.compile(r"%[^%a-zA-Z]*\.(\d+)[eEfgG]")
 
 
 def precision_of(helper: Any) -> int | None:
-    """Wie viele Nachkommastellen der Skin fuer diesen Wert vorsieht.
+    """How many decimal places the skin intends for this value.
 
-    ``None``, wenn sich das nicht sagen laesst. Dann rundet ct4 nicht,
-    und der volle Wert steht im JSON. Das ist die richtige Vorgabe:
-    lieber zu genau als still gekuerzt.
+    ``None`` when that cannot be determined. Then ct4 does not round,
+    and the full value goes into the JSON. That is the right default:
+    too precise rather than silently truncated.
     """
     unit = helper.value_t[1]
     try:
@@ -50,17 +50,17 @@ def value_of(helper: Any) -> Ct4Value:
 
 
 def install() -> None:
-    """Haengt den Adapter an weewx' ValueHelper."""
+    """Attaches the adapter to weewx' ValueHelper."""
     from weewx.units import ValueHelper
 
     ValueHelper.__ct4_value__ = value_of
 
 
 def aggregate_names() -> set[str]:
-    """Die Aggregate, die weewx kennt, aus weewx' eigenen Tabellen.
+    """The aggregates weewx knows, from weewx' own tables.
 
-    Nicht abgeschrieben: abgeschrieben liefe die Liste auseinander, und
-    ein Skin bekaeme Meldungen ueber Namen, die es sehr wohl gibt.
+    Not transcribed: a transcript would drift apart from weewx, and a
+    skin would get complaints about names that do exist.
     """
     import weewx.units
     import weewx.xtypes
@@ -74,12 +74,11 @@ def aggregate_names() -> set[str]:
 
 
 def declare() -> Declaration:
-    """Meldet an, welche Namen ein weewx-Skin lesen darf.
+    """Registers which names a weewx skin may read.
 
-    Die Struktur ist dreistufig und genau dort geschlossen, wo Tippfehler
-    passieren: ``$day.outTemp.mx``. Der mittlere Teil ist ein
-    Messwerttyp, den weewx erst zur Laufzeit kennt, und bleibt deshalb
-    offen.
+    The structure has three levels and is closed exactly where typos
+    happen: ``$day.outTemp.mx``. The middle part is an observation type
+    that weewx only knows at runtime, so it stays open.
     """
     import weewx
     import weewx.tags
@@ -92,8 +91,8 @@ def declare() -> Declaration:
         series=Node(open=True),
     ))
 
-    # Was ein Zeitraum ausser Messwerten noch anbietet. Aus der Klasse
-    # gelesen, damit die Liste mit weewx mitwaechst.
+    # What a period offers besides observations. Read from the class so
+    # that the list grows along with weewx.
     span_fields = {
         name: Node(open=True)
         for name in dir(weewx.tags.TimespanBinder)
@@ -102,16 +101,15 @@ def declare() -> Declaration:
     span_fields["*"] = observation
     span = Node(fields=span_fields)
 
-    # Nur diese Namen liefern einen Zeitraum. $trend liefert Werte,
-    # $span und $days_ago sind Aufrufe. Sie hier mitzunehmen ergaebe
-    # Falschbefunde im unveraenderten Seasons-Skin, und ein Falschbefund
-    # ist schlimmer als ein uebersehener Tippfehler: er bringt Leute
-    # dazu, das Werkzeug zu ignorieren.
+    # Only these names yield a period. $trend yields values, $span and
+    # $days_ago are calls. Taking them along here would produce false
+    # findings in the unmodified Seasons skin, and a false finding is
+    # worse than a missed typo: it makes people ignore the tool.
     periods = ("hour", "day", "yesterday", "week", "month", "year",
                "rainyear", "season", "seasonsyear", "alltime")
     roots = {name: span for name in periods}
-    # Was TimeBinder sonst noch anbietet, bleibt offen. Das ist die
-    # sichere Richtung: hier wird dann nicht geprueft statt falsch.
+    # Whatever else TimeBinder offers stays open. That is the safe
+    # direction: nothing is checked here rather than checked wrongly.
     for name in dir(weewx.tags.TimeBinder):
         if not name.startswith("_"):
             roots.setdefault(name, Node(open=True))
@@ -125,5 +123,5 @@ def declare() -> Declaration:
 
     return Declaration(
         name="weewx",
-        source="weewx %s" % getattr(weewx, "__version__", "unbekannt"),
+        source="weewx %s" % getattr(weewx, "__version__", "unknown"),
         roots=roots)

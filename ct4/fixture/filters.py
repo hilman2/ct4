@@ -1,18 +1,18 @@
-"""Ausgabefilter, die zu aufgezeichneten Kontexten gehoeren.
+"""Output filters that belong to recorded contexts.
 
-Ein Fixture haelt fest, was eine Vorlage aus dem Kontext liest. Was
-danach mit dem gelesenen Wert passiert, bestimmt der Filter, und den
-setzt die Anwendung. weewx setzt ``AssureUnicode``, und dessen Verhalten
-ist an zwei Stellen sichtbar: ``None`` wird zur leeren Zeichenkette, und
-ein ``AttributeError`` beim Umwandeln wird zum Rohtext des Platzhalters
-statt zu einem Abbruch. Ein Skin fuehrt das absichtlich vor, etwa mit
+A fixture holds what a template reads from the context. What happens to
+the value after that is up to the filter, and the application sets the
+filter. weewx sets ``AssureUnicode``, whose behaviour shows at two
+points: ``None`` becomes the empty string, and an ``AttributeError``
+during conversion becomes the raw text of the placeholder instead of an
+abort. A skin demonstrates this on purpose, for example with
 ``$day(data_binding='foo_binding')``.
 
-Der Filter steht deshalb hier nachgebildet. Das ist eine Kopie fremden
-Verhaltens, und Kopien laufen auseinander: ``tests/unit/test_weewx.py``
-vergleicht beide Fassungen Zeichen fuer Zeichen, sobald weewx zur
-Verfuegung steht. Sobald es ``ct4-weewx`` als Plugin gibt, gehoert der
-Filter dorthin und nicht mehr hierher.
+The filter is therefore reproduced here. This is a copy of foreign
+behaviour, and copies drift apart: ``tests/unit/test_weewx.py`` compares
+both versions character by character as soon as weewx is available. Once
+``ct4-weewx`` exists as a plugin, the filter belongs there and no longer
+here.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ NAMES: dict[str, type] = {}
 
 
 class WeewxAssureUnicode(Filter):  # type: ignore[misc]
-    """Nachbildung von ``weewx.cheetahgenerator.AssureUnicode``."""
+    """Reproduction of ``weewx.cheetahgenerator.AssureUnicode``."""
 
     def filter(self, val: Any, **kwargs: Any) -> str:
         if val is None:
@@ -44,10 +44,10 @@ NAMES["weewx.AssureUnicode"] = WeewxAssureUnicode
 
 
 def resolve(name: str) -> type | None:
-    """Die Filterklasse zu einem Namen, oder None fuer den Vorgabefilter."""
+    """The filter class for a name, or None for the default filter."""
     if not name:
         return None
     try:
         return NAMES[name]
     except KeyError:
-        raise KeyError("unbekannter Filter: %s" % name) from None
+        raise KeyError("unknown filter: %s" % name) from None

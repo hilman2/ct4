@@ -1,18 +1,18 @@
-"""Was eine Anwendung ueber ihre Namen anmeldet.
+"""What an application declares about its names.
 
-Ein Plugin, das nur ausfuehrt, bringt fuer die Werkzeuge nichts. Der Wert
-von ``ct4 check`` haengt daran, Dinge zu wissen, ohne sie laufen zu
-lassen. Also meldet eine Anwendung an, welche Namen es gibt, und die
-Anmeldung wird einmal erhoben und abgelegt.
+A plugin that only runs things brings nothing to the tools. The worth of
+``ct4 check`` hangs on knowing things without letting them run. So an
+application declares which names exist, and the declaration is gathered
+once and stored.
 
-Danach findet ``ct4 check`` einen Tippfehler in einem weewx-Skin, ohne
-dass weewx laeuft, ohne Datenbank und in Millisekunden.
+After that ``ct4 check`` finds a typo in a weewx skin without weewx
+running, without a database and in milliseconds.
 
-Ein Knoten hat Felder, und ein Feld ``*`` steht fuer einen Namen, den die
-Anwendung erst zur Laufzeit kennt. Bei weewx ist das der Messwerttyp:
-``$day.outTemp.max`` ist ``day``, dann irgendein Messwert, dann ein
-Aggregat aus einer geschlossenen Liste. Genau dort passieren die
-Tippfehler, und genau dort lassen sie sich finden.
+A node has fields, and a field ``*`` stands for a name the application
+only knows at run time. In weewx that is the observation type:
+``$day.outTemp.max`` is ``day``, then some observation, then an
+aggregate out of a closed list. That is exactly where the typos happen,
+and exactly where they can be found.
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ ANY = "*"
 
 @dataclass
 class Node:
-    """Ein Name und was unter ihm steht.
+    """A name and what stands below it.
 
-    ``open`` heisst: hier darf alles stehen, tiefer wird nicht geprueft.
-    Das ist die ehrliche Antwort fuer Objekte, deren Felder die Anwendung
-    selbst nicht aufzaehlen kann.
+    ``open`` means: anything may stand here, deeper down nothing is
+    checked. That is the honest answer for objects whose fields the
+    application cannot enumerate itself.
     """
 
     fields: dict[str, "Node"] = field(default_factory=dict)
@@ -65,7 +65,7 @@ class Node:
 
 @dataclass
 class Declaration:
-    """Die Anmeldung einer Anwendung."""
+    """The declaration of an application."""
 
     name: str
     roots: dict[str, Node] = field(default_factory=dict)
@@ -96,7 +96,7 @@ class Declaration:
 
 @dataclass(frozen=True)
 class Unknown:
-    """Ein Pfad, den die Anmeldung nicht kennt."""
+    """A path the declaration does not know."""
 
     prefix: str
     name: str
@@ -109,12 +109,12 @@ class Unknown:
 
 
 def resolve(declaration: Declaration, path: str) -> Unknown | None:
-    """Prueft einen Platzhalterpfad gegen die Anmeldung.
+    """Checks a placeholder path against the declaration.
 
-    Gibt ``None`` zurueck, wenn der Pfad passt oder wenn die Anmeldung
-    zu ihm nichts sagt. Das Schweigen ist Absicht: eine Wurzel, die
-    niemand angemeldet hat, ist kein Fehler, sondern unbekanntes Gebiet.
-    Nur wo eine geschlossene Liste steht, wird widersprochen.
+    Returns ``None`` when the path fits or when the declaration says
+    nothing about it. The silence is deliberate: a root that nobody has
+    declared is not an error but unknown ground. Only where a closed
+    list stands is there any objection.
     """
     parts = path.split(".")
     node = declaration.roots.get(parts[0])

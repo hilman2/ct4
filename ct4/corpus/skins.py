@@ -1,13 +1,13 @@
-"""Fremde Skins als Uebersetzungsfaelle in den Korpus nehmen.
+"""Take third-party skins into the corpus as compilation cases.
 
-Ein weewx-Skin laesst sich nicht rendern, ohne weewx samt Datenbank zu
-starten. Sein Kontext ist eine laufende Anwendung, keine Datei. Uebersetzt
-werden kann er aber sehr wohl, und damit wird genau das geprueft, was P4
-im Plan ersetzen will: Parser und Codegenerator.
+A weewx skin cannot be rendered without starting weewx along with its
+database. Its context is a running application, not a file. Compiling it
+works perfectly well, though, and that checks exactly what P4 of the
+plan sets out to replace: parser and code generator.
 
-Ein Uebersetzungsfall haelt den erzeugten Modulcode fest. Aendert ct4 die
-Sprache versehentlich, faellt das hier auf, lange bevor irgendwer eine
-Wetterstation braucht.
+A compilation case records the generated module code. If ct4 changes the
+language by accident, that shows up here, long before anyone needs a
+weather station.
 """
 
 from __future__ import annotations
@@ -18,17 +18,17 @@ from typing import Iterator
 
 from ct4.corpus.case import COMPILE, Case
 
-# weewx-Skins legen Vorlagen unter beiden Endungen ab: .tmpl fuer eine
-# Seite, .inc fuer einen Baustein, den eine Seite per #include holt.
+# weewx skins store templates under both suffixes: .tmpl for a page,
+# .inc for a building block that a page pulls in via #include.
 SUFFIXES = (".tmpl", ".inc")
 
 
 def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
-    """Uebersetzt jede Vorlage unter ``root`` und legt sie als Fall ab.
+    """Compiles every template under ``root`` and stores it as a case.
 
-    ``name`` wird der Namensraum der Fall-Kennungen, damit sich ein Skin
-    im Korpus wiederfinden laesst. Zurueck kommen die Faelle und eine
-    Zaehlung dessen, was nicht uebersetzbar war.
+    ``name`` becomes the namespace of the case ids, so that a skin can
+    be found again in the corpus. Returned are the cases and a count of
+    what could not be compiled.
     """
     from ct4.corpus.check import compile_code
 
@@ -39,7 +39,7 @@ def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
         try:
             source = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            skipped["nicht UTF-8"] += 1
+            skipped["not UTF-8"] += 1
             continue
         case = Case(
             id="%s/%s" % (name, relative),
@@ -51,9 +51,9 @@ def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
         try:
             code = compile_code(case)
         except Exception as exc:                        # noqa: BLE001
-            # Eine Vorlage, die ct3 nicht uebersetzt, ist kein Massstab.
-            # Gezaehlt wird sie nach Ausnahmetyp, damit sichtbar bleibt,
-            # ob es an der Vorlage liegt oder an unserem Aufruf.
+            # A template that ct3 does not compile is no yardstick. It
+            # is counted by exception type, so that it stays visible
+            # whether the template or our own call is to blame.
             skipped[type(exc).__name__] += 1
             continue
         cases.append(Case(**{**case.__dict__, "expected": code}))

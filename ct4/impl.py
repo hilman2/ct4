@@ -1,11 +1,11 @@
-"""Auswahl der Cheetah-Implementierung, gegen die gemessen wird.
+"""Choice of the Cheetah implementation that is measured against.
 
-Der Pruefstand vergleicht zwei Implementierungen, die beide unter dem
-Namen ``Cheetah`` importiert werden: den Fork in diesem Repo und das per
-pip installierte ct3. Welche von beiden gewinnt, haengt allein daran, ob
-das Repo-Wurzelverzeichnis auf ``sys.path`` steht. Deshalb wird die Wahl
-hier einmal explizit getroffen und nicht dem Aufrufer und seinen
-Umgebungsvariablen ueberlassen.
+The test bench compares two implementations, both of which are imported
+under the name ``Cheetah``: the fork in this repository and the ct3
+installed by pip. Which of the two wins depends solely on whether the
+repository root is on ``sys.path``. That is why the choice is made here,
+once and explicitly, instead of being left to the caller and their
+environment variables.
 """
 
 from __future__ import annotations
@@ -21,18 +21,18 @@ CHOICES = (FORK, INSTALLED)
 
 
 def select(impl: str) -> None:
-    """Legt fest, welches Cheetah-Paket ein spaeterer Import findet.
+    """Determines which Cheetah package a later import will find.
 
-    Muss laufen, bevor irgendetwas ``Cheetah`` importiert hat. Bei
-    ``installed`` faellt das Repo-Wurzelverzeichnis aus ``sys.path``, so
-    dass nur noch das installierte ct3 uebrig bleibt. Das Paket ``ct4``
-    ist zu diesem Zeitpunkt bereits geladen und ueberlebt das.
+    Must run before anything has imported ``Cheetah``. With
+    ``installed``, the repository root drops out of ``sys.path``, so that
+    only the installed ct3 is left. The ``ct4`` package is already loaded
+    at that point and survives it.
     """
     if impl not in CHOICES:
-        raise ValueError("unbekannte Implementierung: %s" % impl)
+        raise ValueError("unknown implementation: %s" % impl)
     if "Cheetah" in sys.modules:
         raise RuntimeError(
-            "Cheetah ist bereits importiert; select() kam zu spaet")
+            "Cheetah is already imported; select() came too late")
     if impl == INSTALLED:
         sys.path[:] = [
             entry for entry in sys.path
@@ -41,11 +41,11 @@ def select(impl: str) -> None:
 
 
 def describe() -> str:
-    """Version und Dateipfad des tatsaechlich geladenen Cheetah.
+    """Version and file path of the Cheetah that actually got loaded.
 
-    Der Pfad steht dabei, weil die Version allein nicht verraet, ob der
-    Fork oder das installierte Paket gewonnen hat: beide melden waehrend
-    P0 dieselbe Versionsreihe.
+    The path is reported alongside because the version alone does not
+    reveal whether the fork or the installed package won: during P0 both
+    report the same version series.
     """
     import Cheetah
     from Cheetah import NameMapper

@@ -1,23 +1,23 @@
-# Alles:   docker compose -f tests/docker/compose.yml run --rm tests
-# Nur Korpus:  ... run --rm tests corpus
+# All:   docker compose -f tests/docker/compose.yml run --rm tests
+# Corpus only:  ... run --rm tests corpus
 services:
   tests:
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
-      # Die Quellen bleiben unberuehrt. Gebaut und geschrieben wird nur
-      # in der tmpfs unter /work.
+      # The sources stay untouched. Building and writing happen only in
+      # the tmpfs under /work.
       - ../..:/repo:ro
     tmpfs:
-      # uid/gid, weil der Lauf nicht als root stattfindet und eine tmpfs
-      # sonst root gehoert.
+      # uid/gid, because the run does not happen as root and a tmpfs
+      # would otherwise belong to root.
       - /work:exec,size=512m,uid=1000,gid=1000
     working_dir: /work
     environment:
       PYTHONUNBUFFERED: "1"
 
-  # Kontexte aus einem echten weewx-Lauf mitschreiben:
+  # Record contexts from a real weewx run:
   #   docker compose -f tests/docker/compose.yml run --rm capture
   capture:
     build:

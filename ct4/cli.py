@@ -1,8 +1,8 @@
-"""Die Kommandozeile von ct4.
+"""The command line of ct4.
 
-Jedes Kommando kann seine Ausgabe als JSON. Das ist kein Zusatz: ein
-Werkzeug, dessen Ergebnis nur ein Mensch lesen kann, taugt weder fuer
-eine CI noch fuer einen Agenten.
+Every command can give its output as JSON. That is not an extra: a tool
+whose result only a human can read is good for neither a CI nor an
+agent.
 
     ct4 check skins/Seasons/index.html.tmpl --format=json
     ct4 context index.html.tmpl
@@ -20,7 +20,7 @@ from typing import Sequence
 from ct4 import diagnostics
 from ct4.declare import Declaration
 
-# Wo Anmeldungen liegen, wenn keine genannt wird.
+# Where declarations live when none is named.
 DECLARATIONS = Path(__file__).resolve().parent.parent / "declarations"
 
 
@@ -28,30 +28,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ct4")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    check = sub.add_parser("check", help="eine Vorlage pruefen")
+    check = sub.add_parser("check", help="check a template")
     check.add_argument("paths", type=Path, nargs="+")
     check.add_argument("--format", default="text",
                        choices=sorted(diagnostics.FORMATS))
     check.add_argument("--declare", type=Path, action="append", default=[],
-                       help="Anmeldung; ohne Angabe alle aus declarations/")
+                       help="declaration; without one all of declarations/")
     check.add_argument("--unresolved", action="store_true",
-                       help="auch melden, wo nicht geprueft werden konnte")
+                       help="also report where nothing could be checked")
 
     context = sub.add_parser(
-        "context", help="was eine Vorlage aus dem Kontext liest")
+        "context", help="what a template reads from its context")
     context.add_argument("path", type=Path)
     context.add_argument("--json", action="store_true")
     context.add_argument("--roots", action="store_true",
-                         help="nur die Wurzeln, nicht die vollen Pfade")
+                         help="only the roots, not the full paths")
 
     reference = sub.add_parser(
-        "reference", help="Direktiven und Einstellungen, maschinenlesbar")
+        "reference", help="directives and settings, machine readable")
     reference.add_argument("--json", action="store_true")
 
-    declare = sub.add_parser("declare", help="Anmeldungen anzeigen")
+    declare = sub.add_parser("declare", help="show the declarations")
     declare.add_argument("--json", action="store_true")
 
-    sub.add_parser("mcp", help="als MCP-Server ueber stdio sprechen")
+    sub.add_parser("mcp", help="speak as an MCP server over stdio")
 
     args = parser.parse_args(argv)
     if args.command == "check":
@@ -68,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def load_declarations(paths: Sequence[Path]) -> list[Declaration]:
-    """Laedt die genannten Anmeldungen, sonst alle mitgelieferten."""
+    """Loads the named declarations, otherwise all the shipped ones."""
     if not paths:
         paths = sorted(DECLARATIONS.glob("*.json")) if \
             DECLARATIONS.is_dir() else []
@@ -115,11 +115,11 @@ def _reference(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=1))
         return 0
-    print("Direktiven (%d):" % len(data["directives"]))
+    print("Directives (%d):" % len(data["directives"]))
     for entry in data["directives"]:
         print("  #%-18s %s" % (entry["name"],
-                               "schliessbar" if entry["closeable"] else ""))
-    print("\nEinstellungen (%d):" % len(data["settings"]))
+                               "closeable" if entry["closeable"] else ""))
+    print("\nSettings (%d):" % len(data["settings"]))
     for entry in data["settings"]:
         print("  %-38s %r" % (entry["name"], entry["default"]))
     return 0
@@ -132,8 +132,8 @@ def _declare(args: argparse.Namespace) -> int:
                          ensure_ascii=False, indent=1))
         return 0
     for declaration in declarations:
-        print("%s (%s): %d Wurzeln"
-              % (declaration.name, declaration.source or "ohne Angabe",
+        print("%s (%s): %d roots"
+              % (declaration.name, declaration.source or "not stated",
                  len(declaration.roots)))
         print("  " + ", ".join(sorted(declaration.roots)))
     return 0

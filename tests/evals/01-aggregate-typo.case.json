@@ -1,6 +1,6 @@
 {
- "id": "01-aggregat-vertippt",
- "task": "Ein Skin liest $day.outTemp.mx statt .max.",
+ "id": "01-aggregate-typo",
+ "task": "A skin reads $day.outTemp.mx instead of .max.",
  "broken": "Heute hoechstens $day.outTemp.mx Grad.\n",
  "fixed": "Heute hoechstens $day.outTemp.max Grad.\n",
  "expect": {

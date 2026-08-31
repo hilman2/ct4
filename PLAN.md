@@ -733,12 +733,56 @@ verbessert, nicht die Eval.
 Ziel: Parität mit jinja2 im Textmodus, deutlich darüber im JSON-Modus, weil dort
 die Serialisierung in C läuft statt als Stringkonkatenation in Python.
 
-Hebel, nach erwarteter Wirkung:
+### Gemessen am 31-Aug-2026
 
-1. Persistenter Compile-Cache, wirkt auf jeden frischen Prozess
-2. Kein `inspect.stack()` je Platzhalter im `strict`- und `json`-Modus
-3. `json.dumps` mit C-Encoder statt selbst gebauter Ausgabe
-4. Ausgabe über Liste und `join` statt wiederholter `write`-Aufrufe
+Eine Tabelle mit 200 Zeilen und drei Platzhaltern je Zeile, bestes von drei
+Läufen:
+
+| | je Render | zur Handschrift |
+|---|---|---|
+| von Hand geschrieben | 0,027 ms | 1x |
+| jinja2 | 0,068 ms | 2,5x |
+| ct4, wie ausgeliefert | 0,412 ms | 15x |
+
+Wo die Zeit hingeht:
+
+| | Anteil |
+|---|---|
+| NameMapper | 52 % |
+| Ausgabefilter | 21 % |
+| Rest (Schleife, `write`, Template-Maschinerie) | 26 % |
+
+### Zwei der vier Hebel waren falsch
+
+**Hebel 2 war verkehrt herum.** Der Plan wollte `inspect.stack()` je Platzhalter
+sparen. Mit dem C-NameMapper gibt es kein `inspect.stack()`: der C-Code läuft
+direkt über den Frame, und das ist der **schnelle** Weg. Schaltet man
+`useStackFrames` ab, erzeugt der Compiler stattdessen
+
+```python
+_v = VFSL([locals()]+SL+[globals(), builtin], "r.name", True)
+```
+
+also eine neue Liste samt `locals()` und `globals()` bei **jedem** Platzhalter.
+Gemessen: 0,393 ms mit Frames gegen 0,527 ms ohne. Abschalten kostet 34 Prozent.
+
+**Hebel 4 gibt es schon.** `DummyResponse` sammelt in `_outputChunks` und fügt am
+Ende mit `join` zusammen. Da ist nichts zu holen.
+
+### Was wirklich hilft
+
+jinja2 ist nahe an der Handschrift, weil sein Compiler weiss, dass `r` eine
+Schleifenvariable ist, und direkten Attributzugriff erzeugt. ct4 schlägt für
+dieselbe Stelle den Pfad `"r.name"` zur Laufzeit nach.
+
+Daran hängt alles: **die Hälfte der Zeit ist erst zu holen, wenn der Compiler
+Geltungsbereiche kennt.** Das ist die Arbeit aus P4, nicht eine Einstellung, die
+man umlegt. P5 kann seine Performanceziele ohne P4 nicht erreichen, und der Plan
+sagte das bisher nicht.
+
+Der zweitgrösste Posten, der Ausgabefilter mit 21 Prozent, ist im JSON-Modus
+ohnehin weg: dort gibt es keinen Filter, weil keine Zeichenkette zusammengesetzt
+wird.
 
 Benchmark-Suite im Repo und in CI, mit Schwelle. Eine Regression bricht den
 Build.
@@ -955,8 +999,11 @@ Der Umbau lohnt erst, wenn er beiden Modi dient.
 
 ### P5 — `strict`-Modus und Performance
 
-- Kein Autocalling, keine Frame-Auflösung, kontextabhängiges Escaping im
-  `markup`-Modus, `async`-Rendering, Sandbox für Vorschau und Agent-Schleifen
+- Kein Autocalling, kontextabhängiges Escaping im `markup`-Modus,
+  `async`-Rendering, Sandbox für Vorschau und Agent-Schleifen
+- Die Frame-Auflösung **nicht** ersatzlos entfernen: gemessen ist sie der
+  schnelle Weg (Abschnitt 12). Sie fällt weg, wenn der Compiler aus P4
+  Geltungsbereiche kennt und direkten Zugriff erzeugt, nicht vorher
 - PEP-750-Interop: t-strings als Kontextwerte, die ihr Escaping mitbringen
 - `ct4 migrate` schreibt Templates um und meldet jede Verhaltensänderung
 

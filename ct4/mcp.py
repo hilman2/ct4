@@ -1,13 +1,13 @@
-"""Ein MCP-Server ueber stdio.
+"""An MCP server over stdio.
 
-Damit bekommt ein Agent denselben Prueflauf wie die CI, ohne Kommandos zu
-raten. Die Werkzeuge sind dieselben wie auf der Kommandozeile; hier
-werden sie nur anders angesprochen.
+With it an agent gets the same check run as the CI, without guessing
+commands. The tools are the same as on the command line; here they are
+only addressed differently.
 
-Gesprochen wird JSON-RPC 2.0, eine Nachricht je Zeile. Das reicht fuer
-den Teil des Protokolls, um den es geht: ``initialize``, ``tools/list``
-und ``tools/call``. Eine Bibliothek dafuer waere eine Abhaengigkeit fuer
-zweihundert Zeilen, die sich nicht aendern.
+What is spoken is JSON-RPC 2.0, one message per line. That covers the
+part of the protocol this is about: ``initialize``, ``tools/list`` and
+``tools/call``. A library for it would be a dependency for two hundred
+lines that do not change.
 
     ct4 mcp
 """
@@ -25,7 +25,7 @@ from ct4.cli import load_declarations
 
 PROTOCOL = "2024-11-05"
 
-# JSON-RPC kennt feste Nummern fuer die Faelle, die schiefgehen koennen.
+# JSON-RPC has fixed numbers for the cases that can go wrong.
 INVALID_PARAMS = -32602
 METHOD_NOT_FOUND = -32601
 INTERNAL_ERROR = -32603
@@ -33,22 +33,22 @@ INTERNAL_ERROR = -32603
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "check",
-        "description": "Prueft eine Vorlage: Syntax, unbekannte Namen und "
-                       "das Schema. Braucht die Anwendung nicht.",
+        "description": "Checks a template: syntax, unknown names and the "
+                       "schema. Does not need the application.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "source": {"type": "string",
-                           "description": "der Text der Vorlage"},
+                           "description": "the text of the template"},
                 "path": {"type": "string",
-                         "description": "alternativ ein Dateipfad"},
+                         "description": "a file path instead"},
             },
         },
     },
     {
         "name": "context",
-        "description": "Was eine Vorlage aus dem Kontext liest, mit Zeile "
-                       "und Spalte.",
+        "description": "What a template reads from its context, with "
+                       "line and column.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -59,27 +59,27 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "reference",
-        "description": "Alle Direktiven, Compiler-Einstellungen und die "
-                       "Direktiven des JSON-Modus.",
+        "description": "All directives, compiler settings and the "
+                       "directives of JSON mode.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "declare",
-        "description": "Welche Namen die angemeldeten Anwendungen kennen.",
+        "description": "Which names the declared applications know.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "render_json",
-        "description": "Rendert eine Vorlage im JSON-Modus gegen einen "
-                       "Kontext aus JSON.",
+        "description": "Renders a template in JSON mode against a "
+                       "context taken from JSON.",
         "inputSchema": {
             "type": "object",
             "required": ["source", "context"],
             "properties": {
                 "source": {"type": "string"},
                 "context": {"type": "object",
-                            "description": "wird als einziger Namensraum "
-                                           "der searchList benutzt"},
+                            "description": "used as the only namespace "
+                                           "of the searchList"},
             },
         },
     },
@@ -87,13 +87,13 @@ TOOLS: list[dict[str, Any]] = [
 
 
 def _source_of(arguments: dict[str, Any]) -> tuple[str, str]:
-    """Text und Name der Vorlage, aus ``source`` oder ``path``."""
+    """Text and name of the template, from ``source`` or ``path``."""
     if arguments.get("source") is not None:
-        return arguments["source"], arguments.get("path", "<vorlage>")
+        return arguments["source"], arguments.get("path", "<template>")
     if arguments.get("path"):
         path = Path(arguments["path"])
         return path.read_text(encoding="utf-8"), str(path)
-    raise ValueError("weder source noch path angegeben")
+    raise ValueError("neither source nor path was given")
 
 
 def tool_check(arguments: dict[str, Any]) -> Any:
@@ -138,16 +138,16 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
 
 
 def call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Fuehrt ein Werkzeug aus und verpackt sein Ergebnis.
+    """Runs a tool and wraps up its result.
 
-    Ein Fehler im Werkzeug ist kein Protokollfehler: er gehoert in die
-    Antwort, damit der Agent ihn liest, statt an einer Ausnahme zu
-    scheitern.
+    An error in the tool is not a protocol error: it belongs in the
+    answer, so that the agent reads it instead of failing on an
+    exception.
     """
     try:
         handler = HANDLERS[name]
     except KeyError:
-        return _content("Unbekanntes Werkzeug: %s" % name, error=True)
+        return _content("Unknown tool: %s" % name, error=True)
     try:
         result = handler(arguments)
     except Exception as error:                          # noqa: BLE001
@@ -160,7 +160,7 @@ def _content(text: str, error: bool = False) -> dict[str, Any]:
 
 
 def handle(message: dict[str, Any]) -> dict[str, Any] | None:
-    """Beantwortet eine Nachricht. ``None`` heisst: keine Antwort noetig."""
+    """Answers a message. ``None`` means: no answer needed."""
     method = message.get("method")
     identifier = message.get("id")
 
@@ -177,10 +177,10 @@ def handle(message: dict[str, Any]) -> dict[str, Any] | None:
         return _ok(identifier, call(params.get("name", ""),
                                     params.get("arguments") or {}))
     if identifier is None:
-        # Eine Benachrichtigung, etwa notifications/initialized. Sie
-        # bekommt keine Antwort, und das ist kein Fehler.
+        # A notification, such as notifications/initialized. It gets no
+        # answer, and that is not an error.
         return None
-    return _fail(identifier, METHOD_NOT_FOUND, "unbekannt: %s" % method)
+    return _fail(identifier, METHOD_NOT_FOUND, "unknown: %s" % method)
 
 
 def _version() -> str:
@@ -189,7 +189,7 @@ def _version() -> str:
 
         return str(Version)
     except Exception:                                   # noqa: BLE001
-        return "unbekannt"
+        return "unknown"
 
 
 def _ok(identifier: Any, result: Any) -> dict[str, Any]:
@@ -202,7 +202,7 @@ def _fail(identifier: Any, code: int, message: str) -> dict[str, Any]:
 
 
 def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> int:
-    """Liest Nachrichten bis zum Ende des Stroms."""
+    """Reads messages until the end of the stream."""
     source = stdin or sys.stdin
     sink = stdout or sys.stdout
     for line in source:

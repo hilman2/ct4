@@ -1,15 +1,15 @@
-name: Korpus
+name: Corpus
 
-# Prueft, ob ct4 dieselbe Ausgabe liefert wie das ausgelieferte ct3, und
-# laesst Linter, Typpruefung und beide Testsuiten laufen. Gelaufen wird
-# ueber dieselbe Compose-Datei wie lokal, damit die Umgebung an genau
-# einer Stelle beschrieben ist.
+# Checks whether ct4 delivers the same output as the shipped ct3, and
+# runs linter, type check and both test suites. It runs through the same
+# compose file as locally, so that the environment is described in
+# exactly one place.
 
 on: [push, pull_request]
 
 jobs:
   alles:
-    name: Lint, Tests, Korpus
+    name: Lint, tests, corpus
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

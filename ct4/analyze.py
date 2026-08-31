@@ -1,14 +1,14 @@
-"""Was eine Vorlage aus ihrem Kontext liest.
+"""What a template reads from its context.
 
-Nicht durch einen zweiten Parser, sondern aus dem Code, den Cheetah
-ohnehin erzeugt. Dort steht jeder Platzhalter als Pfad, mitsamt Zeile
-und Spalte, an der er im Template stand:
+Not through a second parser, but from the code Cheetah generates
+anyway. Every placeholder appears there as a path, together with the
+line and column it stood at in the template:
 
     _v = VFFSL(SL,"day.outTemp.max",True) # '$day.outTemp.max' on line 5, col 7
 
-Das ist keine Notloesung, sondern die genaueste Quelle, die es gibt: es
-ist das, was zur Laufzeit wirklich nachgeschlagen wird. Ein eigener
-Parser koennte davon abweichen, dieser Weg nicht.
+This is not a stopgap but the most accurate source there is: it is what
+actually gets looked up at run time. A parser of our own could diverge
+from it, this route cannot.
 """
 
 from __future__ import annotations
@@ -17,24 +17,24 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-# Ein Nachschlagen in der searchList. VFFSL loest den Pfad ueber Frame
-# und searchList auf, VFSL nur ueber die searchList.
+# A lookup in the searchList. VFFSL resolves the path through the frame
+# and the searchList, VFSL only through the searchList.
 LOOKUP = re.compile(r'VFF?SL\(SL,"([^"]+)",\s*(?:True|False)\)')
 
-# Die Herkunftsangabe, die Cheetah hinter den Ausdruck schreibt.
+# The origin note Cheetah writes behind the expression.
 ORIGIN = re.compile(r"(?:on|from) line (\d+), col (\d+)")
 
-# Steht in der Vorlage ein #errorCatcher, wandert jeder Platzhalter in
-# eine eigene Methode. Dann trennt Cheetah Ausdruck und Herkunft auf
-# mehrere Zeilen, und nur der Aufruf von warn() traegt beides. Ohne
-# diesen zweiten Fall verlaeren die Skins von weewx ihre Platzhalter:
-# Seasons setzt den errorCatcher.
+# If a template contains an #errorCatcher, every placeholder moves into
+# a method of its own. Cheetah then splits expression and origin across
+# several lines, and only the call to warn() carries both. Without this
+# second form the weewx skins lose their placeholders: Seasons sets the
+# errorCatcher.
 LINECOL = re.compile(r"lineCol=\((\d+),\s*(\d+)\)")
 
 
 @dataclass(frozen=True)
 class Placeholder:
-    """Ein Pfad, den die Vorlage nachschlaegt, und wo er steht."""
+    """A path the template looks up, and where it stands."""
 
     path: str
     line: int
@@ -47,7 +47,7 @@ class Placeholder:
 
 def placeholders(source: str, settings: dict[str, Any] | None = None,
                  ) -> list[Placeholder]:
-    """Alle Nachschlagevorgaenge einer Vorlage, in Reihenfolge der Datei."""
+    """Every lookup of a template, in the order of the file."""
     from Cheetah.Compiler import ModuleCompiler
 
     options = dict(settings or {})
@@ -64,20 +64,20 @@ def _scan(code: str) -> Iterator[Placeholder]:
         if origin is None:
             continue
         line, column = int(origin.group(1)), int(origin.group(2))
-        # Nur die Nachschlagevorgaenge in der searchList. Ein VFN steht
-        # fuer ein Attribut auf einem schon aufgeloesten Wert; welche es
-        # dort gibt, weiss keine Anmeldung, und geraten wuerde daraus ein
-        # Falschbefund. Stehen mehrere Ausdruecke auf einer Zeile,
-        # teilen sie sich deren Position.
+        # Only the lookups in the searchList. A VFN stands for an
+        # attribute on an already resolved value; no declaration knows
+        # which ones exist there, and guessing would turn into a false
+        # finding. If several expressions stand on one line, they share
+        # its position.
         for path in LOOKUP.findall(text):
             yield Placeholder(path, line, column)
 
 
 def roots(items: list[Placeholder]) -> list[str]:
-    """Die Wurzeln, die eine Vorlage braucht, ohne Wiederholung."""
+    """The roots a template needs, without repetition."""
     return sorted({item.root for item in items})
 
 
 def paths(items: list[Placeholder]) -> list[str]:
-    """Die vollen Pfade, ohne Wiederholung."""
+    """The full paths, without repetition."""
     return sorted({item.path for item in items})

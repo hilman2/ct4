@@ -1,6 +1,6 @@
-"""Werkzeuge fuer die Entwicklung von Cheetah 4.
+"""Tools for developing Cheetah 4.
 
-Dieses Paket gehoert nicht zur Laufzeit der Template-Engine. Es enthaelt
-den Pruefstand, mit dem die Vertraeglichkeit mit ct3 gemessen wird, und
-spaeter die uebrigen Kommandos aus PLAN.md.
+This package is not part of the template engine's runtime. It holds the
+test rig that measures compatibility with ct3, and later the remaining
+commands from PLAN.md.
 """

@@ -1,13 +1,12 @@
-"""Den Korpus gegen eine Cheetah-Implementierung pruefen.
+"""Check the corpus against a Cheetah implementation.
 
-Jeder Fall wird erzeugt und Byte fuer Byte mit dem verglichen, was
-abgelegt ist. Ein Unterschied ist ein Befund, egal wie klein: der Korpus
-haelt fest, was ct3 tut, und ct4 hat das zu treffen, solange es im
-Textmodus laeuft.
+Every case is produced and compared byte for byte with what is stored.
+A difference is a finding, however small: the corpus records what ct3
+does, and ct4 has to match that as long as it runs in text mode.
 
-Der Korpus soll wachsen, bis er weh tut. Deshalb laeuft die Pruefung von
-Anfang an auf allen Kernen. Ein Fall haengt von keinem anderen ab, das
-ist die ganze Voraussetzung dafuer.
+The corpus is meant to grow until it hurts. That is why the check runs
+on all cores from the start. No case depends on any other, and that is
+the whole prerequisite for it.
 """
 
 from __future__ import annotations
@@ -23,31 +22,31 @@ from typing import Iterable, Sequence
 from ct4.corpus import namespaces
 from ct4.corpus.case import COMPILE, Case, decode, read_jsonl
 
-# Zeilen im erzeugten Modul, die von Lauf zu Lauf oder von Version zu
-# Version wechseln. Zeitstempel schaltet der Compiler auf Wunsch selbst
-# ab; die beiden Versionszeilen bleiben und wuerden jeden Vergleich
-# zwischen zwei Cheetah-Staenden scheitern lassen, ohne etwas ueber die
-# Vorlage zu sagen.
+# Lines in the generated module that change from run to run or from
+# version to version. Timestamps the compiler switches off itself on
+# request; the two version lines stay and would make every comparison
+# between two Cheetah revisions fail without saying anything about the
+# template.
 VOLATILE_LINES = ("__CHEETAH_version__", "__CHEETAH_versionTuple__")
 
-# Unter diesem Umfang kostet das Starten der Arbeitsprozesse mehr, als
-# die Verteilung einbringt.
+# Below this many cases, starting the worker processes costs more than
+# the distribution brings in.
 PARALLEL_THRESHOLD = 2000
 
-# Die Faelle des Arbeitsprozesses. Er laedt sie selbst von der Platte,
-# statt sie geschickt zu bekommen: ein Fall traegt eine ganze Vorlage
-# und deren erwartete Ausgabe, und den Korpus an jeden Arbeiter zu
-# pickeln kostet mehr als das Pruefen. Gemessen auf 24 Kernen war die
-# Fassung mit Versand langsamer als der serielle Lauf.
+# The cases of the worker process. It loads them from disk itself
+# instead of having them sent over: a case carries a whole template and
+# its expected output, and pickling the corpus to every worker costs
+# more than the checking does. Measured on 24 cores, the version that
+# sent them was slower than the serial run.
 _worker_cases: Sequence[Case] = ()
 
 
 @dataclass(frozen=True)
 class Mismatch:
-    """Ein Fall, der anders herauskam als abgelegt.
+    """A case that came out different from what was stored.
 
-    ``error`` traegt die Ausnahme, wenn das Erzeugen gar nicht so weit
-    kam. Dann ist ``actual`` leer.
+    ``error`` carries the exception if producing it never got that far.
+    ``actual`` is then empty.
     """
 
     case: Case
@@ -60,22 +59,22 @@ class Mismatch:
         return "".join(difflib.unified_diff(
             self.case.expected.splitlines(keepends=True),
             self.actual.splitlines(keepends=True),
-            fromfile="erwartet", tofile="erhalten", n=context))
+            fromfile="expected", tofile="actual", n=context))
 
 
 def normalize_code(code: str) -> str:
-    """Entfernt aus erzeugtem Modulcode, was nichts ueber die Vorlage sagt."""
+    """Strips from generated code what says nothing about the template."""
     return "\n".join(
         line for line in code.splitlines()
         if not line.startswith(VOLATILE_LINES))
 
 
 def compile_code(case: Case) -> str:
-    """Uebersetzt einen Fall und gibt den erzeugten Modulcode zurueck.
+    """Compiles a case and returns the generated module code.
 
-    Der Weg ueber ``ModuleCompiler`` statt ueber ``Template.compile``
-    ist Absicht: hier soll nichts ausgefuehrt und nichts zwischen-
-    gespeichert werden, es geht allein um den erzeugten Text.
+    Going through ``ModuleCompiler`` instead of ``Template.compile`` is
+    deliberate: nothing is meant to be executed and nothing cached here,
+    this is only about the generated text.
     """
     from Cheetah.Compiler import ModuleCompiler
 
@@ -90,7 +89,7 @@ def compile_code(case: Case) -> str:
 
 
 def render(case: Case) -> str:
-    """Rendert einen Fall mit der gerade geladenen Implementierung."""
+    """Renders a case with the implementation currently loaded."""
     from Cheetah.Template import Template
 
     from ct4.fixture.filters import resolve
@@ -99,9 +98,9 @@ def render(case: Case) -> str:
         source=case.template,
         compilerSettings=decode(case.settings),
         **decode(case.compile_kwargs))
-    # Der Filter gehoert zum Fall, nicht zum Pruefstand: welche Anwendung
-    # die Vorlage rendert, entscheidet, was aus None und aus einem
-    # Fehler beim Umwandeln wird.
+    # The filter belongs to the case, not to the test bench: which
+    # application renders the template decides what becomes of None and
+    # of an error during conversion.
     filter_class = resolve(case.filter)
     kwargs = {"filter": filter_class} if filter_class else {}
     template = template_class(searchList=namespaces.build(case), **kwargs)
@@ -112,14 +111,14 @@ def render(case: Case) -> str:
 
 
 def produce(case: Case) -> str:
-    """Erzeugt, was bei diesem Fall verglichen wird."""
+    """Produces whatever is compared for this case."""
     if case.kind == COMPILE:
         return compile_code(case)
     return render(case)
 
 
 def compare(case: Case) -> Mismatch | None:
-    """Prueft einen Fall. Gibt None zurueck, wenn er stimmt."""
+    """Checks one case. Returns None if it is correct."""
     try:
         actual = produce(case)
     except Exception as exc:                            # noqa: BLE001
@@ -130,20 +129,20 @@ def compare(case: Case) -> Mismatch | None:
 
 
 def check(cases: Iterable[Case]) -> tuple[int, list[Mismatch]]:
-    """Prueft die Faelle im eigenen Prozess."""
+    """Checks the cases in the current process."""
     found = [compare(case) for case in cases]
     return len(found), [m for m in found if m is not None]
 
 
 def check_files(paths: Sequence[Path],
                 jobs: int = 0) -> tuple[int, list[Mismatch]]:
-    """Prueft die Faelle der angegebenen Dateien, verteilt auf Kerne.
+    """Checks the cases of the given files, spread over the cores.
 
-    ``jobs`` ist die Zahl der Arbeitsprozesse, 0 heisst alle und 1 heisst
-    im eigenen Prozess. Die Reihenfolge der Abweichungen folgt der
-    Reihenfolge der Faelle, auch verteilt: sonst wechselte die Ausgabe
-    zwischen zwei gleichen Laeufen, und ein Bericht liesse sich nicht
-    vergleichen.
+    ``jobs`` is the number of worker processes, 0 means all of them and
+    1 means in the current process. The order of the mismatches follows
+    the order of the cases, even when spread out: otherwise the output
+    would differ between two identical runs, and one report could not be
+    compared against another.
     """
     cases = load(paths)
     if jobs == 0:
@@ -151,9 +150,8 @@ def check_files(paths: Sequence[Path],
     if not use_pool(len(cases), jobs):
         return check(cases)
 
-    # Grosse Bloecke, weil jeder Auftrag nur eine Zahl kostet und jeder
-    # Wechsel den Uebersetzungs-Zwischenspeicher des Arbeiters kaelter
-    # macht.
+    # Large chunks, because every job costs no more than one number and
+    # every switch leaves the worker's compilation cache colder.
     chunk = max(1, len(cases) // (jobs * 4))
     context = multiprocessing.get_context()
     arguments = (_selected_impl(), [str(path) for path in paths])
@@ -163,29 +161,29 @@ def check_files(paths: Sequence[Path],
 
 
 def use_pool(count: int, jobs: int) -> bool:
-    """Ob sich das Verteilen bei dieser Menge lohnt.
+    """Whether distributing pays off for this many cases.
 
-    Steht als eigene Funktion da, weil sich die Entscheidung sonst nicht
-    pruefen laesst: ob ein Lauf verteilt war, sieht man einem Ergebnis
-    nicht an, nur seiner Dauer.
+    It stands here as a function of its own, because otherwise the
+    decision could not be tested: a result does not show whether a run
+    was distributed, only its duration does.
     """
     return jobs != 1 and count >= PARALLEL_THRESHOLD
 
 
 def default_jobs() -> int:
-    """Wie viele Arbeitsprozesse ohne ausdrueckliche Angabe laufen.
+    """How many worker processes run without an explicit setting.
 
-    ``os.process_cpu_count`` beruecksichtigt die Zuteilung an den
-    Prozess, nicht nur die Kerne der Maschine. Genau das braucht ein
-    Container, dem ``--cpus`` weniger zugeteilt wurde als die Maschine
-    hat. Vor Python 3.13 gibt es die Funktion nicht.
+    ``os.process_cpu_count`` takes the allocation to the process into
+    account, not just the cores of the machine. That is exactly what a
+    container needs that was given fewer ``--cpus`` than the machine
+    has. Before Python 3.13 the function does not exist.
     """
     counter = getattr(os, "process_cpu_count", os.cpu_count)
     return counter() or 1
 
 
 def _selected_impl() -> str:
-    """Woher das gerade geladene Cheetah kommt, als Wort fuer ct4.impl."""
+    """Where the loaded Cheetah comes from, as a word for ct4.impl."""
     from ct4 import impl
 
     import Cheetah
@@ -196,11 +194,11 @@ def _selected_impl() -> str:
 
 
 def _init_worker(impl_name: str, paths: Sequence[str]) -> None:
-    """Richtet einen Arbeitsprozess ein.
+    """Sets up a worker process.
 
-    Unter ``fork`` ist Cheetah schon geladen und die Wahl steht; unter
-    ``spawn`` faellt sie hier. Beide Faelle muessen gehen, weil Linux
-    und Windows verschiedene Startarten haben.
+    Under ``fork`` Cheetah is already loaded and the choice is settled;
+    under ``spawn`` it is made here. Both cases have to work, because
+    Linux and Windows have different start methods.
     """
     global _worker_cases
 
@@ -216,7 +214,7 @@ def _compare_index(index: int) -> Mismatch | None:
 
 
 def load(paths: Iterable[Path]) -> list[Case]:
-    """Liest alle angegebenen Korpusdateien in Dateireihenfolge."""
+    """Reads all the given corpus files in file order."""
     cases: list[Case] = []
     for path in paths:
         cases.extend(read_jsonl(path))

@@ -1,13 +1,13 @@
-"""Wie fremde Objekte sich ct4 erklaeren.
+"""How foreign objects explain themselves to ct4.
 
-Der Kern von ct4 lernt nicht, was ein Messwert ist. Er fragt danach. Ein
-Objekt, das ``__ct4_value__`` anbietet, sagt damit: hier ist mein nackter
-Wert, und so viele Nachkommastellen sind dafuer sinnvoll. Ein Objekt mit
-``__ct4_json__`` bestimmt seine Serialisierung ganz selbst.
+The core of ct4 never learns what a measurement is. It asks. An object
+that offers ``__ct4_value__`` says: here is my bare value, and this
+many decimal places make sense for it. An object with ``__ct4_json__``
+decides its serialization entirely on its own.
 
-Wer nichts davon anbietet, wird nach den Regeln von JSON behandelt, und
-was dort keinen Platz hat, wird zu seinem ``str()``. Das ist die einzige
-Stelle, an der geraten wird, und sie ist bewusst die letzte.
+Whatever offers neither is treated by the rules of JSON, and what has
+no place there becomes its ``str()``. That is the only point where
+anything is guessed, and it is deliberately the last one.
 """
 
 from __future__ import annotations
@@ -15,17 +15,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-# Werte, die JSON unmittelbar kennt.
+# Values that JSON knows directly.
 NATIVE = (str, int, float, bool, type(None))
 
 
 @dataclass(frozen=True)
 class Ct4Value:
-    """Ein Wert mitsamt dem, was die Anwendung ueber ihn weiss.
+    """A value together with what the application knows about it.
 
-    ``precision`` ist ein Vorschlag, kein Befehl: eine Angabe im Template
-    schlaegt ihn. ``label`` gilt nur fuer den Textmodus; im JSON hat eine
-    Einheit am Zahlwert nichts zu suchen.
+    ``precision`` is a suggestion, not an order: a setting in the
+    template overrides it. ``label`` applies to text mode only; in JSON
+    a unit has no business sitting on a number.
     """
 
     value: Any
@@ -44,7 +44,7 @@ class SupportsCt4Json(Protocol):
 
 
 def as_value(obj: Any) -> Ct4Value:
-    """Holt aus einem Objekt seinen Wert und was daran bekannt ist."""
+    """Gets an object's value and what is known about it."""
     if isinstance(obj, Ct4Value):
         return obj
     hook = getattr(obj, "__ct4_value__", None)
@@ -52,24 +52,24 @@ def as_value(obj: Any) -> Ct4Value:
         result = hook()
         if not isinstance(result, Ct4Value):
             raise TypeError(
-                "%s.__ct4_value__ lieferte %s statt Ct4Value"
+                "%s.__ct4_value__ returned %s instead of Ct4Value"
                 % (type(obj).__name__, type(result).__name__))
         return result
     return Ct4Value(obj)
 
 
 def round_to(value: Any, precision: int | None) -> Any:
-    """Rundet einen Zahlwert, laesst alles andere in Ruhe.
+    """Rounds a numeric value, leaves everything else alone.
 
-    Gerundet wird auf dem Zahlwert, nicht ueber einen Formatstring. Ein
-    Formatstring macht aus einer Zahl eine Zeichenkette, und die steht im
-    JSON dann in Anfuehrungszeichen. Das ist der haeufigste Fehler in
-    Skins, die JSON von Hand bauen.
+    Rounding happens on the number itself, not through a format string.
+    A format string turns a number into a string, and that string then
+    sits in the JSON in quotes. This is the most common mistake in
+    skins that build JSON by hand.
     """
     if precision is None or value is None or isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
         rounded = round(value, precision)
-        # round() auf einem int gibt ein int zurueck; das bleibt so.
+        # round() on an int returns an int; that stays that way.
         return rounded
     return value

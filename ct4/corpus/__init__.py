@@ -1,10 +1,10 @@
-"""Der Vergleichskorpus und sein Pruefstand.
+"""The comparison corpus and its test bench.
 
-Ein Korpusfall besteht aus einer Vorlage, einem Kontext und der Ausgabe,
-die ct3 dafuer liefert. Der Pruefstand rendert jeden Fall mit einer
-gewaehlten Implementierung und vergleicht Byte fuer Byte. Das ist das
-Abnahmekriterium aus PLAN.md, Abschnitt 8: Vertraeglichkeit wird
-gemessen, nicht behauptet.
+A corpus case consists of a template, a context and the output that ct3
+delivers for it. The test bench renders every case with a chosen
+implementation and compares byte for byte. That is the acceptance
+criterion from PLAN.md, section 8: compatibility is measured, not
+claimed.
 """
 
 from ct4.corpus.case import Case, read_jsonl, write_jsonl

@@ -1,17 +1,16 @@
-"""Der JSON-Modus: eine Vorlage beschreibt eine Struktur, keinen Text.
+"""JSON mode: a template describes a structure, not text.
 
-Der Weg einer Vorlage:
+The path a template takes:
 
-1. ``parse`` liest sie als JSON-Dokument mit Loechern.
-2. ``emit`` macht daraus eine Cheetah-Definition, die einen Bauplatz
-   bedient.
-3. Cheetah uebersetzt die Definition. Damit gelten fuer die Ausdruecke
-   dieselben Regeln wie im Textmodus.
-4. Der Bauplatz baut die Struktur, ``json.dumps`` schreibt sie.
+1. ``parse`` reads it as a JSON document with holes.
+2. ``emit`` turns that into a Cheetah definition that drives a
+   building site.
+3. Cheetah compiles the definition. The expressions therefore follow
+   the same rules as in text mode.
+4. The building site assembles the structure, ``json.dumps`` writes it.
 
-Kommas, Escaping, Typen und ``null`` sind damit keine Autorenprobleme
-mehr. Es gibt sie nicht: an keiner Stelle wird eine Zeichenkette
-zusammengesetzt.
+Commas, escaping, types and ``null`` are no longer the author's
+problem. They do not exist: nowhere is a string pieced together.
 """
 
 from ct4.jsonmode.render import compile_template, render

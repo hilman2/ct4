@@ -1,8 +1,8 @@
-"""Die Eval-Suite als Teil des Testlaufs.
+"""The eval suite as part of the test run.
 
-Jede Aufgabe wird ein eigener Test. Faellt eine, ist nicht die Aufgabe
-falsch, sondern die Meldung zu duenn: dann wird die Meldung besser,
-nicht die Aufgabe leichter.
+Every task becomes its own test. If one fails, the task is not wrong,
+the message is too thin: then the message gets better, not the task
+easier.
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ import pytest
 
 from ct4 import evals
 
-FAELLE = evals.load()
+TASKS = evals.load()
 
 
-def test_es_gibt_aufgaben():
-    assert FAELLE
+def test_there_are_tasks():
+    assert TASKS
 
 
-@pytest.mark.parametrize("fall", FAELLE, ids=lambda f: f.id)
-def test_aus_der_meldung_folgt_die_korrektur(fall):
-    ergebnis = evals.run_case(fall, base_dir=evals.CASES)
-    assert ergebnis.passed, "\n".join(ergebnis.reasons)
+@pytest.mark.parametrize("task", TASKS, ids=lambda t: t.id)
+def test_the_message_implies_the_fix(task):
+    result = evals.run_case(task, base_dir=evals.CASES)
+    assert result.passed, "\n".join(result.reasons)

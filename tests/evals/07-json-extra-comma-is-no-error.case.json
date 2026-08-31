@@ -1,0 +1,8 @@
+{
+ "id": "07-json-extra-comma-is-no-error",
+ "task": "In JSON mode one comma too many is not an error.",
+ "broken": "#mode json\n{\"a\": 1, \"b\": 2,}\n",
+ "expect": {
+  "clean": true
+ }
+}

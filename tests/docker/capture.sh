@@ -1,11 +1,11 @@
 #!/bin/sh
-# Arbeitet mit einem echten weewx.
+# Works against a real weewx.
 #
-#   capture  Kontexte aus einem Report-Lauf mitschreiben (Vorgabe)
-#   verify   denselben Lauf einmal mit ct3 und einmal mit dem Fork
-#            machen und die erzeugten Seiten vergleichen
+#   capture  record contexts from a report run (default)
+#   verify   do the same run once with ct3 and once with the fork and
+#            compare the pages they produce
 #
-# Die Aufzeichnungen landen unter /out, das der Aufrufer einhaengt.
+# The recordings land under /out, which the caller mounts.
 set -eu
 
 cp -r /repo/Cheetah /repo/ct4 /repo/tests /repo/setup.py \
@@ -22,26 +22,26 @@ run_capture() {
     export CT4_FIXTURE_DIR="${CT4_FIXTURE_DIR:-/out}"
     mkdir -p "$CT4_FIXTURE_DIR"
 
-    # Der Test von weewx faellt hier durch, auch ohne unser Plugin: die
-    # erzeugten Seiten weichen von seinen Erwartungsdateien ab. Uns geht
-    # es nicht um sein Urteil, sondern um die Kontexte, die dabei
-    # anfallen.
+    # The weewx test fails here, even without our plugin: the pages it
+    # produces differ from its own expectation files. We are not after
+    # its verdict, but after the contexts that accumulate along the
+    # way.
     python -m pytest test_templates.py -q -p ct4.fixture.weewx_capture \
         -k sqlite || true
 
     echo
-    echo "== Nachbau des weewx-Filters =="
+    echo "== Reimplementation of the weewx filter =="
     cd /work && python -m pytest tests/unit/test_weewx_filter.py -q
 
     echo
-    echo "Aufzeichnungen:"
+    echo "Recordings:"
     ls -1 "$CT4_FIXTURE_DIR" | wc -l
 }
 
-# Das Abnahmekriterium aus PLAN.md, Abschnitt 8: weewx laeuft mit
-# unveraendertem Code und unveraenderten Skins gegen ct4 und erzeugt
-# byte-identische Ausgabe. Gemessen wird, indem derselbe Report-Lauf
-# zweimal stattfindet und die erzeugten Baeume verglichen werden.
+# The acceptance criterion from PLAN.md, section 8: weewx runs against
+# ct4 with unchanged code and unchanged skins and produces byte-identical
+# output. Measured by letting the same report run happen twice and
+# comparing the trees it produces.
 run_verify() {
     cd "$TESTS"
     for impl in ct3 ct4; do
@@ -54,21 +54,21 @@ run_verify() {
                 >/dev/null 2>&1 || true
         fi
         cp -r "$RESULTS" "/tmp/out-$impl"
-        echo "$impl: $(find "/tmp/out-$impl" -type f | wc -l) Dateien"
+        echo "$impl: $(find "/tmp/out-$impl" -type f | wc -l) files"
     done
 
     echo
     if diff -r /tmp/out-ct3 /tmp/out-ct4; then
-        echo "Gleich: weewx erzeugt unter ct4 dieselben Seiten wie unter ct3."
+        echo "Same: weewx under ct4 makes the same pages as under ct3."
     else
-        echo "Unterschiede gefunden." >&2
+        echo "Differences found." >&2
         exit 1
     fi
 }
 
-# Das Abnahmekriterium fuer P2: ein Skin erzeugt sein JSON im neuen
-# Modus, das Ergebnis haelt sein Schema, und zwei Laeufe liefern
-# dieselben Bytes.
+# The acceptance criterion for P2: a skin produces its JSON in the new
+# mode, the result holds to its schema, and two runs deliver the same
+# bytes.
 run_json() {
     cd "$TESTS"
     export PYTHONPATH=/work
@@ -81,9 +81,9 @@ run_json() {
 
     echo
     if cmp -s /tmp/day-1.json /tmp/day-2.json; then
-        echo "Zwei Laeufe, dieselben Bytes."
+        echo "Two runs, the same bytes."
     else
-        echo "Die Laeufe unterscheiden sich." >&2
+        echo "The runs differ." >&2
         diff /tmp/day-1.json /tmp/day-2.json | head -20 >&2
         exit 1
     fi
@@ -95,5 +95,5 @@ case "${1:-capture}" in
     capture) run_capture ;;
     verify)  run_verify ;;
     json)    run_json ;;
-    *)       echo "Unbekannt: $1" >&2; exit 2 ;;
+    *)       echo "Unknown: $1" >&2; exit 2 ;;
 esac

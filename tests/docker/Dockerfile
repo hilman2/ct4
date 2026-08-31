@@ -1,27 +1,27 @@
-# Umgebung fuer den Korpus-Pruefstand und die Tests des Werkzeugs.
+# Environment for the corpus test bench and the tool's own tests.
 #
-# Im Bild stehen zwei Cheetah-Implementierungen nebeneinander: das per pip
-# installierte ct3 als Referenz und der Fork aus diesem Repo. Welche von
-# beiden ein Lauf benutzt, entscheidet ct4.impl anhand von sys.path.
-# Deshalb wird der Fork bewusst nicht installiert: ein editierbarer
-# Installationseintrag verdeckte die Referenz, und der Vergleich maesse
-# zweimal dasselbe.
+# The image carries two Cheetah implementations side by side: the
+# pip-installed ct3 as the reference, and the fork from this repo. Which
+# of the two a run uses is decided by ct4.impl from sys.path. That is
+# why the fork is deliberately not installed: an editable install entry
+# would shadow the reference, and the comparison would measure the same
+# thing twice.
 FROM python:3.13-slim
 
-# Der C-NameMapper muss gebaut werden. Ohne ihn schaltet ct3 still
-# useStackFrames ab, und dann misst der Pruefstand eine andere Semantik
-# als die, die ausgeliefert wird.
+# The C NameMapper has to be built. Without it ct3 silently turns off
+# useStackFrames, and then the test bench measures a different semantics
+# than the one that ships.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Die Referenzversion ist die, die weewx-Anwender heute installieren.
+# The reference version is the one weewx users install today.
 ARG CT3_VERSION=3.4.0.post5
 RUN pip install --no-cache-dir "ct3==${CT3_VERSION}" setuptools
 
-# Feste Versionen: was hier laeuft, soll nicht davon abhaengen, wann das
-# Bild gebaut wurde. Markdown und pygments braucht die Filter-Testsuite
-# von ct3.
+# Pinned versions: what runs here must not depend on when the image was
+# built. Markdown and pygments are needed by the filter test suite of
+# ct3.
 RUN pip install --no-cache-dir \
         "pytest==8.4.2" "pytest-xdist==3.8.0" "pytest-timeout==2.4.0" \
         "ruff==0.14.4" "mypy==1.18.2" \

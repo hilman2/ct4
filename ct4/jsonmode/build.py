@@ -1,12 +1,13 @@
-"""Der Bauplatz, auf dem eine JSON-Struktur entsteht.
+"""The building site on which a JSON structure takes shape.
 
-Der uebersetzte Code ruft hier Methoden auf, statt Zeichen zu schreiben.
-Deshalb kann kein Komma fehlen und keins zu viel sein: es gibt keine.
+The compiled code calls methods here instead of writing characters.
+That is why no comma can be missing and none can be one too many:
+there are none.
 
-Namen und feste Werte aus der Vorlage stehen in ``names`` und ``consts``
-und werden ueber ihren Index angesprochen. Sie im uebersetzten Code
-stehen zu lassen waere heikel, weil Cheetah dort jedes ``$`` als
-Platzhalter liest, auch eines mitten in einem Schluessel.
+Names and constant values from the template live in ``names`` and
+``consts`` and are addressed by their index. Leaving them in the
+compiled code would be risky, because Cheetah reads every ``$`` there
+as a placeholder, even one in the middle of a key.
 """
 
 from __future__ import annotations
@@ -19,17 +20,17 @@ OMIT = "omit"
 NULL = "null"
 ERROR = "error"
 
-# Ein Wert, der nicht in die Ausgabe gehoert. Nicht None: None ist ein
-# gueltiges Ergebnis und wird zu null.
+# A value that does not belong in the output. Not None: None is a valid
+# result and becomes null.
 DROP = object()
 
 
 class MissingValue(ValueError):
-    """Ein Feld hat keinen Wert, und die Vorlage verlangt einen."""
+    """A field has no value, and the template demands one."""
 
 
 class Builder:
-    """Nimmt die Aufrufe des uebersetzten Codes entgegen."""
+    """Takes the calls the compiled code makes."""
 
     def __init__(self, names: Sequence[Any], consts: Sequence[Any],
                  precisions: dict[str, int] | None = None,
@@ -41,35 +42,35 @@ class Builder:
         self._stack: list[Any] = []
         self._result: Any = DROP
 
-    # -- Behaelter ------------------------------------------------
+    # -- Containers -----------------------------------------------
 
     def open(self, kind: str) -> None:
-        """Beginnt den Wurzelbehaelter."""
+        """Starts the root container."""
         self._stack.append({} if kind == "obj" else [])
 
     def open_key(self, name_index: int, kind: str) -> None:
-        """Beginnt einen Behaelter unter einem Schluessel."""
+        """Starts a container under a key."""
         container: Any = {} if kind == "obj" else []
         self._stack[-1][self.names[name_index]] = container
         self._stack.append(container)
 
     def open_key_at(self, name: Any, kind: str) -> None:
-        """Wie ``open_key``, aber der Schluessel entsteht zur Laufzeit."""
+        """Like ``open_key``, but the key arises at run time."""
         container: Any = {} if kind == "obj" else []
         self._stack[-1][str(name)] = container
         self._stack.append(container)
 
     def take_first(self) -> None:
-        """Macht aus dem Hilfsbehaelter der Wurzel deren einzigen Wert.
+        """Turns the root's helper container into its single value.
 
-        Ein Dokument darf aus einem einzelnen Wert bestehen. Der Bauplatz
-        braucht trotzdem einen Behaelter, und der wird hier wieder
-        abgezogen.
+        A document may consist of a single value. The building site
+        still needs a container, and that container is taken away
+        again here.
         """
         self._result = self._result[0]
 
     def open_item(self, kind: str) -> None:
-        """Beginnt einen Behaelter als Element einer Liste."""
+        """Starts a container as an element of a list."""
         container: Any = {} if kind == "obj" else []
         self._stack[-1].append(container)
         self._stack.append(container)
@@ -82,10 +83,10 @@ class Builder:
     @property
     def result(self) -> Any:
         if self._result is DROP:
-            raise RuntimeError("die Vorlage hat nichts gebaut")
+            raise RuntimeError("the template built nothing")
         return self._result
 
-    # -- Werte ----------------------------------------------------
+    # -- Values ---------------------------------------------------
 
     def key(self, name_index: int, value: Any,
             precision: int | None = None) -> None:
@@ -97,7 +98,7 @@ class Builder:
 
     def key_at(self, name: Any, value: Any,
                precision: int | None = None) -> None:
-        """Wie ``key``, aber der Schluessel entsteht erst zur Laufzeit."""
+        """Like ``key``, but the key only arises at run time."""
         text = str(name)
         prepared = self.prepare(value, precision, text)
         if prepared is DROP:
@@ -107,15 +108,15 @@ class Builder:
     def item(self, value: Any, precision: int | None = None) -> None:
         prepared = self.prepare(value, precision, None)
         if prepared is DROP:
-            # In einer Liste laesst sich nichts weglassen, ohne die
-            # Stellen zu verschieben. Ein fehlendes Element wird null,
-            # auch wenn die Politik sonst omit heisst.
+            # In a list nothing can be left out without shifting the
+            # positions. A missing element becomes null, even when the
+            # policy is omit otherwise.
             prepared = None
         self._stack[-1].append(prepared)
 
     def series_key(self, name_index: int, source: Iterable[Any],
                    options_index: int) -> None:
-        """Eine Reihe unter einem Schluessel."""
+        """A series under a key."""
         self._stack[-1][self.names[name_index]] = self.series(
             source, options_index)
 
@@ -127,14 +128,14 @@ class Builder:
         return self.consts[const_index]
 
     def cat(self, const_index: int, *values: Any) -> str:
-        """Setzt eine Zeichenkette aus festen Stuecken und Werten zusammen.
+        """Assembles a string out of fixed pieces and values.
 
-        Hier gilt ``str()`` des Objekts, nicht sein ``__ct4_value__``.
-        Der Unterschied ist Absicht: an einer Wertposition ist ein
-        Platzhalter ein Wert und wird zur Zahl, in einer Zeichenkette ist
-        er Text und behaelt die Formatierung, die das Objekt selbst
-        mitbringt. Bei weewx heisst das: ``$day.outTemp.max`` als Wert
-        wird 12.3, in einer Zeichenkette wird es "12.3 °C".
+        Here the object's ``str()`` applies, not its ``__ct4_value__``.
+        The difference is deliberate: in a value position a placeholder
+        is a value and turns into a number, inside a string it is text
+        and keeps the formatting the object brings along itself. With
+        weewx that means: ``$day.outTemp.max`` as a value becomes 12.3,
+        inside a string it becomes "12.3 °C".
         """
         chunks = self.consts[const_index]
         out = [chunks[0]]
@@ -143,11 +144,11 @@ class Builder:
             out.append(chunks[index + 1])
         return "".join(out)
 
-    # -- Umwandlung -----------------------------------------------
+    # -- Conversion -----------------------------------------------
 
     def prepare(self, value: Any, precision: int | None,
                 name: str | None) -> Any:
-        """Macht aus einem gelesenen Wert das, was im JSON steht."""
+        """Turns a value that was read into what stands in the JSON."""
         hook = getattr(value, "__ct4_json__", None)
         if hook is not None:
             return hook()
@@ -161,7 +162,7 @@ class Builder:
         return self.convert(round_to(raw, precision))
 
     def precision_for(self, name: str | None, described: Ct4Value) -> Any:
-        """Welche Rundung gilt: Vorlage vor Anwendung, sonst die Vorgabe."""
+        """Which rounding wins: template over application, else default."""
         if name is not None and name in self.precisions:
             return self.precisions[name]
         if described.precision is not None:
@@ -174,10 +175,10 @@ class Builder:
         if self.missing == OMIT:
             return DROP
         raise MissingValue(
-            "%s hat keinen Wert" % (name or "ein Element"))
+            "%s has no value" % (name or "an element"))
 
     def convert(self, value: Any) -> Any:
-        """Bringt einen Wert in eine Form, die json.dumps kennt."""
+        """Brings a value into a form that json.dumps knows."""
         if isinstance(value, (str, int, float, bool)) or value is None:
             return value
         if isinstance(value, (list, tuple)):
@@ -186,14 +187,14 @@ class Builder:
             return {str(k): self.convert(v) for k, v in value.items()}
         return str(value)
 
-    # -- Reihen ---------------------------------------------------
+    # -- Series ---------------------------------------------------
 
     def series(self, source: Iterable[Any], options_index: int) -> Any:
-        """Baut eine Zeitreihe in dem Layout, das die Vorlage verlangt.
+        """Builds a time series in the layout the template asks for.
 
-        Das Layout ist eine Entscheidung ueber die Serialisierung, keine
-        Schleife. Wer es hier trifft, muss es nicht in jedem Skin von
-        Hand nachbauen.
+        The layout is a decision about serialization, not a loop.
+        Making it here means nobody has to rebuild it by hand in every
+        skin.
         """
         options = self.consts[options_index]
         layout = options["layout"]
@@ -216,9 +217,9 @@ class Builder:
                 for index, name in enumerate(fields)}
 
     def field_of(self, element: Any, name: str) -> Any:
-        """Holt ein Feld aus einem Element der Reihe.
+        """Gets a field out of an element of the series.
 
-        Punkt und Schluessel sind dasselbe, wie ueberall in Cheetah.
+        Dot and key are the same thing, as everywhere in Cheetah.
         """
         current = element
         for part in name.split("."):

@@ -1,12 +1,12 @@
-"""Benannte searchLists fuer Korpusfaelle.
+"""Named searchLists for corpus cases.
 
-Ein Kontext, der Funktionen oder Instanzen enthaelt, laesst sich nicht
-als JSON ablegen. Der Fall speichert deshalb nur einen Namen, und der
-Erzeuger dahinter baut den Kontext beim Pruefen neu auf.
+A context that holds functions or instances cannot be stored as JSON.
+The case therefore stores only a name, and the builder behind it rebuilds
+the context when the check runs.
 
-Die Erzeuger importieren Cheetah erst beim Aufruf. Sonst waere die Wahl
-der Implementierung aus ``ct4.impl`` schon entschieden, bevor das
-Kommando sie treffen konnte.
+The builders import Cheetah only when they are called. Otherwise the
+choice of implementation from ``ct4.impl`` would already be settled
+before the command could make it.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ BUILDERS: dict[str, Builder] = {}
 
 
 def register(name: str) -> Callable[[Builder], Builder]:
-    """Traegt einen Erzeuger unter seinem Namen ein."""
+    """Enters a builder under its name."""
 
     def decorate(builder: Builder) -> Builder:
         BUILDERS[name] = builder
@@ -31,12 +31,12 @@ def register(name: str) -> Callable[[Builder], Builder]:
 
 
 def build(case: Case) -> list[Any]:
-    """Baut die searchList, mit der ein Fall gerendert wird."""
+    """Builds the searchList a case is rendered with."""
     if case.namespace == INLINE:
         return list(case.context)
     if case.namespace == FIXTURE:
-        # Eine aufgezeichnete searchList: je Namensraum ein Baum, in der
-        # Reihenfolge, in der die Anwendung sie durchsucht hat.
+        # A recorded searchList: one tree per namespace, in the order in
+        # which the application searched them.
         from ct4.fixture.record import replay
 
         return [replay(tree) for tree in case.context]
@@ -44,18 +44,18 @@ def build(case: Case) -> list[Any]:
         builder = BUILDERS[case.namespace]
     except KeyError:
         raise KeyError(
-            "Fall %s verlangt den unbekannten Kontext %r"
+            "case %s asks for the unknown context %r"
             % (case.id, case.namespace)) from None
     return builder()
 
 
 @register(CT3_DEFAULT)
 def _ct3_default() -> list[Any]:
-    """Der Kontext, mit dem fast jeder ct3-Testfall arbeitet.
+    """The context that almost every ct3 test case works with.
 
-    Er wird aus der geladenen Cheetah-Implementierung geholt, nicht
-    kopiert. Fork und installiertes ct3 bringen ihn jeweils selbst mit,
-    und ein Unterschied darin ist ein Befund, kein Fehler im Pruefstand.
+    It is fetched from the loaded Cheetah implementation, not copied.
+    The fork and the installed ct3 each bring their own, and a difference
+    between them is a finding, not an error in the test bench.
     """
     from Cheetah.Tests.SyntaxAndOutput import defaultTestNameSpace
 

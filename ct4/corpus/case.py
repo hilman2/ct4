@@ -1,9 +1,9 @@
-"""Ein Korpusfall und seine Ablage.
+"""A corpus case and how it is stored.
 
-Die Ablage ist JSONL, eine Zeile je Fall. Das ist kein Zufall: bei
-mehreren tausend Faellen bleibt ein Diff so lesbar, weil eine geaenderte
-Vorlage genau eine Zeile beruehrt, und die Datei laesst sich zeilenweise
-streamen, ohne sie ganz in den Speicher zu holen.
+Storage is JSONL, one line per case. That is no accident: with several
+thousand cases a diff stays readable this way, because a changed
+template touches exactly one line, and the file can be streamed line by
+line without pulling all of it into memory.
 """
 
 from __future__ import annotations
@@ -17,30 +17,30 @@ CT3_DEFAULT = "ct3_default"
 INLINE = "inline"
 FIXTURE = "fixture"
 
-# Zwei Arten von Fall. "render" vergleicht die Ausgabe und braucht
-# dafuer einen Kontext. "compile" vergleicht den erzeugten Modulcode
-# und kommt ohne aus. Nur deshalb lassen sich fremde Skins in den
-# Korpus nehmen, deren Kontext eine laufende Anwendung waere.
+# Two kinds of case. "render" compares the output and needs a context
+# for that. "compile" compares the generated module code and gets by
+# without one. That is the only reason third-party skins can be taken
+# into the corpus at all: their context would be a running application.
 RENDER = "render"
 COMPILE = "compile"
 
-# Marke fuer einen Wert, den JSON nicht kennt. Bisher tritt nur einer
-# auf: ct3 reicht in extraCompileKwArgs eine Basisklasse durch
-# (`{'baseclass': dict}`) und erzeugt damit zu jeder Testklasse eine
-# zweite Fassung. Ohne diese Marke faellt ein Drittel der Testsuite aus
-# dem Korpus.
+# Marker for a value that JSON does not know. So far only one shows up:
+# ct3 passes a base class through extraCompileKwArgs
+# (`{'baseclass': dict}`) and thereby produces a second version of every
+# test class. Without this marker a third of the test suite drops out of
+# the corpus.
 TYPE_TAG = "__type__"
 
 
 @dataclass(frozen=True)
 class Case:
-    """Vorlage plus Kontext ergibt erwartete Ausgabe.
+    """Template plus context yields the expected output.
 
-    ``namespace`` sagt, woher die searchList kommt: ``inline`` nimmt
-    ``context``, jeder andere Wert benennt einen Erzeuger aus
-    ``ct4.corpus.namespaces``. Die ct3-Testfaelle brauchen den zweiten
-    Weg, weil ihr Kontext Lambdas und Instanzen enthaelt, die sich nicht
-    als JSON ablegen lassen.
+    ``namespace`` says where the searchList comes from: ``inline`` takes
+    ``context``, any other value names a builder from
+    ``ct4.corpus.namespaces``. The ct3 test cases need the second route,
+    because their context holds lambdas and instances that cannot be
+    stored as JSON.
     """
 
     id: str
@@ -56,12 +56,12 @@ class Case:
 
 
 def is_jsonable(value: Any) -> bool:
-    """Ob sich der Wert verlustfrei als JSON ablegen laesst.
+    """Whether the value can be stored as JSON without loss.
 
-    Der Ernter braucht das, um Faelle auszusortieren, deren Kontext oder
-    Compiler-Einstellungen Funktionen oder Instanzen enthalten. Ein Fall,
-    den der Pruefstand spaeter nicht rekonstruieren kann, gehoert nicht
-    in den Korpus, auch nicht halb.
+    The harvester needs this to sort out cases whose context or compiler
+    settings hold functions or instances. A case that the test bench
+    cannot reconstruct later does not belong in the corpus, not even
+    halfway.
     """
     try:
         json.dumps(value)
@@ -71,11 +71,10 @@ def is_jsonable(value: Any) -> bool:
 
 
 def encode(value: Any) -> Any:
-    """Macht einen Wert ablegbar, den JSON nicht kennt.
+    """Makes a value storable that JSON does not know.
 
-    Klassen werden zu ihrem gepunkteten Namen. Alles andere bleibt, wie
-    es ist; ob es sich ablegen laesst, entscheidet danach
-    ``is_jsonable``.
+    Classes become their dotted name. Everything else stays as it is;
+    whether it can be stored is then decided by ``is_jsonable``.
     """
     if isinstance(value, type):
         return {TYPE_TAG: "%s.%s" % (value.__module__, value.__qualname__)}
@@ -87,7 +86,7 @@ def encode(value: Any) -> Any:
 
 
 def decode(value: Any) -> Any:
-    """Stellt her, was ``encode`` abgelegt hat."""
+    """Restores what ``encode`` stored."""
     if isinstance(value, dict) and TYPE_TAG in value and len(value) == 1:
         module_name, _, attribute = value[TYPE_TAG].rpartition(".")
         module = __import__(module_name, fromlist=[attribute])
@@ -100,7 +99,7 @@ def decode(value: Any) -> Any:
 
 
 def write_jsonl(cases: Iterable[Case], path: Path) -> int:
-    """Schreibt die Faelle und gibt ihre Anzahl zurueck."""
+    """Writes the cases and returns how many there were."""
     path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     with path.open("w", encoding="utf-8", newline="\n") as handle:
@@ -112,7 +111,7 @@ def write_jsonl(cases: Iterable[Case], path: Path) -> int:
 
 
 def read_jsonl(path: Path) -> Iterator[Case]:
-    """Liest die Faelle einer Datei, in der Reihenfolge der Datei."""
+    """Reads the cases of a file, in the order of the file."""
     with path.open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():

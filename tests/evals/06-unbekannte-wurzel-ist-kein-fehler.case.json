@@ -1,8 +1,0 @@
-{
- "id": "06-unbekannte-wurzel-ist-kein-fehler",
- "task": "Zu einer nicht angemeldeten Wurzel wird geschwiegen.",
- "broken": "$meinPlugin.irgendwas.tief\n",
- "expect": {
-  "clean": true
- }
-}

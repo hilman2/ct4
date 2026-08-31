@@ -1,8 +1,0 @@
-{
- "id": "05-richtiger-skin-bleibt-still",
- "task": "Eine richtige Vorlage darf keinen Befund erzeugen.",
- "broken": "$station.location: $day.outTemp.max, $day.rain.sum\n",
- "expect": {
-  "clean": true
- }
-}

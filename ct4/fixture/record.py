@@ -1,29 +1,28 @@
-"""Aufzeichnen und Abspielen eines Vorlagen-Kontexts.
+"""Record and replay a template context.
 
-Aufgezeichnet wird nicht der Kontext, sondern der Zugriff darauf. Das
-ist der Unterschied, auf den es ankommt: ein weewx-``ValueHelper`` laesst
-sich nicht ablegen, aber was eine Vorlage aus ihm herausholt, sehr wohl.
+What gets recorded is not the context, but the access to it. That is
+the distinction that matters: a weewx ``ValueHelper`` cannot be stored,
+but what a template pulls out of it can.
 
-Ein Knoten haelt vier Dinge, alle wahlfrei:
+A node holds four things, all optional:
 
 ``text``
-    Was ``str()`` geliefert hat. Cheetah gibt jeden Platzhalter durch
-    einen Filter, und der ruft am Ende ``str()``. Ohne diesen Eintrag
-    kaeme beim Abspielen die Ausgabe nicht heraus.
+    What ``str()`` returned. Cheetah passes every placeholder through a
+    filter, and that filter calls ``str()`` in the end. Without this
+    entry the output would not come out on replay.
 ``attrs``
-    Was ueber Punkt oder Schluessel gelesen wurde. Der NameMapper von
-    Cheetah macht zwischen beidem keinen Unterschied, das Fixture
-    deshalb auch nicht.
+    What was read through a dot or a key. Cheetah's NameMapper makes no
+    difference between the two, so the fixture does not either.
 ``items``
-    Die Elemente, falls ueber den Knoten iteriert wurde.
+    The elements, if the node was iterated over.
 ``calls``
-    Ergebnisse von Aufrufen, nach ihren Argumenten geordnet.
+    Results of calls, keyed by their arguments.
 
-Beim Abspielen entsteht daraus wieder ein Objekt, das sich fuer den
-NameMapper wie das Original verhaelt. Was die Vorlage beim Aufzeichnen
-nicht gelesen hat, fehlt, und ein Zugriff darauf ist ein Fehler mit
-klarer Meldung. Das ist Absicht: ein stiller leerer Wert waere eine
-falsche gruene Pruefung.
+On replay this turns back into an object that behaves like the original
+as far as the NameMapper is concerned. Whatever the template did not
+read while recording is missing, and an access to it is an error with a
+clear message. That is intentional: a silent empty value would be a
+false green test.
 """
 
 from __future__ import annotations
@@ -31,8 +30,8 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterator
 
-# Werte, die ohne Umweg als JSON liegen koennen. Alles andere wird ueber
-# str() und seine Attribute beschrieben.
+# Values that can sit in the JSON directly. Everything else is
+# described through str() and its attributes.
 PLAIN = (str, int, float, bool, type(None))
 
 TEXT = "text"
@@ -41,77 +40,78 @@ ITEMS = "items"
 CALLS = "calls"
 PLAIN_VALUE = "value"
 
-# Eine Ausnahme, die beim Aufzeichnen geflogen ist. weewx-Skins fuehren
-# solche Faelle absichtlich vor: $day(data_binding='foo_binding') zeigt,
-# was bei einem falschen Binding herauskommt. Der Filter faengt die
-# Ausnahme und schreibt einen Ersatztext. Ohne Aufzeichnung fehlte beim
-# Abspielen genau dieser Text.
+# An exception that was raised while recording. weewx skins demonstrate
+# such cases on purpose: $day(data_binding='foo_binding') shows what a
+# wrong binding produces. The filter catches the exception and writes a
+# replacement text. Without recording it, exactly that text would be
+# missing on replay.
 ERROR = "error"
 
-# Die Speicheradresse in einem Standard-repr wechselt bei jedem Lauf.
-# weewx-Skins reichen solche Objekte durch, etwa $jsonize(zip(...)).
-# Ohne diese Kuerzung faende der Abspieler den Aufruf nie wieder.
+# The memory address in a default repr changes with every run. weewx
+# skins pass such objects around, for example $jsonize(zip(...)).
+# Without trimming it away, the replayer would never find the call
+# again.
 _ADDRESS = re.compile(r" at 0x[0-9a-fA-F]+")
 
-# Woran Cheetah erkennt, ob ein Wert eine gebundene Methode ist und
-# deshalb aufgerufen werden muss (isInstanceOrClass in _namemapper.c).
-# weewx' $day ist so eine Methode: sie liefert erst den TimespanBinder.
-# Ein Rekorder, der diese Namen verschweigt, sieht wie eine Instanz aus,
-# wird nicht aufgerufen, und $day.hours findet nichts mehr.
+# How Cheetah tells whether a value is a bound method and therefore has
+# to be called (isInstanceOrClass in _namemapper.c). weewx' $day is such
+# a method: it yields the TimespanBinder in the first place. A recorder
+# that withholds these names looks like an instance, does not get
+# called, and $day.hours finds nothing any more.
 METHOD_MARKS = ("__func__", "__code__", "__self__")
 
-# Dasselbe Verfahren fragt zuerst nach "mro", um Klassen zu erkennen.
-# Die Antwort muss vom Original kommen und darf nicht im Baum landen.
+# The same procedure asks for "mro" first, to recognise classes. The
+# answer has to come from the original and must not land in the tree.
 CLASS_MARK = "mro"
 
 
 class Missing(AttributeError):
-    """Die Vorlage liest etwas, das beim Aufzeichnen nicht gelesen wurde.
+    """The template reads something that was not read while recording.
 
-    Erbt von ``AttributeError``, und das ist wesentlich: Cheetah fragt
-    jeden Namensraum der searchList der Reihe nach, ob er einen Namen
-    kennt. Ein Namensraum, der ihn nicht hat, muss schlicht nein sagen,
-    sonst kommt die Suche nie beim naechsten an. Findet ihn keiner,
-    meldet der NameMapper selbst ``NotFound``, und der Pruefstand sieht
-    es.
+    Inherits from ``AttributeError``, and that is essential: Cheetah
+    asks every namespace of the searchList in turn whether it knows a
+    name. A namespace that does not have it must simply say no,
+    otherwise the search never gets to the next one. If none of them
+    has it, the NameMapper reports ``NotFound`` itself, and the test rig
+    sees it.
     """
 
 
 class Recorder:
-    """Haengt sich vor ein Objekt und schreibt jeden Zugriff mit.
+    """Sits in front of an object and records every access to it.
 
-    Der aufgezeichnete Baum liegt in ``tree`` und laesst sich direkt als
-    JSON ablegen.
+    The recorded tree lives in ``tree`` and can be stored as JSON
+    directly.
 
-    Ein Rekorder traegt nur die Sondermethoden, die auch das Original
-    hat. Python sucht ``__call__``, ``__getitem__`` und ``__iter__`` am
-    Typ, nicht an der Instanz: waeren sie immer da, hielte Cheetahs
-    Autocalling jeden Knoten fuer eine Funktion, und der C-NameMapper
-    versuchte auf allem einen Schluesselzugriff. Deshalb bekommt jede
-    Faehigkeitskombination ihre eigene Klasse.
+    A recorder carries only those special methods that the original has
+    too. Python looks up ``__call__``, ``__getitem__`` and ``__iter__``
+    on the type, not on the instance: were they always there, Cheetah's
+    autocalling would take every node for a function, and the C
+    NameMapper would attempt a key access on everything. Each
+    combination of capabilities therefore gets its own class.
     """
 
     def __init__(self, target: Any, tree: dict[str, Any] | None = None,
                  path: str = "$"):
-        # Nicht ueber self.x setzen: __setattr__ ist umgeleitet.
+        # Do not set through self.x: __setattr__ is redirected.
         object.__setattr__(self, "_target", target)
         object.__setattr__(self, "tree", {} if tree is None else tree)
         object.__setattr__(self, "_path", path)
 
     def __getattr__(self, name: str) -> Any:
         if name in METHOD_MARKS or name == CLASS_MARK:
-            # Durchreichen, nicht aufzeichnen: das ist eine Frage nach
-            # der Art des Objekts, kein Zugriff der Vorlage.
+            # Pass through, do not record: this asks what kind of
+            # object this is, it is not an access by the template.
             return getattr(self._target, name)
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
         try:
             value = getattr(self._target, name)
         except AttributeError:
-            # Ein Schluessel muss wie ein Attribut aussehen. Cheetahs
-            # hasKey() fragt mit hasattr(), und die oberste Ebene einer
-            # searchList ist bei weewx ein gewoehnliches dict. Ohne
-            # diesen Zweig faende der NameMapper dort nichts.
+            # A key has to look like an attribute. Cheetah's hasKey()
+            # asks with hasattr(), and the top level of a searchList is
+            # a plain dict in weewx. Without this branch the NameMapper
+            # would find nothing there.
             try:
                 value = self._target[name]
             except (TypeError, KeyError, IndexError):
@@ -128,13 +128,13 @@ class Recorder:
         return text
 
     def __setattr__(self, name: str, value: Any) -> None:
-        raise TypeError("ein aufgezeichneter Kontext wird nicht geschrieben")
+        raise TypeError("a recorded context is not written to")
 
     def _child(self, section: str, key: Any, value: Any,
                separator: str = ".") -> Any:
-        # Erst holen, dann ablegen. Wirft der Zugriff, soll kein leerer
-        # Platz im Baum zurueckbleiben; der saehe beim Abspielen wie ein
-        # aufgezeichneter Wert aus.
+        # Fetch first, then store. If the access raises, no empty slot
+        # should be left behind in the tree; on replay it would look
+        # like a recorded value.
         slot = self.tree.setdefault(section, {}).setdefault(str(key), {})
         return _wrap(value, slot, "%s%s%s" % (self._path, separator, key))
 
@@ -147,9 +147,9 @@ class _Subscriptable:
 
     def __getitem__(self, key: Any) -> Any:
         if not isinstance(key, str):
-            # Ein Index in eine Liste fuehrt ueber items, nicht ueber
-            # attrs: sonst haette der Baum Schluessel "0", "1", "2" und
-            # verlore die Reihenfolge.
+            # An index into a list goes through items, not through
+            # attrs: otherwise the tree would carry keys "0", "1", "2"
+            # and lose the order.
             return self._child(ITEMS, key, self._target[key])
         return self._child(ATTRS, key, self._target[key])
 
@@ -187,10 +187,10 @@ class _Callable:
     _child: Callable[..., Any]
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        # Ohne Trennzeichen: ein Aufruf haengt direkt am Namen, und der
-        # Pfad muss dem entsprechen, den CallableReplay bildet. Sonst
-        # passen die Schluessel nicht, wenn ein Knoten als Argument
-        # weitergereicht wird.
+        # No separator: a call hangs directly off the name, and the
+        # path has to match the one CallableReplay builds. Otherwise
+        # the keys do not line up when a node is passed on as an
+        # argument.
         return self._child(CALLS, _signature(args, kwargs),
                            self._target(*args, **kwargs), separator="")
 
@@ -205,7 +205,7 @@ _CLASSES: dict[tuple[bool, ...], type] = {}
 
 
 def _recorder_class(target: Any) -> type:
-    """Die Rekorderklasse, die zu den Faehigkeiten des Ziels passt."""
+    """The recorder class that fits the target's capabilities."""
     kind = type(target)
     caps = tuple(hasattr(kind, name) for name, _ in _MIXINS)
     if caps not in _CLASSES:
@@ -217,12 +217,12 @@ def _recorder_class(target: Any) -> type:
 
 
 def _signature(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
-    """Ein stabiler Schluessel fuer einen Aufruf.
+    """A stable key for a call.
 
-    ``repr`` reicht fuer Zahlen und Zeichenketten (``$span(day_delta=1)``).
-    Objekte ohne eigenes ``repr`` tragen ihre Speicheradresse darin; die
-    wird entfernt, sonst passte der Schluessel nur im Lauf, der ihn
-    aufgezeichnet hat.
+    ``repr`` is enough for numbers and strings (``$span(day_delta=1)``).
+    Objects without a ``repr`` of their own carry their memory address
+    in it; that gets removed, otherwise the key would only fit the run
+    that recorded it.
     """
     parts = [_argument(value) for value in args]
     parts += ["%s=%s" % (name, _argument(value))
@@ -231,13 +231,12 @@ def _signature(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
 
 
 def _argument(value: Any) -> str:
-    """Ein Argument als Schluesselteil.
+    """An argument as part of a key.
 
-    Ein Knoten wird ueber seinen Pfad benannt, nicht ueber sein ``repr``.
-    weewx-Skins reichen Werte weiter, etwa
-    ``$colorize($current.outTemp)``. Beim Aufzeichnen steckt dort ein
-    Rekorder, beim Abspielen ein Abspieler; ihre ``repr`` sind
-    verschieden, ihre Pfade sind gleich.
+    A node is named by its path, not by its ``repr``. weewx skins pass
+    values on, for example ``$colorize($current.outTemp)``. While
+    recording there is a recorder in that spot, on replay a replayer;
+    their ``repr`` differ, their paths are the same.
     """
     if isinstance(value, (Recorder, Replay)):
         return "<%s>" % value._path
@@ -245,7 +244,7 @@ def _argument(value: Any) -> str:
 
 
 def _wrap(value: Any, slot: dict[str, Any], path: str = "$") -> Any:
-    """Legt einen gelesenen Wert ab und gibt zurueck, was die Vorlage sieht."""
+    """Stores a value that was read and returns what the template sees."""
     if isinstance(value, PLAIN):
         slot[PLAIN_VALUE] = value
         return value
@@ -253,7 +252,7 @@ def _wrap(value: Any, slot: dict[str, Any], path: str = "$") -> Any:
 
 
 class Replay:
-    """Spielt einen aufgezeichneten Knoten ab."""
+    """Replays a recorded node."""
 
     __slots__ = ("_tree", "_path")
 
@@ -263,9 +262,9 @@ class Replay:
 
     def __getattr__(self, name: str) -> Any:
         if name in METHOD_MARKS:
-            # Beim Aufzeichnen war das eine Methode, die Cheetah ohne
-            # Argumente aufgerufen hat. Damit es beim Abspielen wieder
-            # passiert, muss der Knoten hier dieselbe Auskunft geben.
+            # While recording this was a method that Cheetah called
+            # without arguments. For that to happen again on replay,
+            # the node has to give the same answer here.
             if "()" in self._tree.get(CALLS, {}):
                 return self
             raise AttributeError(name)
@@ -282,10 +281,10 @@ class Replay:
         try:
             return self._lookup(key)
         except Missing as exc:
-            # Ein Schluesselzugriff, der ins Leere geht, meldet KeyError.
-            # Missing ist ein AttributeError, und den erwartet
-            # PyMapping_HasKeyString nicht: es meldet ihn als ignorierte
-            # Ausnahme, und der Lauf rauscht zu.
+            # A key access that goes nowhere reports KeyError. Missing
+            # is an AttributeError, and PyMapping_HasKeyString does not
+            # expect one: it reports it as an ignored exception, and
+            # the run carries on regardless.
             raise KeyError(str(exc)) from None
 
     def __contains__(self, key: Any) -> bool:
@@ -304,7 +303,7 @@ class Replay:
             raise _rebuild(self._tree[ERROR])
         if TEXT not in self._tree:
             raise Missing(
-                "%s wurde beim Aufzeichnen nie ausgegeben" % self._path)
+                "%s was never rendered while recording" % self._path)
         return str(self._tree[TEXT])
 
     def _lookup(self, name: str) -> Any:
@@ -313,13 +312,13 @@ class Replay:
         except KeyError:
             known = sorted(self._tree.get(ATTRS, {}))
             raise Missing(
-                "%s.%s fehlt im Fixture; aufgezeichnet wurden: %s"
-                % (self._path, name, ", ".join(known) or "nichts")) from None
+                "%s.%s is missing from the fixture; recorded were: %s"
+                % (self._path, name, ", ".join(known) or "nothing")) from None
         return replay(child, "%s.%s" % (self._path, name))
 
 
 class CallableReplay(Replay):
-    """Ein Abspieler fuer etwas, das die Vorlage aufruft."""
+    """A replayer for something the template calls."""
 
     __slots__ = ()
 
@@ -330,17 +329,17 @@ class CallableReplay(Replay):
         except KeyError:
             known = sorted(self._tree.get(CALLS, {}))
             raise Missing(
-                "%s%s fehlt im Fixture; aufgezeichnet wurden: %s"
-                % (self._path, key, ", ".join(known) or "nichts")) from None
+                "%s%s is missing from the fixture; recorded were: %s"
+                % (self._path, key, ", ".join(known) or "nothing")) from None
         return replay(child, "%s%s" % (self._path, key))
 
 
 def _rebuild(recorded: list[str]) -> Exception:
-    """Baut eine aufgezeichnete Ausnahme nach.
+    """Rebuilds a recorded exception.
 
-    Der Typ zaehlt, nicht nur die Meldung: weewx' Ausgabefilter faengt
-    ``AttributeError`` und laesst alles andere durch. Ein Ersatztyp
-    aenderte, was am Ende in der Datei steht.
+    The type counts, not just the message: weewx' output filter catches
+    ``AttributeError`` and lets everything else through. A substitute
+    type would change what ends up in the file.
     """
     import builtins
 
@@ -353,7 +352,7 @@ def _rebuild(recorded: list[str]) -> Exception:
 
 
 def replay(tree: dict[str, Any], path: str = "$") -> Any:
-    """Macht aus einem aufgezeichneten Knoten wieder etwas Lesbares."""
+    """Turns a recorded node back into something readable."""
     if PLAIN_VALUE in tree:
         return tree[PLAIN_VALUE]
     if CALLS in tree:

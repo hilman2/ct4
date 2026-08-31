@@ -1,17 +1,17 @@
-"""Aus einer Zeile im erzeugten Modul die Zeile in der Vorlage machen.
+"""Turn a line in the generated module into a line in the template.
 
-Ein Traceback aus einer Cheetah-Vorlage zeigt auf
+A traceback out of a Cheetah template points at
 ``cheetah_DynamicallyCompiledCheetahTemplate_1788178423_42383.py``,
-Zeile 243. Das ist die Wahrheit, aber niemandem geholfen: die Datei gibt
-es nicht auf der Platte, und wer den Fehler beheben will, sucht die
-Stelle in seiner Vorlage.
+line 243. That is the truth, but it helps nobody: the file does not
+exist on disk, and whoever wants to fix the error looks for the place in
+their own template.
 
-Die Zuordnung steht schon da. Cheetah schreibt hinter jede erzeugte
-Anweisung, aus welcher Zeile und Spalte sie stammt. Hier wird das
-gelesen und an die Ausnahme gehaengt, statt es wegzuwerfen.
+The mapping is already there. Cheetah writes behind every generated
+statement which line and column it came from. Here that is read and
+hung on the exception instead of thrown away.
 
-Angehaengt, nicht ersetzt: der urspruengliche Traceback bleibt stehen.
-Wer im erzeugten Code nachsehen will, kann das weiter.
+Hung on, not replaced: the original traceback stays. Whoever wants to
+look into the generated code still can.
 """
 
 from __future__ import annotations
@@ -20,20 +20,21 @@ import re
 from types import TracebackType
 from typing import Any, Iterator, Literal
 
-# Dieselben zwei Formen wie in ct4.analyze: die gewoehnliche und die,
-# die ein #errorCatcher erzeugt.
+# The same two forms as in ct4.analyze: the ordinary one and the one an
+# #errorCatcher produces.
 ORIGIN = re.compile(r"(?:on|from) line (\d+), col (\d+)")
 LINECOL = re.compile(r"lineCol=\((\d+),\s*(\d+)\)")
 
-# Woran ein erzeugtes Modul zu erkennen ist.
+# How a generated module is recognized.
 GENERATED = "cheetah"
 
 
 def line_map(code: str) -> dict[int, tuple[int, int]]:
-    """Zeile im erzeugten Modul auf Zeile und Spalte in der Vorlage.
+    """Line in the generated module to line and column in the template.
 
-    Eingetragen wird nur, wo eine Herkunft steht. Fuer alles dazwischen
-    gilt der letzte Eintrag davor; das erledigt ``position_of``.
+    An entry is made only where an origin stands. For everything in
+    between, the last entry before it applies; ``position_of`` takes
+    care of that.
     """
     found: dict[int, tuple[int, int]] = {}
     for number, text in enumerate(code.splitlines(), 1):
@@ -45,11 +46,10 @@ def line_map(code: str) -> dict[int, tuple[int, int]]:
 
 def position_of(mapping: dict[int, tuple[int, int]],
                 line: int) -> tuple[int, int] | None:
-    """Die Stelle in der Vorlage, die zu einer erzeugten Zeile gehoert.
+    """The place in the template that belongs to a generated line.
 
-    Genommen wird die letzte Herkunft an oder vor der Zeile. Eine
-    Anweisung erstreckt sich ueber mehrere erzeugte Zeilen, und die
-    Herkunft steht an ihrem Anfang.
+    Taken is the last origin at or before the line. A statement spans
+    several generated lines, and the origin stands at its start.
     """
     candidates = [number for number in mapping if number <= line]
     if not candidates:
@@ -58,11 +58,11 @@ def position_of(mapping: dict[int, tuple[int, int]],
 
 
 def note(error: BaseException, text: str) -> None:
-    """Haengt eine Bemerkung an eine Ausnahme.
+    """Hangs a remark on an exception.
 
-    ``add_note`` gibt es erst ab Python 3.11, und ct4 laeuft ab 3.10.
-    Wo es fehlt, wird die Bemerkung an der Ausnahme abgelegt; wer sie
-    braucht, findet sie unter ``ct4_notes``.
+    ``add_note`` exists only from Python 3.11 on, and ct4 runs from
+    3.10. Where it is missing, the remark is stored on the exception;
+    whoever needs it finds it under ``ct4_notes``.
     """
     adder = getattr(error, "add_note", None)
     if adder is not None:
@@ -87,8 +87,8 @@ def is_generated(name: str) -> bool:
 
 
 def describe(error: BaseException, code: str,
-             file: str = "<vorlage>") -> list[str]:
-    """Die Stellen in der Vorlage, durch die der Fehler gelaufen ist."""
+             file: str = "<template>") -> list[str]:
+    """The places in the template the error ran through."""
     mapping = line_map(code)
     out = []
     for frame in frames(error):
@@ -97,31 +97,31 @@ def describe(error: BaseException, code: str,
         where = position_of(mapping, frame.tb_lineno)
         if where is None:
             continue
-        out.append("%s, Zeile %d, Spalte %d" % (file, where[0], where[1]))
+        out.append("%s, line %d, column %d" % (file, where[0], where[1]))
     return out
 
 
 def annotate(error: BaseException, code: str,
-             file: str = "<vorlage>") -> BaseException:
-    """Haengt die Stellen in der Vorlage an die Ausnahme.
+             file: str = "<template>") -> BaseException:
+    """Hangs the places in the template on the exception.
 
-    Ueber ``add_note``, damit sie beim Ausgeben des Tracebacks
-    mitkommen, ohne dass irgendetwas ersetzt wird.
+    Through ``add_note``, so that they come along when the traceback is
+    printed, without anything being replaced.
     """
     for line in describe(error, code, file):
-        note(error, "Vorlage: %s" % line)
+        note(error, "template: %s" % line)
     return error
 
 
 class mapped:
-    """Ein Block, dessen Ausnahmen die Stelle in der Vorlage tragen.
+    """A block whose exceptions carry the place in the template.
 
-    ``code`` ist der erzeugte Modulcode; er wird erst geholt, wenn
-    wirklich etwas schiefgeht, weil das Aufbereiten sonst jeden Lauf
-    kostet.
+    ``code`` is the generated module code; it is fetched only when
+    something really goes wrong, because preparing it would otherwise
+    cost every run.
     """
 
-    def __init__(self, code: Any, file: str = "<vorlage>"):
+    def __init__(self, code: Any, file: str = "<template>"):
         self.code = code
         self.file = file
 
@@ -138,15 +138,14 @@ class mapped:
 
 
 class mapped_via:
-    """Wie ``mapped``, aber mit einer schon fertigen Zuordnung.
+    """Like ``mapped``, but with a mapping that is already done.
 
-    Der JSON-Modus uebersetzt in eine Cheetah-Definition. Deren Zeilen
-    stehen in keiner Datei, und die Herkunftsangaben darin zeigen auf sie
-    selbst. Die Bruecke zur Vorlage baut der Emitter, und sie kommt hier
-    an.
+    JSON mode compiles into a Cheetah definition. Its lines stand in no
+    file, and the origin notes inside it point at itself. The bridge to
+    the template is built by the emitter, and it arrives here.
     """
 
-    def __init__(self, origins: dict[int, int], file: str = "<vorlage>"):
+    def __init__(self, origins: dict[int, int], file: str = "<template>"):
         self.origins = origins
         self.file = file
 
@@ -164,7 +163,7 @@ class mapped_via:
                 continue
             where = position_of(mapping, frame.tb_lineno)
             if where is not None:
-                note(error, "Vorlage: %s, Zeile %d"
+                note(error, "template: %s, line %d"
                      % (self.file, where[0]))
                 break
         return False

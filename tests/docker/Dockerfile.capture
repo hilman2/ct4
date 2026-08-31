@@ -1,8 +1,8 @@
-# Umgebung, um Kontexte aus einem echten weewx-Lauf mitzuschreiben.
+# Environment for recording contexts from a real weewx run.
 #
-# Getrennt vom Testbild, weil weewx samt Abhaengigkeiten und Quellen ein
-# Vielfaches davon wiegt und fuer den taeglichen Lauf nicht gebraucht
-# wird.
+# Kept apart from the test image, because weewx with its dependencies
+# and sources weighs a multiple of it and is not needed for the daily
+# run.
 FROM python:3.13-slim
 
 RUN apt-get update \
@@ -12,19 +12,19 @@ RUN apt-get update \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
-# test_templates.py setzt Zeitzone und Sprache fest und braucht beide
-# im Bild.
+# test_templates.py pins time zone and language and needs both in the
+# image.
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
-# Derselbe Stand, aus dem die Skin-Faelle im Korpus stammen. Steht auch
-# in corpus/skin-sources.json.
+# The same revision the skin cases in the corpus come from. Also
+# recorded in corpus/skin-sources.json.
 ARG WEEWX_COMMIT=4a74ad9a35523bc8ef5b9832938c90fb5e31c9a0
 RUN git clone https://github.com/weewx/weewx.git /opt/weewx \
     && git -C /opt/weewx checkout --quiet "${WEEWX_COMMIT}"
 
 RUN pip install --no-cache-dir -e /opt/weewx
-# jsonschema prueft das fertige JSON gegen sein Schema.
-# Die statische Pruefung kommt ohne aus.
+# jsonschema checks the finished JSON against its schema.
+# The static check gets by without it.
 RUN pip install --no-cache-dir "pytest==8.4.2" setuptools "jsonschema==4.25.1"
 
 RUN useradd --create-home --uid 1000 ct4 \

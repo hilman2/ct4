@@ -1,10 +1,10 @@
 {
- "id": "08-json-block-nicht-geschlossen",
- "task": "Ein #for im JSON-Modus ohne #end for.",
+ "id": "08-json-block-not-closed",
+ "task": "A #for in JSON mode without its #end for.",
  "broken": "#mode json\n{\"r\": [#for $p in $x\n$p\n]}\n",
  "fixed": "#mode json\n{\"r\": [#for $p in $x\n$p\n#end for]}\n",
  "expect": {
   "code": "CT4003",
-  "mentions": "Zeile"
+  "mentions": "line"
  }
 }

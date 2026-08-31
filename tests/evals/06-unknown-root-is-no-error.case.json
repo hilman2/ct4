@@ -1,0 +1,8 @@
+{
+ "id": "06-unknown-root-is-no-error",
+ "task": "Nothing is said about a root that was never declared.",
+ "broken": "$meinPlugin.irgendwas.tief\n",
+ "expect": {
+  "clean": true
+ }
+}

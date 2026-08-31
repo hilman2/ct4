@@ -1,6 +1,6 @@
 {
- "id": "04-errorcatcher-verdeckt-nichts",
- "task": "Auch mit #errorCatcher wird der Tippfehler gefunden.",
+ "id": "04-errorcatcher-hides-nothing",
+ "task": "The typo is found even with #errorCatcher set.",
  "broken": "#errorCatcher Echo\n$day.rain.sm\n",
  "fixed": "#errorCatcher Echo\n$day.rain.sum\n",
  "expect": {

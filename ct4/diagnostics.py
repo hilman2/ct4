@@ -1,13 +1,12 @@
-"""Befunde als Datenstruktur, nicht als Fliesstext.
+"""Findings as a data structure, not as prose.
 
-Eine Meldung, aus der niemand eine Korrektur ableiten kann, ist keine
-Meldung. Deshalb traegt jeder Befund hier Ort, Code und, wo es geht,
-konkrete Vorschlaege. Und deshalb gibt es ihn in drei Formen: fuer
-Menschen, fuer Programme und fuer die Annotationen einer CI.
+A message from which nobody can derive a correction is not a message.
+That is why every finding here carries a place, a code and, where it can
+be had, concrete suggestions. And that is why it comes in three forms:
+for humans, for programs and for the annotations of a CI.
 
-Die Codes sind stabil. Sie sind die einzige Handhabe, ueber einen Befund
-zu reden, ohne seinen Wortlaut zu zitieren, und der Wortlaut aendert
-sich.
+The codes are stable. They are the only handle for talking about a
+finding without quoting its wording, and the wording changes.
 """
 
 from __future__ import annotations
@@ -20,18 +19,18 @@ ERROR = "error"
 WARNING = "warning"
 NOTE = "note"
 
-# Nach SARIF: was ein Befund fuer den Lauf bedeutet.
+# After SARIF: what a finding means for the run.
 SARIF_LEVEL = {ERROR: "error", WARNING: "warning", NOTE: "note"}
 
 
 @dataclass(frozen=True)
 class Diagnostic:
-    """Ein Befund.
+    """A finding.
 
-    ``path`` ist der Ort innerhalb des Dokuments, wo einer benennbar ist
-    (etwa ``$.day.outTemp``); ``line`` und ``column`` zeigen in die
-    Datei. Beides zugleich zu haben ist kein Luxus: das eine sagt, wo im
-    Ergebnis, das andere, wo im Text.
+    ``path`` is the place inside the document, where one can be named
+    (such as ``$.day.outTemp``); ``line`` and ``column`` point into the
+    file. Having both at once is no luxury: one says where in the
+    result, the other where in the text.
     """
 
     code: str
@@ -44,7 +43,7 @@ class Diagnostic:
     suggestions: Sequence[str] = field(default_factory=tuple)
 
     def __str__(self) -> str:
-        where = self.file or "<vorlage>"
+        where = self.file or "<template>"
         if self.line:
             where = "%s:%d:%d" % (where, self.line, self.column)
         head = "%s %s %s: %s" % (self.code, self.severity.upper(),
@@ -52,7 +51,7 @@ class Diagnostic:
         if self.path:
             head += "  [%s]" % self.path
         if self.suggestions:
-            head += "\n  Meinten Sie: %s?" % ", ".join(self.suggestions)
+            head += "\n  Did you mean: %s?" % ", ".join(self.suggestions)
         return head
 
     def as_dict(self) -> dict[str, Any]:
@@ -69,7 +68,7 @@ class Diagnostic:
 
 
 def worst(findings: Iterable[Diagnostic]) -> str:
-    """Der schwerste Grad unter den Befunden, oder ``note`` fuer keine."""
+    """The worst grade among the findings, or ``note`` for none."""
     grades = {d.severity for d in findings}
     for grade in (ERROR, WARNING):
         if grade in grades:
@@ -79,7 +78,7 @@ def worst(findings: Iterable[Diagnostic]) -> str:
 
 def as_text(findings: Sequence[Diagnostic]) -> str:
     if not findings:
-        return "Keine Befunde."
+        return "No findings."
     return "\n".join(str(d) for d in findings)
 
 
@@ -89,10 +88,10 @@ def as_json(findings: Sequence[Diagnostic]) -> str:
 
 
 def as_sarif(findings: Sequence[Diagnostic]) -> str:
-    """SARIF 2.1.0, so viel davon wie hier Sinn ergibt.
+    """SARIF 2.1.0, as much of it as makes sense here.
 
-    Damit annotiert eine CI die geaenderten Zeilen selbst, statt dass
-    jemand ein Protokoll liest.
+    With it a CI annotates the changed lines itself, instead of somebody
+    reading a log.
     """
     rules: dict[str, dict[str, str]] = {}
     results: list[dict[str, Any]] = []
@@ -128,4 +127,4 @@ def render(findings: Sequence[Diagnostic], form: str = "text") -> str:
     try:
         return FORMATS[form](findings)
     except KeyError:
-        raise ValueError("unbekannte Form: %s" % form) from None
+        raise ValueError("unknown form: %s" % form) from None

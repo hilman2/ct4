@@ -1,7 +1,7 @@
-"""Der JSON-Modus.
+"""The JSON mode.
 
-Die Zusicherungen aus PLAN.md, Abschnitt 4, jede als Test. Was hier
-gruen ist, kann ein Skin-Autor nicht mehr falsch machen.
+The guarantees from PLAN.md, section 4, each one as a test. What is
+green here, a skin author can no longer get wrong.
 """
 
 from __future__ import annotations
@@ -16,237 +16,237 @@ from ct4.jsonmode.build import MissingValue
 from ct4.jsonmode.parse import JsonTemplateError, parse
 
 
-class Messwert:
-    """Wie weewx' ValueHelper: kennt Rohwert, Stellen und Formatierung."""
+class Reading:
+    """Like weewx' ValueHelper: knows raw value, digits and format."""
 
-    def __init__(self, wert, stellen=1, einheit="°C"):
-        self.wert = wert
-        self.stellen = stellen
-        self.einheit = einheit
+    def __init__(self, value, digits=1, unit="°C"):
+        self.value = value
+        self.digits = digits
+        self.unit = unit
 
     def __ct4_value__(self):
-        return Ct4Value(self.wert, precision=self.stellen)
+        return Ct4Value(self.value, precision=self.digits)
 
     def __str__(self):
-        if self.wert is None:
+        if self.value is None:
             return "N/A"
-        return "%.*f %s" % (self.stellen, self.wert, self.einheit)
+        return "%.*f %s" % (self.digits, self.value, self.unit)
 
 
-class Punkt:
+class Point:
     def __init__(self, start, value):
         self.start = start
         self.value = value
 
 
-KONTEXT = [{
+CONTEXT = [{
     "station": 'Zuhause "am" Berg',
-    "temp": Messwert(12.3456),
-    "leer": Messwert(None),
+    "temp": Reading(12.3456),
+    "leer": Reading(None),
     "id": 42,
-    "zeilen": [Punkt(1, 3.14159), Punkt(2, None), Punkt(3, 2.71828)],
+    "zeilen": [Point(1, 3.14159), Point(2, None), Point(3, 2.71828)],
     "wahr": True,
     "null": None,
 }]
 
 
-def geladen(quelle, kontext=None, **kw):
-    return json.loads(render(quelle, kontext or KONTEXT, **kw))
+def loaded(source, context=None, **kw):
+    return json.loads(render(source, context or CONTEXT, **kw))
 
 
-# -- Die Zusicherungen ----------------------------------------------
+# -- The guarantees --------------------------------------------------
 
-def test_kommas_sind_kein_autorenproblem():
-    # Eines zu viel, eines zu wenig, beides ist in Ordnung: es gibt
-    # keine Kommas, es gibt eine Struktur.
-    assert geladen('{"a": 1, "b": 2,}') == {"a": 1, "b": 2}
-    assert geladen('{"a": 1 "b": 2}') == {"a": 1, "b": 2}
-    assert geladen('[1, 2, 3,]') == [1, 2, 3]
-
-
-def test_schleife_am_ende_ohne_komma():
-    quelle = '{"r": [#for $p in $zeilen\n$p.start\n#end for]}'
-    assert geladen(quelle) == {"r": [1, 2, 3]}
+def test_commas_are_not_the_authors_problem():
+    # One too many, one too few, both are fine: there are no commas,
+    # there is a structure.
+    assert loaded('{"a": 1, "b": 2,}') == {"a": 1, "b": 2}
+    assert loaded('{"a": 1 "b": 2}') == {"a": 1, "b": 2}
+    assert loaded('[1, 2, 3,]') == [1, 2, 3]
 
 
-def test_leere_schleife_laesst_nichts_zurueck():
-    quelle = '{"r": [#for $p in []\n$p\n#end for]}'
-    assert geladen(quelle) == {"r": []}
+def test_a_loop_at_the_end_needs_no_comma():
+    source = '{"r": [#for $p in $zeilen\n$p.start\n#end for]}'
+    assert loaded(source) == {"r": [1, 2, 3]}
 
 
-def test_zahlen_bleiben_zahlen():
-    ergebnis = geladen('{"t": $temp}')
-    assert ergebnis == {"t": 12.3}
-    assert isinstance(ergebnis["t"], float)
+def test_an_empty_loop_leaves_nothing_behind():
+    source = '{"r": [#for $p in []\n$p\n#end for]}'
+    assert loaded(source) == {"r": []}
 
 
-def test_fehlender_wert_wird_null():
-    assert geladen('{"t": $leer}') == {"t": None}
+def test_numbers_stay_numbers():
+    result = loaded('{"t": $temp}')
+    assert result == {"t": 12.3}
+    assert isinstance(result["t"], float)
 
 
-def test_fehlender_wert_kann_weggelassen_werden():
-    assert geladen('#missing omit\n{"t": $leer, "i": $id}') == {"i": 42}
+def test_a_missing_value_becomes_null():
+    assert loaded('{"t": $leer}') == {"t": None}
 
 
-def test_fehlender_wert_kann_ein_fehler_sein():
+def test_a_missing_value_can_be_omitted():
+    assert loaded('#missing omit\n{"t": $leer, "i": $id}') == {"i": 42}
+
+
+def test_a_missing_value_can_be_an_error():
     with pytest.raises(MissingValue):
-        render('#missing error\n{"t": $leer}', KONTEXT)
+        render('#missing error\n{"t": $leer}', CONTEXT)
 
 
-def test_fehlendes_element_bleibt_null_trotz_omit():
-    # In einer Liste wuerde Weglassen die Stellen verschieben.
-    quelle = '#missing omit\n{"r": [$leer, $id]}'
-    assert geladen(quelle) == {"r": [None, 42]}
+def test_a_missing_element_stays_null_despite_omit():
+    # Inside a list, omitting would shift the positions.
+    source = '#missing omit\n{"r": [$leer, $id]}'
+    assert loaded(source) == {"r": [None, 42]}
 
 
-def test_anfuehrungszeichen_zerlegen_die_datei_nicht():
-    assert geladen('{"s": $station}') == {"s": 'Zuhause "am" Berg'}
+def test_quotes_do_not_break_the_document():
+    assert loaded('{"s": $station}') == {"s": 'Zuhause "am" Berg'}
 
 
-def test_umlaute_bleiben_umlaute():
-    text = render('{"s": "grün"}', KONTEXT)
+def test_umlauts_stay_umlauts():
+    text = render('{"s": "grün"}', CONTEXT)
     assert "grün" in text
 
 
-def test_wahrheitswerte_und_null_aus_der_vorlage():
-    assert geladen('{"a": true, "b": false, "c": null}') == {
+def test_booleans_and_null_from_the_template():
+    assert loaded('{"a": true, "b": false, "c": null}') == {
         "a": True, "b": False, "c": None}
 
 
-# -- Praezision ------------------------------------------------------
+# -- Precision -------------------------------------------------------
 
-def test_praezision_kommt_vom_objekt():
-    assert geladen('{"t": $temp}') == {"t": 12.3}
-
-
-def test_vorlage_schlaegt_objekt():
-    assert geladen('{"t": $temp @ 3}') == {"t": 12.346}
+def test_the_precision_comes_from_the_object():
+    assert loaded('{"t": $temp}') == {"t": 12.3}
 
 
-def test_vorgabe_gilt_wo_das_objekt_nichts_sagt():
-    quelle = '#precision default = 2\n{"x": 3.14159}'
-    assert geladen(quelle) == {"x": 3.14}
+def test_the_template_beats_the_object():
+    assert loaded('{"t": $temp @ 3}') == {"t": 12.346}
 
 
-def test_praezision_je_feldname():
-    quelle = '#precision default = 3\n#precision kurz = 0\n' \
+def test_the_default_applies_where_the_object_is_silent():
+    source = '#precision default = 2\n{"x": 3.14159}'
+    assert loaded(source) == {"x": 3.14}
+
+
+def test_precision_per_field_name():
+    source = '#precision default = 3\n#precision kurz = 0\n' \
              '{"kurz": 3.9, "lang": 3.14159}'
-    assert geladen(quelle) == {"kurz": 4, "lang": 3.142}
+    assert loaded(source) == {"kurz": 4, "lang": 3.142}
 
 
-def test_rundung_macht_keine_zeichenkette():
-    ergebnis = geladen('{"x": $temp @ 0}')
-    assert ergebnis == {"x": 12}
-    assert not isinstance(ergebnis["x"], str)
+def test_rounding_does_not_make_a_string():
+    result = loaded('{"x": $temp @ 0}')
+    assert result == {"x": 12}
+    assert not isinstance(result["x"], str)
 
 
-# -- Wert oder Text --------------------------------------------------
+# -- Value or text ---------------------------------------------------
 
-def test_an_der_wertposition_zaehlt_der_wert():
-    assert geladen('{"t": $temp}') == {"t": 12.3}
-
-
-def test_in_der_zeichenkette_zaehlt_die_formatierung():
-    # Der Unterschied ist Absicht. Im Text will der Autor das, was das
-    # Objekt selbst anzeigt, samt Einheit.
-    assert geladen('{"t": "$temp"}') == {"t": "12.3 °C"}
+def test_at_a_value_position_the_value_counts():
+    assert loaded('{"t": $temp}') == {"t": 12.3}
 
 
-def test_schluessel_darf_aus_werten_entstehen():
-    assert geladen('{"kanal-$id": 1}') == {"kanal-42": 1}
+def test_inside_a_string_the_formatting_counts():
+    # The difference is deliberate. In text the author wants what the
+    # object itself displays, unit included.
+    assert loaded('{"t": "$temp"}') == {"t": "12.3 °C"}
 
 
-# -- Steuerung -------------------------------------------------------
+def test_a_key_may_be_built_from_values():
+    assert loaded('{"kanal-$id": 1}') == {"kanal-42": 1}
 
-def test_if_laesst_ein_feld_weg():
-    quelle = '{"a": 1,\n#if $null\n"b": 2,\n#end if\n"c": 3}'
-    assert geladen(quelle) == {"a": 1, "c": 3}
+
+# -- Control flow ----------------------------------------------------
+
+def test_if_leaves_a_field_out():
+    source = '{"a": 1,\n#if $null\n"b": 2,\n#end if\n"c": 3}'
+    assert loaded(source) == {"a": 1, "c": 3}
 
 
 def test_if_else():
-    quelle = '{\n#if $null\n"a": 1\n#else\n"b": 2\n#end if\n}'
-    assert geladen(quelle) == {"b": 2}
+    source = '{\n#if $null\n"a": 1\n#else\n"b": 2\n#end if\n}'
+    assert loaded(source) == {"b": 2}
 
 
 def test_elif():
-    quelle = '{\n#if $null\n"a": 1\n#elif $wahr\n"b": 2\n#else\n"c": 3\n' \
+    source = '{\n#if $null\n"a": 1\n#elif $wahr\n"b": 2\n#else\n"c": 3\n' \
              '#end if\n}'
-    assert geladen(quelle) == {"b": 2}
+    assert loaded(source) == {"b": 2}
 
 
-def test_verschachtelte_schleife():
-    quelle = '{"r": [#for $p in $zeilen\n{"t": $p.start}\n#end for]}'
-    assert geladen(quelle) == {"r": [{"t": 1}, {"t": 2}, {"t": 3}]}
+def test_a_nested_loop():
+    source = '{"r": [#for $p in $zeilen\n{"t": $p.start}\n#end for]}'
+    assert loaded(source) == {"r": [{"t": 1}, {"t": 2}, {"t": 3}]}
 
 
-# -- Reihen ----------------------------------------------------------
+# -- Series ----------------------------------------------------------
 
-def test_reihe_als_datensaetze():
-    quelle = '{"r": #series($zeilen, fields=["start", "value"], ' \
+def test_a_series_as_records():
+    source = '{"r": #series($zeilen, fields=["start", "value"], ' \
              'precision=2)}'
-    assert geladen(quelle) == {"r": [
+    assert loaded(source) == {"r": [
         {"start": 1, "value": 3.14},
         {"start": 2, "value": None},
         {"start": 3, "value": 2.72}]}
 
 
-def test_reihe_als_spalten():
-    quelle = '{"r": #series($zeilen, layout="columns", ' \
+def test_a_series_as_columns():
+    source = '{"r": #series($zeilen, layout="columns", ' \
              'fields=["start", "value"], precision=2)}'
-    assert geladen(quelle) == {"r": {"start": [1, 2, 3],
-                                     "value": [3.14, None, 2.72]}}
+    assert loaded(source) == {"r": {"start": [1, 2, 3],
+                                    "value": [3.14, None, 2.72]}}
 
 
-def test_reihe_als_paare_ohne_luecken():
-    quelle = '{"r": #series($zeilen, layout="pairs", ' \
+def test_a_series_as_pairs_without_gaps():
+    source = '{"r": #series($zeilen, layout="pairs", ' \
              'fields=["start", "value"], gaps="omit")}'
-    assert geladen(quelle) == {"r": [[1, 3.14159], [3, 2.71828]]}
+    assert loaded(source) == {"r": [[1, 3.14159], [3, 2.71828]]}
 
 
-# -- Determinismus ---------------------------------------------------
+# -- Determinism -----------------------------------------------------
 
-def test_zwei_laeufe_liefern_dieselben_bytes():
-    quelle = '{"b": 2, "a": 1, "r": [#for $p in $zeilen\n$p.start\n' \
+def test_two_runs_give_the_same_bytes():
+    source = '{"b": 2, "a": 1, "r": [#for $p in $zeilen\n$p.start\n' \
              '#end for]}'
-    erster = render(quelle, KONTEXT)
-    assert erster == render(quelle, KONTEXT)
+    first = render(source, CONTEXT)
+    assert first == render(source, CONTEXT)
 
 
-def test_schluessel_behalten_die_reihenfolge_der_vorlage():
-    text = render('{"z": 1, "a": 2, "m": 3}', KONTEXT)
+def test_keys_keep_the_order_of_the_template():
+    text = render('{"z": 1, "a": 2, "m": 3}', CONTEXT)
     assert text.index('"z"') < text.index('"a"') < text.index('"m"')
 
 
-# -- Fehler ----------------------------------------------------------
+# -- Errors ----------------------------------------------------------
 
-def test_unbekannte_direktive_wird_gemeldet():
+def test_an_unknown_directive_is_reported():
     with pytest.raises(JsonTemplateError):
         parse('{\n#foo\n"a": 1\n#end foo\n}')
 
 
-def test_offener_block_wird_gemeldet():
+def test_an_open_block_is_reported():
     with pytest.raises(JsonTemplateError):
         parse('{"r": [#for $p in $zeilen\n$p\n]}')
 
 
-def test_falsches_end_wird_gemeldet():
+def test_a_wrong_end_is_reported():
     with pytest.raises(JsonTemplateError):
         parse('{\n#if $wahr\n"a": 1\n#end for\n}')
 
 
-def test_fehlermeldung_nennt_zeile_und_spalte():
-    with pytest.raises(JsonTemplateError) as fehler:
+def test_the_error_message_names_line_and_column():
+    with pytest.raises(JsonTemplateError) as error:
         parse('{\n  "a": nichts\n}')
-    assert "Zeile 2" in str(fehler.value)
+    assert "line 2" in str(error.value)
 
 
-def test_kommentar_wie_in_cheetah():
-    assert geladen('{\n## das hier ist weg\n"a": 1\n}') == {"a": 1}
+def test_a_comment_works_as_in_cheetah():
+    assert loaded('{\n## this one is gone\n"a": 1\n}') == {"a": 1}
 
 
-# -- Stroemen --------------------------------------------------------
+# -- Streaming -------------------------------------------------------
 
-STROM_PROBEN = [
+STREAM_SAMPLES = [
     '#mode json\n{"a": 1, "b": $station, "c": $leer}',
     '#mode json\n{"r": [#for $p in $zeilen\n{"t": $p.start}\n#end for]}',
     '#mode json\n{"r": [#for $p in []\n$p\n#end for]}',
@@ -265,85 +265,85 @@ STROM_PROBEN = [
 ]
 
 
-@pytest.mark.parametrize("quelle", STROM_PROBEN)
-def test_stroemen_liefert_dieselben_bytes(quelle):
-    # Die Eigenschaft, an der der ganze zweite Weg haengt. Waere sie
-    # nicht da, muesste man sich fuer einen entscheiden.
+@pytest.mark.parametrize("source", STREAM_SAMPLES)
+def test_streaming_gives_the_same_bytes(source):
+    # The property the whole second path hinges on. Without it, one
+    # would have to settle for a single path.
     import io
 
     from ct4.jsonmode import compile_template
 
-    compiled = compile_template(quelle)
-    puffer = io.StringIO()
-    compiled.stream(puffer, KONTEXT)
-    assert puffer.getvalue() == compiled.render(KONTEXT)
+    compiled = compile_template(source)
+    buffer = io.StringIO()
+    compiled.stream(buffer, CONTEXT)
+    assert buffer.getvalue() == compiled.render(CONTEXT)
 
 
-class Senke:
-    """Nimmt alles entgegen und behaelt nichts.
+class Sink:
+    """Takes everything and keeps nothing.
 
-    Ein StringIO wuerde die ganze Ausgabe sammeln, und dann maesse der
-    Test seinen eigenen Puffer statt den Bauplatz.
+    A StringIO would collect the whole output, and then the test would
+    measure its own buffer instead of the build area.
     """
 
     def write(self, text):
         return len(text)
 
 
-QUELLE_REIHE = ('#mode json\n{"s": #series($punkte, layout="pairs",'
-                ' fields=["start","value"])}')
+SERIES_SOURCE = ('#mode json\n{"s": #series($punkte, layout="pairs",'
+                 ' fields=["start","value"])}')
 
 
-def _spitze(compiled, anzahl, schreiben):
+def _peak(compiled, count, write):
     import tracemalloc
 
-    punkte = (Punkt(i, float(i)) for i in range(anzahl))
+    points = (Point(i, float(i)) for i in range(count))
     tracemalloc.start()
-    schreiben(compiled, punkte)
-    _, hoch = tracemalloc.get_traced_memory()
+    write(compiled, points)
+    _, high = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    return hoch
+    return high
 
 
-def test_stroemen_haelt_den_speicher_konstant():
-    # Der Punkt der Sache. Verglichen werden zwei Groessen, nicht eine
-    # absolute Zahl, und der erste Aufruf zaehlt nicht mit: er legt die
-    # uebersetzte Vorlage an, und das faellt nur einmal an.
+def test_streaming_keeps_the_memory_constant():
+    # The whole point. Two sizes are compared, not one absolute
+    # number, and the first call does not count: it builds the
+    # compiled template, and that happens only once.
     from ct4.jsonmode import compile_template
 
-    compiled = compile_template(QUELLE_REIHE)
+    compiled = compile_template(SERIES_SOURCE)
 
-    def schreiben(c, punkte):
-        c.stream(Senke(), [{"punkte": punkte}])
+    def write(c, points):
+        c.stream(Sink(), [{"punkte": points}])
 
-    _spitze(compiled, 100, schreiben)
-    klein = _spitze(compiled, 10_000, schreiben)
-    gross = _spitze(compiled, 50_000, schreiben)
-    assert gross < klein * 2, "%d gegen %d Bytes" % (klein, gross)
+    _peak(compiled, 100, write)
+    small = _peak(compiled, 10_000, write)
+    large = _peak(compiled, 50_000, write)
+    assert large < small * 2, "%d against %d bytes" % (small, large)
 
 
-def test_sammelnder_weg_waechst_mit_der_reihe():
-    # Die Gegenprobe. Ohne sie sagt der Test darueber nichts: er koennte
-    # gruen sein, weil beide Wege konstant sind.
+def test_the_collecting_path_grows_with_the_series():
+    # The counter-check. Without it the test above says nothing: it
+    # could be green because both paths are constant.
     from ct4.jsonmode import compile_template
 
-    compiled = compile_template(QUELLE_REIHE)
+    compiled = compile_template(SERIES_SOURCE)
 
-    def schreiben(c, punkte):
-        c.render([{"punkte": punkte}])
+    def write(c, points):
+        c.render([{"punkte": points}])
 
-    _spitze(compiled, 100, schreiben)
-    klein = _spitze(compiled, 10_000, schreiben)
-    gross = _spitze(compiled, 50_000, schreiben)
-    assert gross > klein * 3, "%d gegen %d Bytes" % (klein, gross)
+    _peak(compiled, 100, write)
+    small = _peak(compiled, 10_000, write)
+    large = _peak(compiled, 50_000, write)
+    assert large > small * 3, "%d against %d bytes" % (small, large)
 
 
-def test_einzelwert_als_wurzel_wird_nicht_gestroemt():
+def test_a_single_value_root_is_not_streamed():
     import io
 
     from ct4.jsonmode import compile_template
 
     compiled = compile_template('#mode json\n$id')
-    assert compiled.render(KONTEXT) == "42"
+    assert compiled.render(CONTEXT) == "42"
     with pytest.raises(NotImplementedError):
-        compiled.stream(io.StringIO(), KONTEXT)
+        compiled.stream(io.StringIO(), CONTEXT)

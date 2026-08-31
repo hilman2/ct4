@@ -1,0 +1,8 @@
+{
+ "id": "05-correct-skin-stays-quiet",
+ "task": "A correct template must produce no finding.",
+ "broken": "$station.location: $day.outTemp.max, $day.rain.sum\n",
+ "expect": {
+  "clean": true
+ }
+}

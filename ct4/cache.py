@@ -1,19 +1,19 @@
-"""Uebersetzte Vorlagen auf der Platte behalten.
+"""Keep compiled templates on disk.
 
-ct3 merkt sich uebersetzte Vorlagen in einem ``dict`` im Prozess. Ein
-Daemon zahlt das Uebersetzen einmal, jeder frische Prozess zahlt es
-voll. Gemessen an den 136 Skin-Vorlagen des Korpus sind das 7,7 ms je
-Vorlage, gut eine Sekunde je Lauf. Bei ``weectl report run`` und in einer
-Agent-Schleife ist das der groesste einzelne Posten.
+ct3 remembers compiled templates in a ``dict`` inside the process. A
+daemon pays for compiling once, every fresh process pays in full.
+Measured against the 136 skin templates of the corpus that is 7.7 ms per
+template, a good second per run. For ``weectl report run`` and in an
+agent loop it is the largest single item.
 
-Eingehaengt wird an der Stelle, die ct3 dafuer vorsieht:
-``Template._CHEETAH_compilerClass``. Der Cache ersetzt also nicht das
-Uebersetzen, er ueberspringt es. Was danach passiert, macht ct3
-unveraendert selbst, und deshalb kann hier nichts auseinanderlaufen.
+It hooks in where ct3 provides for it:
+``Template._CHEETAH_compilerClass``. So the cache does not replace
+compiling, it skips it. What happens afterwards ct3 still does itself,
+unchanged, and that is why nothing here can drift apart.
 
-Der Modulname geht nicht in den Schluessel ein: er wechselt bei jedem
-dynamischen Uebersetzen, und der erzeugte Code haengt nachweislich nicht
-an ihm. Der Klassenname sehr wohl.
+The module name is not part of the key: it changes with every dynamic
+compilation, and the generated code demonstrably does not depend on it.
+The class name very much does.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-# Bei einem Wechsel des Formats oder der Schluesselbildung hochzaehlen.
-# Alte Eintraege werden dann nicht gelesen statt falsch gelesen.
+# Bump on a change of the format or of how the key is built. Old entries
+# are then not read at all instead of read wrongly.
 FORMAT = 1
 
 DEFAULT_DIR = Path(os.environ.get("CT4_CACHE_DIR", ".ct4-cache"))
@@ -32,11 +32,11 @@ DEFAULT_DIR = Path(os.environ.get("CT4_CACHE_DIR", ".ct4-cache"))
 
 def key_for(source: str, class_name: str, base_class: str | None,
             main_method: str | None, settings: Any) -> str:
-    """Der Schluessel eines Uebersetzungsergebnisses.
+    """The key of a compilation result.
 
-    Alles, was den erzeugten Text beeinflusst, geht ein: die Quelle, die
-    Namen, die Einstellungen und die Version von Cheetah, deren Nummer im
-    erzeugten Modul steht.
+    Everything that influences the generated text goes in: the source,
+    the names, the settings and the version of Cheetah, whose number
+    stands in the generated module.
     """
     from Cheetah.Version import Version
 
@@ -50,7 +50,7 @@ def key_for(source: str, class_name: str, base_class: str | None,
 
 
 class Store:
-    """Ein Verzeichnis voller erzeugter Module."""
+    """A directory full of generated modules."""
 
     def __init__(self, directory: Path | None = None):
         self.directory = Path(directory or DEFAULT_DIR)
@@ -58,8 +58,8 @@ class Store:
         self.misses = 0
 
     def path_for(self, key: str) -> Path:
-        # Zwei Zeichen als Unterverzeichnis. Ein Verzeichnis mit
-        # zehntausend Dateien ist auf manchen Dateisystemen langsam.
+        # Two characters as a subdirectory. A directory with ten
+        # thousand files is slow on some file systems.
         return self.directory / key[:2] / (key[2:] + ".py")
 
     def get(self, key: str) -> str | None:
@@ -75,9 +75,8 @@ class Store:
     def put(self, key: str, code: str) -> None:
         path = self.path_for(key)
         path.parent.mkdir(parents=True, exist_ok=True)
-        # Erst daneben schreiben, dann umbenennen. Zwei Prozesse, die
-        # dieselbe Vorlage uebersetzen, sollen sich keine halbe Datei
-        # hinterlassen.
+        # Write beside it first, then rename. Two processes compiling
+        # the same template should not leave half a file behind.
         temporary = path.with_suffix(".%d.tmp" % os.getpid())
         temporary.write_text(code, encoding="utf-8", newline="\n")
         os.replace(temporary, path)
@@ -89,11 +88,11 @@ class Store:
 
 
 def caching_compiler(store: Store) -> type:
-    """Baut eine Compiler-Klasse, die den Cache benutzt."""
+    """Builds a compiler class that uses the cache."""
     from Cheetah.Compiler import ModuleCompiler
 
     class CachingCompiler(ModuleCompiler):    # type: ignore[misc]
-        """Uebersetzt nur, was noch nicht uebersetzt ist."""
+        """Compiles only what is not compiled yet."""
 
         def __init__(self, source: Any = None, file: Any = None,
                      **kwargs: Any) -> None:
@@ -127,11 +126,11 @@ def caching_compiler(store: Store) -> type:
 
 
 def install(directory: Path | None = None) -> Store:
-    """Haengt den Cache in Cheetah ein und gibt ihn zurueck.
+    """Hooks the cache into Cheetah and returns it.
 
-    Nur fuer Vorlagen aus einer Zeichenkette. Eine Vorlage aus einer
-    Datei traegt ihren Pfad im erzeugten Modul; sie zu cachen brauchte
-    zusaetzlich die mtime, und den Fall gibt es hier noch nicht.
+    Only for templates from a string. A template from a file carries its
+    path in the generated module; caching it would need the mtime as
+    well, and that case does not exist here yet.
     """
     from Cheetah.Template import Template
 

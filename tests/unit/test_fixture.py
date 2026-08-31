@@ -1,8 +1,8 @@
-"""Aufzeichnen und Abspielen eines Kontexts.
+"""Recording and replaying a context.
 
-Der entscheidende Test ist ``test_abspielen_liefert_dieselbe_ausgabe``:
-dieselbe Vorlage, einmal gegen die lebenden Objekte, einmal gegen die
-abgelegte Aufzeichnung, und beides muss Byte fuer Byte gleich sein.
+The decisive test is ``test_replay_gives_the_same_output``: the same
+template, once against the live objects, once against the stored
+recording, and both must be equal byte for byte.
 """
 
 from __future__ import annotations
@@ -15,135 +15,135 @@ from Cheetah.Template import Template
 from ct4.fixture.record import Missing, Recorder, replay
 
 
-class Messwert:
-    """Steht fuer weewx' ValueHelper: formatiert sich, kennt seinen Rohwert."""
+class Reading:
+    """Stands for weewx' ValueHelper: formats itself, knows its raw value."""
 
-    def __init__(self, wert, form="%.1f"):
-        self.raw = wert
-        self._form = form
+    def __init__(self, value, fmt="%.1f"):
+        self.raw = value
+        self._fmt = fmt
 
     def __str__(self):
-        return "N/A" if self.raw is None else self._form % self.raw
+        return "N/A" if self.raw is None else self._fmt % self.raw
 
 
-class Aggregat:
-    def __init__(self, kleinst, groesst):
-        self.min = Messwert(kleinst)
-        self.max = Messwert(groesst)
+class Aggregate:
+    def __init__(self, smallest, largest):
+        self.min = Reading(smallest)
+        self.max = Reading(largest)
 
 
-class Datensatz:
-    def __init__(self, stempel, temperatur):
-        self.dateTime = Messwert(stempel, "%d")
-        self.outTemp = Messwert(temperatur)
+class Record:
+    def __init__(self, stamp, temperature):
+        self.dateTime = Reading(stamp, "%d")
+        self.outTemp = Reading(temperature)
 
 
-class Tag:
+class Day:
     def __init__(self):
-        self.outTemp = Aggregat(3.25, 17.5)
-        self.rain = Aggregat(0.0, None)
-        self.records = [Datensatz(100, 3.25), Datensatz(200, 17.5)]
+        self.outTemp = Aggregate(3.25, 17.5)
+        self.rain = Aggregate(0.0, None)
+        self.records = [Record(100, 3.25), Record(200, 17.5)]
 
     def span(self, delta=1):
-        return Aggregat(delta, delta * 2)
+        return Aggregate(delta, delta * 2)
 
 
-VORLAGE = """\
-Max: $day.outTemp.max, roh $day.outTemp.max.raw
-Regen: $day.rain.max
+TEMPLATE = """\
+Max: $day.outTemp.max, raw $day.outTemp.max.raw
+Rain: $day.rain.max
 #for $r in $day.records
   $r.dateTime = $r.outTemp
 #end for
-Spanne: $day.span(delta=3).max
+Span: $day.span(delta=3).max
 """
 
 
-def _rendern(kontext):
-    template = Template(VORLAGE, searchList=[{"day": kontext}])
+def _render(context):
+    template = Template(TEMPLATE, searchList=[{"day": context}])
     try:
         return template.respond()
     finally:
         template.shutdown()
 
 
-def test_abspielen_liefert_dieselbe_ausgabe():
-    baum = {}
-    lebendig = _rendern(Recorder(Tag(), baum))
-    # Der Umweg ueber JSON gehoert dazu: das Fixture liegt auf Platte.
-    aufgezeichnet = json.loads(json.dumps(baum))
-    assert _rendern(replay(aufgezeichnet)) == lebendig
+def test_replay_gives_the_same_output():
+    tree = {}
+    live = _render(Recorder(Day(), tree))
+    # The detour through JSON belongs here: the fixture lives on disk.
+    recorded = json.loads(json.dumps(tree))
+    assert _render(replay(recorded)) == live
 
 
-def test_fehlender_wert_bleibt_als_none_erhalten():
-    baum = {}
-    lebendig = _rendern(Recorder(Tag(), baum))
-    assert "N/A" in lebendig
-    assert _rendern(replay(baum)) == lebendig
+def test_a_missing_value_survives_as_none():
+    tree = {}
+    live = _render(Recorder(Day(), tree))
+    assert "N/A" in live
+    assert _render(replay(tree)) == live
 
 
-def test_ungelesenes_feld_meldet_sich():
-    # Ein Fixture, das stillschweigend Leeres liefert, waere schlimmer
-    # als keines: die Pruefung waere gruen und saehe nichts.
-    baum = {}
-    _rendern(Recorder(Tag(), baum))
-    with pytest.raises(Missing) as fehler:
-        replay(baum).outTemp.avg
-    assert "avg" in str(fehler.value)
-    assert "max" in str(fehler.value)
+def test_an_unread_field_reports_itself():
+    # A fixture that silently returns nothing would be worse than no
+    # fixture at all: the check would be green and see nothing.
+    tree = {}
+    _render(Recorder(Day(), tree))
+    with pytest.raises(Missing) as error:
+        replay(tree).outTemp.avg
+    assert "avg" in str(error.value)
+    assert "max" in str(error.value)
 
 
-def test_unbekannter_aufruf_meldet_sich():
-    baum = {}
-    _rendern(Recorder(Tag(), baum))
+def test_an_unknown_call_reports_itself():
+    tree = {}
+    _render(Recorder(Day(), tree))
     with pytest.raises(Missing):
-        replay(baum).span(delta=99)
+        replay(tree).span(delta=99)
 
 
-def test_aufzeichnung_ist_json():
-    baum = {}
-    _rendern(Recorder(Tag(), baum))
-    assert json.dumps(baum)
+def test_the_recording_is_json():
+    tree = {}
+    _render(Recorder(Day(), tree))
+    assert json.dumps(tree)
 
 
-def test_aufgezeichneter_kontext_ist_schreibgeschuetzt():
+def test_the_recorded_context_is_read_only():
     with pytest.raises(TypeError):
-        Recorder(Tag(), {}).outTemp = 1
+        Recorder(Day(), {}).outTemp = 1
 
 
-class MitMethode:
-    """Wie weewx' TimeBinder: $day ist eine Methode, kein Attribut."""
+class WithMethod:
+    """Like weewx' TimeBinder: $day is a method, not an attribute."""
 
-    def tag(self):
-        return Aggregat(1.0, 2.0)
+    def day(self):
+        return Aggregate(1.0, 2.0)
 
 
-def test_gebundene_methode_wird_weiter_aufgerufen():
-    # Cheetah ruft eine Methode ohne Klammern von selbst auf. Ein
-    # Rekorder, der wie eine Instanz aussieht, bricht das, und
-    # $day.hours findet dann nichts mehr.
-    vorlage = "$obj.tag.max"
-    baum = {}
+def test_a_bound_method_is_still_called():
+    # Cheetah calls a method without parentheses on its own. A
+    # recorder that looks like an instance breaks that, and then
+    # $day.hours finds nothing any more.
+    source = "$obj.day.max"
+    tree = {}
 
-    def rendern(kontext):
-        template = Template(vorlage, searchList=[{"obj": kontext}])
+    def render(context):
+        template = Template(source, searchList=[{"obj": context}])
         try:
             return template.respond()
         finally:
             template.shutdown()
 
-    lebendig = rendern(Recorder(MitMethode(), baum))
-    assert lebendig == "2.0"
-    assert rendern(replay(json.loads(json.dumps(baum)))) == lebendig
+    live = render(Recorder(WithMethod(), tree))
+    assert live == "2.0"
+    assert render(replay(json.loads(json.dumps(tree)))) == live
 
 
-def test_fehlender_schluessel_meldet_keyerror():
-    # Cheetah prueft Namensraeume mit einem Schluesselzugriff. Ein
-    # AttributeError an dieser Stelle laesst CPython eine ignorierte
-    # Ausnahme melden, und der Lauf rauscht zu.
-    baum = {}
-    _rendern(Recorder(Tag(), baum))
-    knoten = replay(baum)
+def test_a_missing_key_raises_keyerror():
+    # Cheetah probes namespaces with a key lookup. An AttributeError
+    # at that point makes CPython report an ignored exception, and the
+    # run drowns in noise.
+    tree = {}
+    _render(Recorder(Day(), tree))
+    node = replay(tree)
     with pytest.raises(KeyError):
-        knoten["gibtsnicht"]
+        node["nosuchkey"]
     with pytest.raises(AttributeError):
-        knoten.gibtsnicht
+        node.nosuchkey

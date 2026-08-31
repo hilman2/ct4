@@ -1,30 +1,30 @@
-"""Anwendungen melden sich selbst an.
+"""Applications declare themselves.
 
-Ein Paket traegt sich in seiner eigenen Metadatei ein:
+A package registers itself in its own metadata file:
 
     [project.entry-points."ct4.plugins"]
     weewx = "weewx.ct4:plugin"
 
-Danach findet ct4 es ueber die installierte Umgebung, ohne dass jemand
-eine Einstellung setzt. Das ist der Unterschied zu ct3s
-``macroDirectives``: das war ein Compiler-Setting, musste durch jede
-``Template``-Konstruktion getragen werden, und ein Werkzeug, das nur die
-Datei ansieht, fand es nie.
+After that ct4 finds it through the installed environment, without
+anybody setting an option. That is the difference to ct3's
+``macroDirectives``: that was a compiler setting, had to be carried
+through every ``Template`` construction, and a tool that only looks at
+the file never found it.
 
-Ein Plugin ist ein Modul oder ein Objekt. Was es kann, wird gefragt, nicht
-verlangt:
+A plugin is a module or an object. What it can do is asked for, not
+demanded:
 
 ``declare()``
-    gibt eine ``Declaration`` zurueck: welche Namen es gibt.
+    returns a ``Declaration``: which names exist.
 ``install()``
-    haengt Typ-Adapter ein, damit Werte sich selbst erklaeren.
+    hooks in type adapters so that values explain themselves.
 
-Fehlt eines davon, ist das kein Fehler. Ein Plugin, das nur Typen
-anmeldet, ist ein vollstaendiges Plugin.
+If one of them is missing, that is not an error. A plugin that only
+declares types is a complete plugin.
 
-In diesem Repo findet die Suche nichts: ct4 ist hier nicht installiert,
-und Entry Points gibt es nur fuer installierte Pakete. Die eingecheckten
-Anmeldungen unter ``declarations/`` bleiben deshalb der Hauptweg.
+In this repo the search finds nothing: ct4 is not installed here, and
+entry points exist only for installed packages. The checked-in
+declarations under ``declarations/`` therefore remain the main route.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ GROUP = "ct4.plugins"
 
 @dataclass(frozen=True)
 class Plugin:
-    """Ein gefundenes Plugin und was es kann."""
+    """A plugin that was found, and what it can do."""
 
     name: str
     target: Any
@@ -52,7 +52,7 @@ class Plugin:
 
 
 def entry_points(loader: Callable[[], Any] | None = None) -> list[Any]:
-    """Die Eintraege der Gruppe, oder nichts, wenn es keine gibt."""
+    """The entries of the group, or nothing when there are none."""
     if loader is not None:
         return list(loader())
     from importlib.metadata import entry_points as builtin
@@ -64,11 +64,11 @@ def entry_points(loader: Callable[[], Any] | None = None) -> list[Any]:
 
 
 def discover(loader: Callable[[], Any] | None = None) -> list[Plugin]:
-    """Laedt alle gefundenen Plugins.
+    """Loads all the plugins that were found.
 
-    Ein Plugin, das sich nicht laden laesst, wird uebergangen und nicht
-    zum Fehler des ganzen Laufs. Ein kaputtes Fremdpaket soll ``ct4
-    check`` nicht unbrauchbar machen.
+    A plugin that cannot be loaded is passed over and does not become an
+    error of the whole run. A broken third-party package should not make
+    ``ct4 check`` unusable.
     """
     found = []
     for entry in entry_points(loader):
@@ -80,7 +80,7 @@ def discover(loader: Callable[[], Any] | None = None) -> list[Plugin]:
 
 
 def declarations(plugins: list[Plugin] | None = None) -> list[Declaration]:
-    """Was die Plugins an Namen anmelden."""
+    """What names the plugins declare."""
     out = []
     for plugin in (discover() if plugins is None else plugins):
         if plugin.can("declare"):
@@ -91,11 +91,11 @@ def declarations(plugins: list[Plugin] | None = None) -> list[Declaration]:
 
 
 def install_all(plugins: list[Plugin] | None = None) -> list[str]:
-    """Haengt die Typ-Adapter aller Plugins ein.
+    """Hooks in the type adapters of all the plugins.
 
-    Gibt zurueck, welche das getan haben. Wer wissen will, ob ein
-    bestimmtes Plugin gegriffen hat, sieht dort nach; ein stilles
-    Nichtstun waere schwer zu finden.
+    Returns which ones did so. Whoever wants to know whether a certain
+    plugin took hold looks there; a silent doing-nothing would be hard
+    to find.
     """
     done = []
     for plugin in (discover() if plugins is None else plugins):

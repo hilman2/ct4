@@ -1,13 +1,13 @@
-"""Ein JSON-Dokument mit Loechern lesen.
+"""Reading a JSON document with holes.
 
-Der Parser kennt die JSON-Grammatik. Deshalb weiss er jederzeit, ob er an
-einer Wert-, Schluessel- oder Elementposition steht, und deshalb sind
-Kommas hier kein Autorenproblem: sie trennen, mehr nicht. Eines zu viel
-oder eines zu wenig ist kein Fehler, weil am Ende keine Zeichenkette
-zusammengesetzt wird, sondern eine Struktur.
+The parser knows the JSON grammar. That is why it always knows whether
+it stands at a value, a key or an element position, and that is why
+commas are no problem for the author here: they separate, nothing more.
+One too many or one too few is not an error, because in the end no
+string is pieced together, but a structure.
 
-``#`` und ``$`` sind in JSON frei. Direktiven stehen auf eigenen Zeilen,
-Platzhalter an Wertpositionen.
+``#`` and ``$`` are free in JSON. Directives stand on lines of their
+own, placeholders at value positions.
 """
 
 from __future__ import annotations
@@ -19,32 +19,32 @@ from typing import Any
 
 WHITESPACE = " \t\r\n"
 
-# Ein Platzhalter, so weit ihn dieser Parser abgrenzen muss. Was darin
-# steht, uebersetzt spaeter Cheetah; hier geht es nur darum, wo er
-# aufhoert.
+# A placeholder, as far as this parser has to delimit it. What stands
+# inside it is compiled by Cheetah later; here it is only about where
+# it ends.
 NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 LITERALS = {"true": True, "false": False, "null": None}
 
 
 class JsonTemplateError(SyntaxError):
-    """Die Vorlage laesst sich nicht als JSON-Dokument lesen."""
+    """The template cannot be read as a JSON document."""
 
 
 @dataclass
 class Lit:
-    """Ein Wert, der schon im Template steht."""
+    """A value that already stands in the template."""
 
     value: Any
 
 
 @dataclass
 class Expr:
-    """Ein Platzhalter. ``precision`` kommt aus einem angehaengten ``@``.
+    """A placeholder. ``precision`` comes from a trailing ``@``.
 
-    ``line`` ist die Zeile in der Vorlage. Sie wird gebraucht, damit ein
-    Fehler beim Rendern dorthin zeigt und nicht in die erzeugte
-    Definition.
+    ``line`` is the line in the template. It is needed so that a
+    rendering error points there and not into the generated
+    definition.
     """
 
     text: str
@@ -54,7 +54,7 @@ class Expr:
 
 @dataclass
 class Str:
-    """Eine Zeichenkette, in der Platzhalter stehen duerfen."""
+    """A string in which placeholders may stand."""
 
     parts: list[Any]
 
@@ -77,7 +77,7 @@ class Member:
 
 @dataclass
 class For:
-    """``#for`` um Mitglieder oder Elemente herum."""
+    """``#for`` around members or elements."""
 
     header: str
     body: list[Any]
@@ -85,7 +85,7 @@ class For:
 
 @dataclass
 class If:
-    """``#if`` mit beliebig vielen ``#elif`` und einem ``#else``."""
+    """``#if`` with any number of ``#elif`` and one ``#else``."""
 
     branches: list[tuple[str, list[Any]]]
     otherwise: list[Any] | None = None
@@ -93,7 +93,7 @@ class If:
 
 @dataclass
 class Series:
-    """``#series`` an einer Wertposition."""
+    """``#series`` at a value position."""
 
     expr: str
     layout: str = "records"
@@ -104,7 +104,7 @@ class Series:
 
 @dataclass
 class Document:
-    """Was eine Vorlage insgesamt beschreibt."""
+    """What a template describes as a whole."""
 
     root: Any
     precisions: dict[str, int] = field(default_factory=dict)
@@ -113,7 +113,7 @@ class Document:
 
 
 def parse(source: str) -> Document:
-    """Liest eine JSON-Vorlage."""
+    """Reads a JSON template."""
     return _Parser(source).document()
 
 
@@ -123,12 +123,12 @@ class _Parser:
         self.pos = 0
         self.doc = Document(root=None)
 
-    # -- Grundlagen -----------------------------------------------
+    # -- Basics ---------------------------------------------------
 
     def error(self, message: str) -> JsonTemplateError:
         line = self.src.count("\n", 0, self.pos) + 1
         column = self.pos - (self.src.rfind("\n", 0, self.pos) + 1) + 1
-        return JsonTemplateError("Zeile %d, Spalte %d: %s"
+        return JsonTemplateError("line %d, column %d: %s"
                                  % (line, column, message))
 
     def line_at(self, position: int) -> int:
@@ -141,10 +141,10 @@ class _Parser:
         return "" if self.at_end() else self.src[self.pos]
 
     def skip_space(self) -> None:
-        """Ueberspringt Leerraum und Kommentare.
+        """Skips whitespace and comments.
 
-        ``##`` bis zum Zeilenende ist wie in Cheetah ein Kommentar. JSON
-        kennt keine, und ein Skin braucht sie.
+        ``##`` up to the end of the line is a comment, as in Cheetah.
+        JSON has none, and a skin needs them.
         """
         while not self.at_end():
             char = self.src[self.pos]
@@ -159,8 +159,8 @@ class _Parser:
     def expect(self, char: str) -> None:
         self.skip_space()
         if self.peek() != char:
-            raise self.error("%r erwartet, %r gefunden"
-                             % (char, self.peek() or "<Ende>"))
+            raise self.error("%r expected, %r found"
+                             % (char, self.peek() or "<end>"))
         self.pos += 1
 
     def line_rest(self) -> str:
@@ -171,18 +171,18 @@ class _Parser:
         self.pos = end
         return text.strip()
 
-    # -- Dokument -------------------------------------------------
+    # -- Document -------------------------------------------------
 
     def document(self) -> Document:
         self.header()
         self.doc.root = self.value()
         self.skip_space()
         if not self.at_end():
-            raise self.error("nach dem Dokument steht noch etwas")
+            raise self.error("something follows after the document")
         return self.doc
 
     def header(self) -> None:
-        """Liest die Direktiven vor dem eigentlichen Dokument."""
+        """Reads the directives before the document proper."""
         while True:
             self.skip_space()
             if self.peek() != "#" or self.src.startswith("##", self.pos):
@@ -191,8 +191,8 @@ class _Parser:
             self.pos += 1
             word = self.word()
             if word == "mode":
-                # Die Ansage selbst. Sie steht dort, damit ct4 einer
-                # Datei ansieht, wie sie gelesen werden will.
+                # The announcement itself. It stands there so that ct4
+                # can tell from a file how it wants to be read.
                 self.line_rest()
             elif word == "precision":
                 self.precision_directive()
@@ -206,8 +206,8 @@ class _Parser:
 
     def missing_value(self, text: str) -> str:
         if text not in ("omit", "null", "error"):
-            raise self.error("#missing kennt omit, null und error, "
-                             "nicht %r" % text)
+            raise self.error("#missing knows omit, null and error, "
+                             "not %r" % text)
         return text
 
     def precision_directive(self) -> None:
@@ -216,8 +216,8 @@ class _Parser:
         try:
             self.doc.precisions[name.strip()] = int(digits)
         except ValueError:
-            raise self.error("#precision braucht NAME = ZAHL, "
-                             "bekommen: %r" % text) from None
+            raise self.error("#precision needs NAME = NUMBER, "
+                             "got: %r" % text) from None
 
     def word(self) -> str:
         match = NAME.match(self.src, self.pos)
@@ -226,7 +226,7 @@ class _Parser:
         self.pos = match.end()
         return match.group()
 
-    # -- Werte ----------------------------------------------------
+    # -- Values ---------------------------------------------------
 
     def value(self) -> Any:
         self.skip_space()
@@ -247,8 +247,8 @@ class _Parser:
         self.pos += 1
         word = self.word()
         if word != "series":
-            raise self.error("an einer Wertposition steht nur #series, "
-                             "nicht #%s" % word)
+            raise self.error("only #series stands at a value position, "
+                             "not #%s" % word)
         return self.series()
 
     def literal(self) -> Lit:
@@ -262,7 +262,7 @@ class _Parser:
             return Lit(json.loads(text))
         except ValueError:
             self.pos = start
-            raise self.error("kein Wert: %r" % text) from None
+            raise self.error("not a value: %r" % text) from None
 
     def expr(self) -> Expr:
         line = self.line_at(self.pos)
@@ -277,26 +277,26 @@ class _Parser:
             while not self.at_end() and self.src[self.pos].isdigit():
                 self.pos += 1
             if start == self.pos:
-                raise self.error("nach @ fehlt die Zahl der Stellen")
+                raise self.error("the number of digits is missing after @")
             precision = int(self.src[start:self.pos])
         else:
             self.pos = save
         return Expr(text, precision, line)
 
     def placeholder(self) -> str:
-        """Grenzt einen Platzhalter ab, ohne ihn zu deuten.
+        """Delimits a placeholder without interpreting it.
 
-        ``${...}`` reicht bis zur schliessenden Klammer. Sonst gilt ein
-        Name, gefolgt von beliebig vielen Punkten, Indizes und Aufrufen.
-        Was daraus wird, entscheidet Cheetah.
+        ``${...}`` reaches to the closing brace. Otherwise a name
+        applies, followed by any number of dots, indexes and calls.
+        What becomes of it is Cheetah's decision.
         """
         start = self.pos
-        self.pos += 1                      # das $
+        self.pos += 1                      # the $
         if self.peek() == "{":
             self.pos = self.balanced("{", "}")
             return self.src[start:self.pos]
         if not self.word():
-            raise self.error("nach $ fehlt ein Name")
+            raise self.error("a name is missing after $")
         while not self.at_end():
             char = self.src[self.pos]
             if char == ".":
@@ -314,7 +314,7 @@ class _Parser:
         return self.src[start:self.pos]
 
     def balanced(self, opening: str, closing: str) -> int:
-        """Position hinter der passenden schliessenden Klammer."""
+        """Position just past the matching closing bracket."""
         depth = 0
         index = self.pos
         while index < len(self.src):
@@ -329,7 +329,7 @@ class _Parser:
                 if depth == 0:
                     return index + 1
             index += 1
-        raise self.error("%r wird nicht geschlossen" % opening)
+        raise self.error("%r is never closed" % opening)
 
     def skip_json_string(self, index: int) -> int:
         index += 1
@@ -340,10 +340,10 @@ class _Parser:
             if self.src[index] == '"':
                 return index + 1
             index += 1
-        raise self.error("Zeichenkette wird nicht geschlossen")
+        raise self.error("string is never closed")
 
     def string(self) -> Any:
-        """Liest eine Zeichenkette; Platzhalter darin werden eingesetzt."""
+        """Reads a string; placeholders inside it are substituted."""
         end = self.skip_json_string(self.pos)
         raw = self.src[self.pos:end]
         self.pos = end
@@ -370,7 +370,7 @@ class _Parser:
             parts.append(Lit("".join(plain)))
         return parts
 
-    # -- Sammlungen -----------------------------------------------
+    # -- Collections ----------------------------------------------
 
     def obj(self) -> Obj:
         self.expect("{")
@@ -385,11 +385,11 @@ class _Parser:
         return node
 
     def collect(self, into: list[Any], closing: str, read: Any) -> None:
-        """Liest Mitglieder oder Elemente bis zur schliessenden Klammer.
+        """Reads members or elements up to the closing bracket.
 
-        Kommas werden gelesen und weggeworfen. Sie stehen im Template,
-        damit es wie JSON aussieht; fuer die Struktur sind sie ohne
-        Bedeutung, und genau deshalb kann hier keins zu viel sein.
+        Commas are read and thrown away. They stand in the template so
+        that it looks like JSON; for the structure they carry no
+        meaning, and that is exactly why none can be one too many here.
         """
         while True:
             self.skip_space()
@@ -400,7 +400,7 @@ class _Parser:
                 self.pos += 1
                 return
             if self.at_end():
-                raise self.error("%r fehlt" % closing)
+                raise self.error("%r is missing" % closing)
             if self.peek() == "#" and not self.src.startswith("##", self.pos):
                 node = self.control(closing, read)
                 if node is None:
@@ -415,7 +415,7 @@ class _Parser:
         self.expect(":")
         return Member(key, self.value())
 
-    # -- Steuerung ------------------------------------------------
+    # -- Control --------------------------------------------------
 
     def control(self, closing: str, read: Any) -> Any:
         self.pos += 1
@@ -424,7 +424,7 @@ class _Parser:
             return For(self.line_rest(), self.block(closing, read, ("for",)))
         if word == "if":
             return self.if_node(closing, read)
-        raise self.error("hier steht nur #for oder #if, nicht #%s" % word)
+        raise self.error("only #for or #if stands here, not #%s" % word)
 
     def if_node(self, closing: str, read: Any) -> If:
         branches: list[tuple[str, list[Any]]] = []
@@ -455,7 +455,7 @@ class _Parser:
         while True:
             self.skip_space()
             if self.at_end():
-                raise self.error("Block wird nicht geschlossen")
+                raise self.error("block is never closed")
             if self.peek() == ",":
                 self.pos += 1
                 continue
@@ -469,15 +469,15 @@ class _Parser:
                 body.append(self.control(closing, read))
                 continue
             if self.peek() == closing:
-                raise self.error("Block wird nicht geschlossen")
+                raise self.error("block is never closed")
             body.append(read())
 
     def finish_end(self, expected: str) -> None:
-        """Liest den Rest einer #end-Zeile und prueft, was sie schliesst."""
+        """Reads the rest of an #end line and checks what it closes."""
         self.skip_space()
         word = self.word()
         if word and word != expected:
-            raise self.error("#end %s erwartet, #end %s gefunden"
+            raise self.error("#end %s expected, #end %s found"
                              % (expected, word))
 
     # -- #series --------------------------------------------------
@@ -498,26 +498,26 @@ class _Parser:
             elif name == "gaps":
                 node.gaps = self.literal_option(name, raw, str)
             else:
-                raise self.error("#series kennt %r nicht" % name)
+                raise self.error("#series does not know %r" % name)
         if node.layout not in ("records", "columns", "pairs"):
-            raise self.error("layout kennt records, columns und pairs, "
-                             "nicht %r" % node.layout)
+            raise self.error("layout knows records, columns and pairs, "
+                             "not %r" % node.layout)
         return node
 
     def literal_option(self, name: str, raw: str, kind: type) -> Any:
         try:
             value = json.loads(raw.replace("'", '"'))
         except ValueError:
-            raise self.error("%s=%s ist kein Wert" % (name, raw)) from None
+            raise self.error("%s=%s is not a value" % (name, raw)) from None
         if not isinstance(value, kind):
-            raise self.error("%s erwartet %s" % (name, kind.__name__))
+            raise self.error("%s expects %s" % (name, kind.__name__))
         return value
 
     def split_arguments(self, text: str) -> tuple[str, dict[str, str]]:
-        """Trennt den Ausdruck von den benannten Angaben.
+        """Separates the expression from the named options.
 
-        Getrennt wird nur an Kommas der obersten Ebene, damit ein Aufruf
-        im Ausdruck selbst nicht zerrissen wird.
+        Splitting happens only at commas of the top level, so that a
+        call inside the expression itself is not torn apart.
         """
         parts: list[str] = []
         depth = 0

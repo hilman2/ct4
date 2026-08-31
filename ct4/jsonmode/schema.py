@@ -1,19 +1,19 @@
-"""Eine JSON-Vorlage gegen ihr Zielformat halten.
+"""Holding a JSON template against its target format.
 
-Zwei Pruefungen, und die statische ist die wertvollere. Sie braucht keine
-Daten und keine Anwendung: sie liest die Vorlage und das Schema und
-sagt, was nicht zusammenpasst. Damit findet ein Skin-Autor oder ein Agent
-den Fehler beim Schreiben statt beim naechsten Report-Lauf.
+Two checks, and the static one is the more valuable. It needs no data
+and no application: it reads the template and the schema and says what
+does not fit together. A skin author or an agent thus finds the mistake
+while writing instead of at the next report run.
 
-Was statisch entschieden werden kann, ist begrenzt, und das ist hier
-ausdruecklich so gemeint:
+What can be decided statically is limited, and that is meant
+explicitly here:
 
-* Ein Feld, das die Vorlage nirgends erzeugt, fehlt sicher.
-* Ein Feld, das nur in einem ``#if`` steht, kann fehlen. Das ist eine
-  Warnung, keine Meldung: vielleicht ist genau das gewollt.
-* Ein fester Wert, dessen Typ dem Schema widerspricht, ist ein Fehler.
-* Ein Platzhalter sagt statisch nichts ueber seinen Typ. Dafuer gibt es
-  die Laufzeitpruefung.
+* A field that the template produces nowhere is certainly missing.
+* A field that stands only inside an ``#if`` may be missing. That is a
+  warning, not an error: perhaps it is exactly what was wanted.
+* A constant value whose type contradicts the schema is an error.
+* A placeholder says nothing about its type statically. That is what
+  the runtime check is for.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from typing import Any
 from ct4.diagnostics import ERROR, WARNING, Diagnostic
 from ct4.jsonmode.parse import Arr, Expr, For, If, Lit, Member, Obj, Series
 
-# Wie ein fester Wert der Vorlage auf die Typnamen von JSON Schema
-# abgebildet wird. bool steht vor int, weil True in Python ein int ist.
+# How a constant value of the template maps onto the type names of JSON
+# Schema. bool comes before int, because True is an int in Python.
 JSON_TYPES: tuple[tuple[type, str], ...] = (
     (bool, "boolean"),
     (str, "string"),
@@ -34,7 +34,7 @@ JSON_TYPES: tuple[tuple[type, str], ...] = (
 
 
 def check(node: Any, schema: Any, path: str = "$") -> list[Diagnostic]:
-    """Haelt einen Vorlagenknoten gegen ein Schema."""
+    """Holds a template node against a schema."""
     found: list[Diagnostic] = []
     _check(node, schema, path, found, certain=True)
     return found
@@ -50,7 +50,7 @@ def _check(node: Any, schema: Any, path: str,
         if kind not in (None, "object"):
             found.append(Diagnostic(
                 "CT4210", ERROR,
-                "das Schema erwartet %s, die Vorlage baut ein Objekt" % kind,
+                "the schema expects %s, the template builds an object" % kind,
                 path=path))
             return
         _check_object(node, schema, path, found, certain)
@@ -60,7 +60,7 @@ def _check(node: Any, schema: Any, path: str,
         if kind not in (None, "array"):
             found.append(Diagnostic(
                 "CT4211", ERROR,
-                "das Schema erwartet %s, die Vorlage baut eine Liste" % kind,
+                "the schema expects %s, the template builds an array" % kind,
                 path=path))
             return
         items = schema.get("items")
@@ -74,7 +74,7 @@ def _check(node: Any, schema: Any, path: str,
         if not _type_fits(actual, kind):
             found.append(Diagnostic(
                 "CT4212", ERROR,
-                "das Schema erwartet %s, im Template steht %s"
+                "the schema expects %s, the template has %s"
                 % (kind, actual), path=path))
 
 
@@ -89,21 +89,21 @@ def _check_object(node: Obj, schema: dict[str, Any], path: str,
         if name in sometimes or (name in always and not certain):
             found.append(Diagnostic(
                 "CT4201", WARNING,
-                "das Schema verlangt %r, die Vorlage baut es nur unter "
-                "einer Bedingung" % name, path="%s.%s" % (path, name)))
+                "the schema requires %r, the template builds it only "
+                "under a condition" % name, path="%s.%s" % (path, name)))
         else:
             found.append(Diagnostic(
                 "CT4200", ERROR,
-                "das Schema verlangt %r, die Vorlage baut es nicht" % name,
-                path="%s.%s" % (path, name)))
+                "the schema requires %r, the template does not build it"
+                % name, path="%s.%s" % (path, name)))
 
     if schema.get("additionalProperties") is False:
         for name in sorted(always | sometimes):
             if name not in properties:
                 found.append(Diagnostic(
                     "CT4202", ERROR,
-                    "das Schema kennt %r nicht und laesst keine weiteren "
-                    "Felder zu" % name, path="%s.%s" % (path, name)))
+                    "the schema does not know %r and allows no further "
+                    "fields" % name, path="%s.%s" % (path, name)))
 
     for member, sure in _members_of(node, certain):
         if not isinstance(member.key, Lit):
@@ -115,7 +115,7 @@ def _check_object(node: Obj, schema: dict[str, Any], path: str,
 
 
 def _members_of(node: Obj, certain: bool) -> list[tuple[Member, bool]]:
-    """Alle Mitglieder samt der Frage, ob sie sicher entstehen."""
+    """All members together with whether they certainly arise."""
     out: list[tuple[Member, bool]] = []
     _walk(node.members, certain, out)
     return out
@@ -136,7 +136,7 @@ def _walk(nodes: list[Any], certain: bool,
 
 
 def _keys_of(node: Obj) -> tuple[set[str], set[str]]:
-    """Feste Schluessel, getrennt nach sicher und moeglich."""
+    """Constant keys, split into certain and possible."""
     always: set[str] = set()
     sometimes: set[str] = set()
     for member, certain in _members_of(node, True):
@@ -156,7 +156,7 @@ def _json_type(value: Any) -> str:
 
 
 def _type_fits(actual: str, expected: Any) -> bool:
-    """Ob der Typ passt. ``integer`` erfuellt auch ``number``."""
+    """Whether the type fits. ``integer`` also satisfies ``number``."""
     wanted = expected if isinstance(expected, list) else [expected]
     if actual in wanted:
         return True
@@ -164,33 +164,33 @@ def _type_fits(actual: str, expected: Any) -> bool:
 
 
 def validate(value: Any, schema: Any) -> None:
-    """Prueft ein fertiges Ergebnis gegen das Schema.
+    """Checks a finished result against the schema.
 
-    Braucht ``jsonschema``. Die Bibliothek ist eine zusaetzliche
-    Abhaengigkeit und deshalb wahlfrei; wer die Laufzeitpruefung will,
-    installiert ``ct4[schema]``.
+    Needs ``jsonschema``. The library is an additional dependency and
+    therefore optional; whoever wants the runtime check installs
+    ``ct4[schema]``.
     """
     try:
         import jsonschema  # type: ignore[import-untyped]
     except ImportError:
         raise RuntimeError(
-            "Die Laufzeitpruefung braucht jsonschema. "
-            "Zu installieren mit: pip install 'ct4[schema]'") from None
+            "The runtime check needs jsonschema. "
+            "Install it with: pip install 'ct4[schema]'") from None
     jsonschema.validate(value, schema)
 
 
 def unknown_expressions(node: Any, path: str = "$") -> list[Diagnostic]:
-    """Zaehlt auf, was statisch offen bleibt.
+    """Lists what stays open statically.
 
-    Ein Platzhalter und eine ``#series`` liefern erst zur Laufzeit einen
-    Typ. Diese Liste sagt, wo die statische Pruefung aufhoert, damit
-    niemand sie fuer mehr haelt, als sie ist.
+    A placeholder and a ``#series`` only settle their type at run time.
+    This list says where the static check ends, so that nobody takes it
+    for more than it is.
     """
     out: list[Diagnostic] = []
     if isinstance(node, (Expr, Series)):
         out.append(Diagnostic(
             "CT4220", WARNING,
-            "der Typ steht erst zur Laufzeit fest", path=path))
+            "the type is only settled at run time", path=path))
     elif isinstance(node, Obj):
         for member, _ in _members_of(node, True):
             key = (member.key.value if isinstance(member.key, Lit) else "?")

@@ -1,6 +1,6 @@
 {
- "id": "02-aggregat-vertippt-summe",
- "task": "Ein Skin liest $month.rain.sm statt .sum.",
+ "id": "02-aggregate-typo-sum",
+ "task": "A skin reads $month.rain.sm instead of .sum.",
  "broken": "#for $m in $year.months\n$month.rain.sm\n#end for\n",
  "fixed": "#for $m in $year.months\n$month.rain.sum\n#end for\n",
  "expect": {

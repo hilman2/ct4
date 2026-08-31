@@ -1,8 +1,8 @@
-"""Aufgezeichnete Kontexte in Korpusfaelle umwandeln.
+"""Turn recorded contexts into corpus cases.
 
-``ct4.fixture.weewx_capture`` legt je erzeugter Seite eine Datei mit
-Vorlage, Kontext und Ausgabe ab. Hier wird daraus ein Fall, den der
-Pruefstand ohne weewx rendern kann.
+``ct4.fixture.weewx_capture`` stores one file per generated page, with
+template, context and output. Here that becomes a case which the test
+bench can render without weewx.
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from ct4.corpus.case import FIXTURE, RENDER, Case
 
 
 def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
-    """Liest die Aufzeichnungen unter ``root`` und macht Faelle daraus."""
+    """Reads the recordings under ``root`` and makes cases of them."""
     cases: list[Case] = []
     skipped: Counter[str] = Counter()
     for path in sorted(root.glob("*.json")):
         record = json.loads(path.read_text(encoding="utf-8"))
         if not record.get("context"):
-            skipped["kein Kontext"] += 1
+            skipped["no context"] += 1
             continue
         cases.append(Case(
             id="%s/%s" % (name, path.stem),

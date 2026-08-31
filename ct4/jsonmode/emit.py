@@ -1,13 +1,13 @@
-"""Aus dem gelesenen Dokument eine Cheetah-Definition machen.
+"""Turning the parsed document into a Cheetah definition.
 
-Die Ausdruecke der Vorlage werden nicht gedeutet. Sie wandern
-unveraendert in eine ``#def``, und Cheetah uebersetzt sie. Damit gelten
-im JSON-Modus dieselben Regeln wie im Textmodus: dieselbe searchList,
-dasselbe Autocalling, dieselbe Punktschreibweise. Ein zweiter
-Ausdrucksparser waere eine zweite Semantik, und eine davon waere falsch.
+The template's expressions are never interpreted. They go into a
+``#def`` unchanged, and Cheetah compiles them. JSON mode therefore
+follows the same rules as text mode: the same searchList, the same
+autocalling, the same dot notation. A second expression parser would be
+a second semantics, and one of the two would be wrong.
 
-Was die Definition tut, ist Behaelter oeffnen und schliessen und Werte
-eintragen. Die Struktur entsteht auf dem Bauplatz, nicht im Text.
+What the definition does is open and close containers and enter values.
+The structure takes shape on the building site, not in the text.
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ METHOD_NAME = "_ct4_build"
 
 
 class Emitter:
-    """Sammelt die Zeilen der Definition und die Namen daneben."""
+    """Collects the lines of the definition and the names beside it."""
 
     def __init__(self) -> None:
         self.lines: list[str] = []
         self.names: list[Any] = []
         self.consts: list[Any] = []
-        # Zeile in der Definition auf Zeile in der Vorlage. Ohne die
-        # zeigt ein Fehler beim Rendern in die Definition, und die hat
-        # nie jemand geschrieben.
+        # Line in the definition to line in the template. Without it a
+        # rendering error points into the definition, and nobody ever
+        # wrote that.
         self.origins: dict[int, int] = {}
 
     def name_index(self, value: Any) -> int:
@@ -46,14 +46,14 @@ class Emitter:
             self.origins[len(self.lines)] = origin
 
     def call(self, text: str, origin: int = 0) -> None:
-        # #silent wertet den Ausdruck aus und schreibt nichts. Genau das
-        # soll passieren: die Ausgabe der Definition ist ihr Rueckgabe-
-        # wert, nicht ihr Text.
+        # #silent evaluates the expression and writes nothing. That is
+        # exactly what should happen: the output of the definition is
+        # its return value, not its text.
         self.add("#silent $B.%s" % text, origin)
 
 
 def emit(document: Document) -> tuple[str, list[Any], list[Any]]:
-    """Gibt Quelltext, Namen und feste Werte zurueck."""
+    """Returns source code, names and constant values."""
     code, names, consts, _ = emit_with_origins(document)
     return code, names, consts
 
@@ -61,11 +61,11 @@ def emit(document: Document) -> tuple[str, list[Any], list[Any]]:
 def emit_with_origins(
         document: Document,
         ) -> tuple[str, list[Any], list[Any], dict[int, int]]:
-    """Wie ``emit``, dazu Definitionszeile auf Vorlagenzeile.
+    """Like ``emit``, plus definition line to template line.
 
-    Die Zuordnung braucht ``ct4.trace``: ein Fehler beim Rendern soll auf
-    die Zeile der Vorlage zeigen, nicht auf eine Zeile der Definition,
-    die nie jemand geschrieben hat.
+    ``ct4.trace`` needs that mapping: a rendering error should point at
+    the line of the template, not at a line of the definition that
+    nobody ever wrote.
     """
     out = Emitter()
     out.add("#def %s($B)" % METHOD_NAME)
@@ -77,12 +77,12 @@ def emit_with_origins(
 
 def _value(out: Emitter, node: Any, holder: str | None,
            precision: int | None = None) -> None:
-    """Schreibt einen Wert an die Stelle, die ``holder`` bezeichnet.
+    """Writes a value at the place that ``holder`` designates.
 
-    ``holder`` ist None fuer die Wurzel, ein Aufruf von ``open_key`` fuer
-    ein Mitglied und ``open_item`` fuer ein Element. Behaelter und
-    einfache Werte gehen verschiedene Wege, weil ein Behaelter geoeffnet
-    und wieder geschlossen werden muss.
+    ``holder`` is None for the root, a call to ``open_key`` for a
+    member and ``open_item`` for an element. Containers and plain
+    values take different paths, because a container has to be opened
+    and closed again.
     """
     if isinstance(node, (Obj, Arr)):
         kind = "obj" if isinstance(node, Obj) else "arr"
@@ -102,8 +102,8 @@ def _value(out: Emitter, node: Any, holder: str | None,
     text = _expression(out, node)
     suffix = "" if precision is None else ", %d" % precision
     if holder is None:
-        # Ein Dokument, das nur aus einem Wert besteht. Selten, aber
-        # gueltiges JSON, und der Bauplatz braucht trotzdem eine Wurzel.
+        # A document that consists of a single value. Rare, but valid
+        # JSON, and the building site still needs a root.
         out.call("open('arr')")
         out.call("item(%s%s)" % (text, suffix))
         out.call("end()")
@@ -165,8 +165,8 @@ def _member(out: Emitter, node: Any) -> None:
 def _open_key(out: Emitter, key: Any, kind: str) -> str:
     if isinstance(key, Lit):
         return "open_key(%d, '%s')" % (out.name_index(key.value), kind)
-    # Ein Schluessel, der erst zur Laufzeit entsteht, wird zuerst als
-    # leerer Behaelter angelegt und dann betreten.
+    # A key that only arises at run time is first created as an empty
+    # container and then entered.
     return "open_key_at(%s, '%s')" % (_expression(out, key), kind)
 
 
@@ -213,7 +213,7 @@ def _item(out: Emitter, node: Any) -> None:
 
 
 def _expression(out: Emitter, node: Any) -> str:
-    """Der Cheetah-Ausdruck, der diesen Knoten liefert."""
+    """The Cheetah expression that yields this node."""
     if isinstance(node, Lit):
         return "$B.lit(%d)" % out.const_index(node.value)
     if isinstance(node, Expr):
@@ -233,7 +233,7 @@ def _expression(out: Emitter, node: Any) -> str:
     if isinstance(node, Series):
         return "$B.series(%s, %d)" % (node.expr,
                                       out.const_index(_series_options(node)))
-    raise TypeError("unbekannter Knoten: %s" % type(node).__name__)
+    raise TypeError("unknown node: %s" % type(node).__name__)
 
 
 def _series_options(node: Series) -> dict[str, Any]:

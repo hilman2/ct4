@@ -1,6 +1,6 @@
 {
- "id": "03-schleife-nicht-geschlossen",
- "task": "Eine #for-Schleife hat kein #end for.",
+ "id": "03-loop-not-closed",
+ "task": "A #for loop has no #end for.",
  "broken": "#for $r in $day.records\n$r.dateTime\n",
  "fixed": "#for $r in $day.records\n$r.dateTime\n#end for\n",
  "expect": {

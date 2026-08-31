@@ -1,4 +1,4 @@
-"""Eine JSON-Vorlage uebersetzen und rendern."""
+"""Compiling and rendering a JSON template."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from ct4.jsonmode.build import Builder
 from ct4.jsonmode.emit import METHOD_NAME, emit_with_origins
 from ct4.jsonmode.parse import Document, parse
 
-# Feste Trennzeichen, damit zwei Laeufe dieselben Bytes liefern. Die
-# Vorgabe von json.dumps haengt daran, ob indent gesetzt ist.
+# Fixed separators, so that two runs deliver the same bytes. What
+# json.dumps defaults to depends on whether indent is set.
 SEPARATORS = (",", ": ")
 
 
 @dataclass(frozen=True)
 class Compiled:
-    """Eine uebersetzte Vorlage, bereit fuer beliebig viele Kontexte."""
+    """A compiled template, ready for any number of contexts."""
 
     document: Document
     template_class: Any
@@ -26,10 +26,10 @@ class Compiled:
     consts: Sequence[Any]
     schema: Any = None
     origins: dict[int, int] | None = None
-    file: str = "<vorlage>"
+    file: str = "<template>"
 
     def build(self, search_list: Sequence[Any]) -> Any:
-        """Baut die Struktur, ohne sie zu serialisieren."""
+        """Builds the structure without serializing it."""
         builder = Builder(self.names, self.consts,
                           precisions=self.document.precisions,
                           missing=self.document.missing)
@@ -41,29 +41,29 @@ class Compiled:
             template.shutdown()
 
     def _pointing_at_the_template(self) -> Any:
-        """Sorgt dafuer, dass ein Fehler die Zeile der Vorlage nennt."""
+        """Makes sure an error names the line of the template."""
         from ct4 import trace
 
         return trace.mapped_via(self.origins or {}, self.file)
 
     def render(self, search_list: Sequence[Any],
                indent: int | None = None, validate: bool = False) -> str:
-        """Baut die Struktur und schreibt sie als JSON."""
+        """Builds the structure and writes it as JSON."""
         value = self.build(search_list)
         if validate:
             if self.schema is None:
-                raise RuntimeError("die Vorlage nennt kein #schema")
+                raise RuntimeError("the template names no #schema")
             from ct4.jsonmode import schema as schema_module
 
             schema_module.validate(value, self.schema)
         return dumps(value, indent=indent)
 
     def stream(self, out: Any, search_list: Sequence[Any]) -> None:
-        """Schreibt die Struktur, ohne sie im Speicher zu halten.
+        """Writes the structure without holding it in memory.
 
-        Liefert dieselben Bytes wie ``render`` ohne ``indent``. Eine
-        Einrueckung gibt es hier nicht: sie waere nur Zierde und kostete
-        den Vorteil.
+        Delivers the same bytes as ``render`` without ``indent``. There
+        is no indentation here: it would be mere decoration and would
+        cost the advantage.
         """
         from ct4.jsonmode.stream import StreamBuilder
 
@@ -78,7 +78,7 @@ class Compiled:
             template.shutdown()
 
     def check(self) -> list[Any]:
-        """Haelt die Vorlage statisch gegen ihr Schema."""
+        """Holds the template statically against its schema."""
         if self.schema is None:
             return []
         from ct4.jsonmode import schema as schema_module
@@ -87,23 +87,23 @@ class Compiled:
 
 
 def dumps(value: Any, indent: int | None = None) -> str:
-    """Schreibt eine Struktur als JSON.
+    """Writes a structure as JSON.
 
-    ``ensure_ascii`` bleibt aus: ein Stationsname mit Umlaut soll als
-    Umlaut in der Datei stehen, nicht als Fluchtfolge. Die Schluessel
-    behalten die Reihenfolge der Vorlage; sie zu sortieren waere eine
-    zweite Ordnung neben der, die der Autor hingeschrieben hat.
+    ``ensure_ascii`` stays off: a station name with an umlaut should
+    stand in the file as an umlaut, not as an escape sequence. The keys
+    keep the order of the template; sorting them would be a second
+    order next to the one the author wrote down.
     """
     return json.dumps(value, ensure_ascii=False, indent=indent,
                       separators=SEPARATORS if indent is None else None)
 
 
 def compile_template(source: str, base_dir: Path | None = None,
-                     file: str = "<vorlage>") -> Compiled:
-    """Uebersetzt eine JSON-Vorlage.
+                     file: str = "<template>") -> Compiled:
+    """Compiles a JSON template.
 
-    ``base_dir`` sagt, wovon ein ``#schema`` seinen Pfad aus zaehlt.
-    Ohne Angabe gilt das Arbeitsverzeichnis.
+    ``base_dir`` says what a ``#schema`` counts its path from. Without
+    it the working directory applies.
     """
     from Cheetah.Template import Template
 
@@ -122,6 +122,6 @@ def compile_template(source: str, base_dir: Path | None = None,
 def render(source: str, search_list: Sequence[Any],
            indent: int | None = None, base_dir: Path | None = None,
            validate: bool = False) -> str:
-    """Uebersetzt und rendert in einem Zug."""
+    """Compiles and renders in one go."""
     compiled = compile_template(source, base_dir=base_dir)
     return compiled.render(search_list, indent=indent, validate=validate)
