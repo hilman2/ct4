@@ -7,13 +7,19 @@ FROM python:3.13-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        gcc libc6-dev git locales tzdata \
+        gcc libc6-dev git locales tzdata mariadb-server \
     && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen \
+    && sed -i 's/^# *de_DE.UTF-8/de_DE.UTF-8/' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
 # test_templates.py pins time zone and language and needs both in the
-# image.
+# image. Both locales, not just the American one: testgen.conf runs the
+# report a second time in metric units with lang = de_DE.UTF-8, and
+# German writes 8,2 where English writes 8.2. Without that locale in
+# the image the run produced periods, weewx' own test failed on its own
+# expectation files, and the failure was written off here as a fact of
+# life rather than diagnosed.
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # The same revision the skin cases in the corpus come from. Also
@@ -29,6 +35,23 @@ RUN pip install --no-cache-dir "pytest==8.4.2" setuptools "jsonschema==4.25.1"
 
 RUN useradd --create-home --uid 1000 ct4 \
     && chown -R ct4 /opt/weewx
+
+# Half of weewx' tests run against MySQL as well as SQLite, and
+# testgen.conf and test_manager.py hardcode host = localhost. So the
+# server belongs in this image rather than beside it: a container of
+# its own would need the network namespace shared to make localhost
+# mean anything, and that is a lot of coupling for one database.
+#
+# The data directory is prepared at build time and owned by the same
+# user the tests run as, so nothing here needs root. capture.sh starts
+# the server and loads mysql-init.sql.
+COPY mysql-init.sql /opt/mysql-init.sql
+RUN mkdir -p /var/lib/mysql-ct4 /run/mysqld \
+    && chown -R ct4 /var/lib/mysql-ct4 /run/mysqld \
+    && su ct4 -s /bin/sh -c \
+       "mariadb-install-db --user=ct4 --datadir=/var/lib/mysql-ct4 \
+        --auth-root-authentication-method=normal >/dev/null"
+
 USER ct4
 WORKDIR /work
 

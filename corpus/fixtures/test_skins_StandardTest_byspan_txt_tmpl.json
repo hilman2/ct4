@@ -2,7 +2,7 @@
  "template_path": "/opt/weewx/src/weewx/tests/test_skins/StandardTest/byspan.txt.tmpl",
  "output_path": "/var/tmp/weewx-test/test_results/StandardTest/metric/byspan.txt",
  "template": "Current time is $current.dateTime ($current.dateTime.raw)\n\nHourly Top Temperatures in Last Day\n#for $_hour in $day(days_ago=1).hours\n$_hour.start.format(\"%a %m/%d %H:%M\")-$_hour.end.format(\"%H:%M\"): $_hour.outTemp.max at $_hour.outTemp.maxtime\n#end for\n\nDaily Top Temperatures in Last Week\n#for $_day in $week(weeks_ago=1).days\n$_day.dateTime.format(\"%a %m/%d\"): $_day.outTemp.max at $_day.outTemp.maxtime\n#end for\n\nDaily Top Temperatures in Last Month\n#for $_day in $month(months_ago=1).days\n$_day.dateTime.format(\"%a %m/%d\"): $_day.outTemp.max at $_day.outTemp.maxtime\n#end for\n\nMonthly Top Temperatures this Year\n#for $_month in $year.months\n$_month.dateTime.format(\"%b %Y\"): $_month.outTemp.max at $_month.outTemp.maxtime\n#end for\n\n3 hour averages over yesterday\n#for $span in $yesterday.spans(interval=10800)\n$span.dateTime.format(\"%m/%d %H:%M\")-$span.end.format(\"%H:%M\"): $span.outTemp.avg\n#end for\n\nAll temperature records for yesterday\n#for $record in $yesterday.records\n$record.dateTime.format(\"%m/%d %H:%M\"): $record.outTemp\n#end for\n",
- "expected": "Current time is 03-Sep-2010 11:00 (1283536800)\n\nHourly Top Temperatures in Last Day\nThu 09/02 00:00-01:00: 8.6°C at 00:30\nThu 09/02 01:00-02:00: 6.5°C at 01:30\nThu 09/02 02:00-03:00: 5.0°C at 02:30\nThu 09/02 03:00-04:00: 4.3°C at 03:30\nThu 09/02 04:00-05:00: 4.5°C at 05:00\nThu 09/02 05:00-06:00: 5.6°C at 06:00\nThu 09/02 06:00-07:00: 7.4°C at 07:00\nThu 09/02 07:00-08:00: 9.7°C at 08:00\nThu 09/02 08:00-09:00: 12.3°C at 09:00\nThu 09/02 09:00-10:00: 15.2°C at 10:00\nThu 09/02 10:00-11:00: 18.1°C at 11:00\nThu 09/02 11:00-12:00: 20.7°C at 12:00\nThu 09/02 12:00-13:00: 23.0°C at 13:00\nThu 09/02 13:00-14:00: 24.8°C at 14:00\nThu 09/02 14:00-15:00: 25.9°C at 15:00\nThu 09/02 15:00-16:00: 26.2°C at 16:00\nThu 09/02 16:00-17:00: 26.1°C at 16:30\nThu 09/02 17:00-18:00: 25.4°C at 17:30\nThu 09/02 18:00-19:00: 23.9°C at 18:30\nThu 09/02 19:00-20:00: 21.8°C at 19:30\nThu 09/02 20:00-21:00: 19.3°C at 20:30\nThu 09/02 21:00-22:00: 16.5°C at 21:30\nThu 09/02 22:00-23:00: 13.6°C at 22:30\nThu 09/02 23:00-00:00: 10.8°C at 23:30\n\nDaily Top Temperatures in Last Week\nSun 08/22: 29.7°C at 16:00\nMon 08/23: 29.4°C at 16:00\nTue 08/24: 29.1°C at 16:00\nWed 08/25: 28.8°C at 16:00\nThu 08/26: 28.5°C at 16:00\nFri 08/27: 28.2°C at 16:00\nSat 08/28: 27.9°C at 16:00\n\nDaily Top Temperatures in Last Month\nSun 08/01: 34.9°C at 16:00\nMon 08/02: 34.7°C at 16:00\nTue 08/03: 34.5°C at 16:00\nWed 08/04: 34.3°C at 16:00\nThu 08/05: 34.1°C at 16:00\nFri 08/06: 33.8°C at 16:00\nSat 08/07: 33.6°C at 16:00\nSun 08/08: 33.4°C at 16:00\nMon 08/09: 33.2°C at 16:00\nTue 08/10: 32.9°C at 16:00\nWed 08/11: 32.7°C at 16:00\nThu 08/12: 32.4°C at 16:00\nFri 08/13: 32.2°C at 16:00\nSat 08/14: 31.9°C at 16:00\nSun 08/15: 31.7°C at 16:00\nMon 08/16: 31.4°C at 16:00\nTue 08/17: 31.1°C at 16:00\nWed 08/18: 30.9°C at 16:00\nThu 08/19: 30.6°C at 16:00\nFri 08/20: 30.3°C at 16:00\nSat 08/21: 30.0°C at 16:00\nSun 08/22: 29.7°C at 16:00\nMon 08/23: 29.4°C at 16:00\nTue 08/24: 29.1°C at 16:00\nWed 08/25: 28.8°C at 16:00\nThu 08/26: 28.5°C at 16:00\nFri 08/27: 28.2°C at 16:00\nSat 08/28: 27.9°C at 16:00\nSun 08/29: 27.6°C at 16:00\nMon 08/30: 27.2°C at 16:00\nTue 08/31: 26.9°C at 16:00\n\nMonthly Top Temperatures this Year\nJan 2010: -3.6°C at 31-Jan-2010 15:00\nFeb 2010: 3.7°C at 28-Feb-2010 15:00\nMar 2010: 14.9°C at 31-Mar-2010 16:00\nApr 2010: 26.0°C at 30-Apr-2010 16:00\nMay 2010: 34.5°C at 31-May-2010 16:00\nJun 2010: 37.8°C at 30-Jun-2010 16:00\nJul 2010: 37.8°C at 02-Jul-2010 16:00\nAug 2010: 34.9°C at 01-Aug-2010 16:00\nSep 2010: 26.6°C at 01-Sep-2010 16:00\nOct 2010:    N/A at    N/A\nNov 2010:    N/A at    N/A\nDec 2010:    N/A at    N/A\n\n3 hour averages over yesterday\n09/02 00:00-03:00: 6.3°C\n09/02 03:00-06:00: 4.7°C\n09/02 06:00-09:00: 9.2°C\n09/02 09:00-12:00: 17.3°C\n09/02 12:00-15:00: 24.2°C\n09/02 15:00-18:00: 25.7°C\n09/02 18:00-21:00: 21.1°C\n09/02 21:00-00:00: 12.9°C\n\nAll temperature records for yesterday\n09/02 00:30: 8.6°C\n09/02 01:00: 7.5°C\n09/02 01:30: 6.5°C\n09/02 02:00: 5.7°C\n09/02 02:30: 5.0°C\n09/02 03:00: 4.6°C\n09/02 03:30: 4.3°C\n09/02 04:00: 4.2°C\n09/02 04:30: 4.3°C\n09/02 05:00: 4.5°C\n09/02 05:30: 5.0°C\n09/02 06:00: 5.6°C\n09/02 06:30: 6.4°C\n09/02 07:00: 7.4°C\n09/02 07:30: 8.5°C\n09/02 08:00: 9.7°C\n09/02 08:30: 11.0°C\n09/02 09:00: 12.3°C\n09/02 09:30: 13.8°C\n09/02 10:00: 15.2°C\n09/02 10:30: 16.7°C\n09/02 11:00: 18.1°C\n09/02 11:30: 19.4°C\n09/02 12:00: 20.7°C\n09/02 12:30: 21.9°C\n09/02 13:00: 23.0°C\n09/02 13:30: 24.0°C\n09/02 14:00: 24.8°C\n09/02 14:30: 25.4°C\n09/02 15:00: 25.9°C\n09/02 15:30: 26.1°C\n09/02 16:00: 26.2°C\n09/02 16:30: 26.1°C\n09/02 17:00: 25.8°C\n09/02 17:30: 25.4°C\n09/02 18:00: 24.7°C\n09/02 18:30: 23.9°C\n09/02 19:00: 22.9°C\n09/02 19:30: 21.8°C\n09/02 20:00: 20.6°C\n09/02 20:30: 19.3°C\n09/02 21:00: 17.9°C\n09/02 21:30: 16.5°C\n09/02 22:00: 15.0°C\n09/02 22:30: 13.6°C\n09/02 23:00: 12.2°C\n09/02 23:30: 10.8°C\n09/03 00:00: 9.5°C\n",
+ "expected": "Current time is 03-Sep-2010 11:00 (1283536800)\n\nHourly Top Temperatures in Last Day\nDo 09/02 00:00-01:00: 8,6°C at 00:30\nDo 09/02 01:00-02:00: 6,5°C at 01:30\nDo 09/02 02:00-03:00: 5,0°C at 02:30\nDo 09/02 03:00-04:00: 4,3°C at 03:30\nDo 09/02 04:00-05:00: 4,5°C at 05:00\nDo 09/02 05:00-06:00: 5,6°C at 06:00\nDo 09/02 06:00-07:00: 7,4°C at 07:00\nDo 09/02 07:00-08:00: 9,7°C at 08:00\nDo 09/02 08:00-09:00: 12,3°C at 09:00\nDo 09/02 09:00-10:00: 15,2°C at 10:00\nDo 09/02 10:00-11:00: 18,1°C at 11:00\nDo 09/02 11:00-12:00: 20,7°C at 12:00\nDo 09/02 12:00-13:00: 23,0°C at 13:00\nDo 09/02 13:00-14:00: 24,8°C at 14:00\nDo 09/02 14:00-15:00: 25,9°C at 15:00\nDo 09/02 15:00-16:00: 26,2°C at 16:00\nDo 09/02 16:00-17:00: 26,1°C at 16:30\nDo 09/02 17:00-18:00: 25,4°C at 17:30\nDo 09/02 18:00-19:00: 23,9°C at 18:30\nDo 09/02 19:00-20:00: 21,8°C at 19:30\nDo 09/02 20:00-21:00: 19,3°C at 20:30\nDo 09/02 21:00-22:00: 16,5°C at 21:30\nDo 09/02 22:00-23:00: 13,6°C at 22:30\nDo 09/02 23:00-00:00: 10,8°C at 23:30\n\nDaily Top Temperatures in Last Week\nSo 08/22: 29,7°C at 16:00\nMo 08/23: 29,4°C at 16:00\nDi 08/24: 29,1°C at 16:00\nMi 08/25: 28,8°C at 16:00\nDo 08/26: 28,5°C at 16:00\nFr 08/27: 28,2°C at 16:00\nSa 08/28: 27,9°C at 16:00\n\nDaily Top Temperatures in Last Month\nSo 08/01: 34,9°C at 16:00\nMo 08/02: 34,7°C at 16:00\nDi 08/03: 34,5°C at 16:00\nMi 08/04: 34,3°C at 16:00\nDo 08/05: 34,1°C at 16:00\nFr 08/06: 33,8°C at 16:00\nSa 08/07: 33,6°C at 16:00\nSo 08/08: 33,4°C at 16:00\nMo 08/09: 33,2°C at 16:00\nDi 08/10: 32,9°C at 16:00\nMi 08/11: 32,7°C at 16:00\nDo 08/12: 32,4°C at 16:00\nFr 08/13: 32,2°C at 16:00\nSa 08/14: 31,9°C at 16:00\nSo 08/15: 31,7°C at 16:00\nMo 08/16: 31,4°C at 16:00\nDi 08/17: 31,1°C at 16:00\nMi 08/18: 30,9°C at 16:00\nDo 08/19: 30,6°C at 16:00\nFr 08/20: 30,3°C at 16:00\nSa 08/21: 30,0°C at 16:00\nSo 08/22: 29,7°C at 16:00\nMo 08/23: 29,4°C at 16:00\nDi 08/24: 29,1°C at 16:00\nMi 08/25: 28,8°C at 16:00\nDo 08/26: 28,5°C at 16:00\nFr 08/27: 28,2°C at 16:00\nSa 08/28: 27,9°C at 16:00\nSo 08/29: 27,6°C at 16:00\nMo 08/30: 27,2°C at 16:00\nDi 08/31: 26,9°C at 16:00\n\nMonthly Top Temperatures this Year\nJan 2010: -3,6°C at 31-Jan-2010 15:00\nFeb 2010: 3,7°C at 28-Feb-2010 15:00\nMär 2010: 14,9°C at 31-Mär-2010 16:00\nApr 2010: 26,0°C at 30-Apr-2010 16:00\nMai 2010: 34,5°C at 31-Mai-2010 16:00\nJun 2010: 37,8°C at 30-Jun-2010 16:00\nJul 2010: 37,8°C at 02-Jul-2010 16:00\nAug 2010: 34,9°C at 01-Aug-2010 16:00\nSep 2010: 26,6°C at 01-Sep-2010 16:00\nOkt 2010:    N/A at    N/A\nNov 2010:    N/A at    N/A\nDez 2010:    N/A at    N/A\n\n3 hour averages over yesterday\n09/02 00:00-03:00: 6,3°C\n09/02 03:00-06:00: 4,7°C\n09/02 06:00-09:00: 9,2°C\n09/02 09:00-12:00: 17,3°C\n09/02 12:00-15:00: 24,2°C\n09/02 15:00-18:00: 25,7°C\n09/02 18:00-21:00: 21,1°C\n09/02 21:00-00:00: 12,9°C\n\nAll temperature records for yesterday\n09/02 00:30: 8,6°C\n09/02 01:00: 7,5°C\n09/02 01:30: 6,5°C\n09/02 02:00: 5,7°C\n09/02 02:30: 5,0°C\n09/02 03:00: 4,6°C\n09/02 03:30: 4,3°C\n09/02 04:00: 4,2°C\n09/02 04:30: 4,3°C\n09/02 05:00: 4,5°C\n09/02 05:30: 5,0°C\n09/02 06:00: 5,6°C\n09/02 06:30: 6,4°C\n09/02 07:00: 7,4°C\n09/02 07:30: 8,5°C\n09/02 08:00: 9,7°C\n09/02 08:30: 11,0°C\n09/02 09:00: 12,3°C\n09/02 09:30: 13,8°C\n09/02 10:00: 15,2°C\n09/02 10:30: 16,7°C\n09/02 11:00: 18,1°C\n09/02 11:30: 19,4°C\n09/02 12:00: 20,7°C\n09/02 12:30: 21,9°C\n09/02 13:00: 23,0°C\n09/02 13:30: 24,0°C\n09/02 14:00: 24,8°C\n09/02 14:30: 25,4°C\n09/02 15:00: 25,9°C\n09/02 15:30: 26,1°C\n09/02 16:00: 26,2°C\n09/02 16:30: 26,1°C\n09/02 17:00: 25,8°C\n09/02 17:30: 25,4°C\n09/02 18:00: 24,7°C\n09/02 18:30: 23,9°C\n09/02 19:00: 22,9°C\n09/02 19:30: 21,8°C\n09/02 20:00: 20,6°C\n09/02 20:30: 19,3°C\n09/02 21:00: 17,9°C\n09/02 21:30: 16,5°C\n09/02 22:00: 15,0°C\n09/02 22:30: 13,6°C\n09/02 23:00: 12,2°C\n09/02 23:30: 10,8°C\n09/03 00:00: 9,5°C\n",
  "context": [
   {},
   {},
@@ -55,7 +55,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 00:00"
+                   "value": "Do 09/02 00:00"
                   }
                  }
                 }
@@ -75,7 +75,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "8.6°C"
+                 "text": "8,6°C"
                 },
                 "maxtime": {
                  "text": "00:30"
@@ -91,7 +91,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 01:00"
+                   "value": "Do 09/02 01:00"
                   }
                  }
                 }
@@ -111,7 +111,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "6.5°C"
+                 "text": "6,5°C"
                 },
                 "maxtime": {
                  "text": "01:30"
@@ -127,7 +127,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 02:00"
+                   "value": "Do 09/02 02:00"
                   }
                  }
                 }
@@ -147,7 +147,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "5.0°C"
+                 "text": "5,0°C"
                 },
                 "maxtime": {
                  "text": "02:30"
@@ -163,7 +163,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 03:00"
+                   "value": "Do 09/02 03:00"
                   }
                  }
                 }
@@ -183,7 +183,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "4.3°C"
+                 "text": "4,3°C"
                 },
                 "maxtime": {
                  "text": "03:30"
@@ -199,7 +199,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 04:00"
+                   "value": "Do 09/02 04:00"
                   }
                  }
                 }
@@ -219,7 +219,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "4.5°C"
+                 "text": "4,5°C"
                 },
                 "maxtime": {
                  "text": "05:00"
@@ -235,7 +235,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 05:00"
+                   "value": "Do 09/02 05:00"
                   }
                  }
                 }
@@ -255,7 +255,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "5.6°C"
+                 "text": "5,6°C"
                 },
                 "maxtime": {
                  "text": "06:00"
@@ -271,7 +271,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 06:00"
+                   "value": "Do 09/02 06:00"
                   }
                  }
                 }
@@ -291,7 +291,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "7.4°C"
+                 "text": "7,4°C"
                 },
                 "maxtime": {
                  "text": "07:00"
@@ -307,7 +307,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 07:00"
+                   "value": "Do 09/02 07:00"
                   }
                  }
                 }
@@ -327,7 +327,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "9.7°C"
+                 "text": "9,7°C"
                 },
                 "maxtime": {
                  "text": "08:00"
@@ -343,7 +343,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 08:00"
+                   "value": "Do 09/02 08:00"
                   }
                  }
                 }
@@ -363,7 +363,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "12.3°C"
+                 "text": "12,3°C"
                 },
                 "maxtime": {
                  "text": "09:00"
@@ -379,7 +379,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 09:00"
+                   "value": "Do 09/02 09:00"
                   }
                  }
                 }
@@ -399,7 +399,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "15.2°C"
+                 "text": "15,2°C"
                 },
                 "maxtime": {
                  "text": "10:00"
@@ -415,7 +415,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 10:00"
+                   "value": "Do 09/02 10:00"
                   }
                  }
                 }
@@ -435,7 +435,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "18.1°C"
+                 "text": "18,1°C"
                 },
                 "maxtime": {
                  "text": "11:00"
@@ -451,7 +451,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 11:00"
+                   "value": "Do 09/02 11:00"
                   }
                  }
                 }
@@ -471,7 +471,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "20.7°C"
+                 "text": "20,7°C"
                 },
                 "maxtime": {
                  "text": "12:00"
@@ -487,7 +487,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 12:00"
+                   "value": "Do 09/02 12:00"
                   }
                  }
                 }
@@ -507,7 +507,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "23.0°C"
+                 "text": "23,0°C"
                 },
                 "maxtime": {
                  "text": "13:00"
@@ -523,7 +523,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 13:00"
+                   "value": "Do 09/02 13:00"
                   }
                  }
                 }
@@ -543,7 +543,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "24.8°C"
+                 "text": "24,8°C"
                 },
                 "maxtime": {
                  "text": "14:00"
@@ -559,7 +559,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 14:00"
+                   "value": "Do 09/02 14:00"
                   }
                  }
                 }
@@ -579,7 +579,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "25.9°C"
+                 "text": "25,9°C"
                 },
                 "maxtime": {
                  "text": "15:00"
@@ -595,7 +595,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 15:00"
+                   "value": "Do 09/02 15:00"
                   }
                  }
                 }
@@ -615,7 +615,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "26.2°C"
+                 "text": "26,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -631,7 +631,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 16:00"
+                   "value": "Do 09/02 16:00"
                   }
                  }
                 }
@@ -651,7 +651,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "26.1°C"
+                 "text": "26,1°C"
                 },
                 "maxtime": {
                  "text": "16:30"
@@ -667,7 +667,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 17:00"
+                   "value": "Do 09/02 17:00"
                   }
                  }
                 }
@@ -687,7 +687,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "25.4°C"
+                 "text": "25,4°C"
                 },
                 "maxtime": {
                  "text": "17:30"
@@ -703,7 +703,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 18:00"
+                   "value": "Do 09/02 18:00"
                   }
                  }
                 }
@@ -723,7 +723,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "23.9°C"
+                 "text": "23,9°C"
                 },
                 "maxtime": {
                  "text": "18:30"
@@ -739,7 +739,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 19:00"
+                   "value": "Do 09/02 19:00"
                   }
                  }
                 }
@@ -759,7 +759,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "21.8°C"
+                 "text": "21,8°C"
                 },
                 "maxtime": {
                  "text": "19:30"
@@ -775,7 +775,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 20:00"
+                   "value": "Do 09/02 20:00"
                   }
                  }
                 }
@@ -795,7 +795,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "19.3°C"
+                 "text": "19,3°C"
                 },
                 "maxtime": {
                  "text": "20:30"
@@ -811,7 +811,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 21:00"
+                   "value": "Do 09/02 21:00"
                   }
                  }
                 }
@@ -831,7 +831,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "16.5°C"
+                 "text": "16,5°C"
                 },
                 "maxtime": {
                  "text": "21:30"
@@ -847,7 +847,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 22:00"
+                   "value": "Do 09/02 22:00"
                   }
                  }
                 }
@@ -867,7 +867,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "13.6°C"
+                 "text": "13,6°C"
                 },
                 "maxtime": {
                  "text": "22:30"
@@ -883,7 +883,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d %H:%M')": {
-                   "value": "Thu 09/02 23:00"
+                   "value": "Do 09/02 23:00"
                   }
                  }
                 }
@@ -903,7 +903,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "10.8°C"
+                 "text": "10,8°C"
                 },
                 "maxtime": {
                  "text": "23:30"
@@ -935,7 +935,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/22"
+                   "value": "So 08/22"
                   }
                  }
                 }
@@ -944,7 +944,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.7°C"
+                 "text": "29,7°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -960,7 +960,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/23"
+                   "value": "Mo 08/23"
                   }
                  }
                 }
@@ -969,7 +969,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.4°C"
+                 "text": "29,4°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -985,7 +985,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/24"
+                   "value": "Di 08/24"
                   }
                  }
                 }
@@ -994,7 +994,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.1°C"
+                 "text": "29,1°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1010,7 +1010,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Wed 08/25"
+                   "value": "Mi 08/25"
                   }
                  }
                 }
@@ -1019,7 +1019,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.8°C"
+                 "text": "28,8°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1035,7 +1035,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Thu 08/26"
+                   "value": "Do 08/26"
                   }
                  }
                 }
@@ -1044,7 +1044,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.5°C"
+                 "text": "28,5°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1060,7 +1060,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Fri 08/27"
+                   "value": "Fr 08/27"
                   }
                  }
                 }
@@ -1069,7 +1069,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.2°C"
+                 "text": "28,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1085,7 +1085,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sat 08/28"
+                   "value": "Sa 08/28"
                   }
                  }
                 }
@@ -1094,7 +1094,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "27.9°C"
+                 "text": "27,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1126,7 +1126,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/01"
+                   "value": "So 08/01"
                   }
                  }
                 }
@@ -1135,7 +1135,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.9°C"
+                 "text": "34,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1151,7 +1151,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/02"
+                   "value": "Mo 08/02"
                   }
                  }
                 }
@@ -1160,7 +1160,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.7°C"
+                 "text": "34,7°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1176,7 +1176,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/03"
+                   "value": "Di 08/03"
                   }
                  }
                 }
@@ -1185,7 +1185,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.5°C"
+                 "text": "34,5°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1201,7 +1201,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Wed 08/04"
+                   "value": "Mi 08/04"
                   }
                  }
                 }
@@ -1210,7 +1210,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.3°C"
+                 "text": "34,3°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1226,7 +1226,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Thu 08/05"
+                   "value": "Do 08/05"
                   }
                  }
                 }
@@ -1235,7 +1235,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.1°C"
+                 "text": "34,1°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1251,7 +1251,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Fri 08/06"
+                   "value": "Fr 08/06"
                   }
                  }
                 }
@@ -1260,7 +1260,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "33.8°C"
+                 "text": "33,8°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1276,7 +1276,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sat 08/07"
+                   "value": "Sa 08/07"
                   }
                  }
                 }
@@ -1285,7 +1285,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "33.6°C"
+                 "text": "33,6°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1301,7 +1301,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/08"
+                   "value": "So 08/08"
                   }
                  }
                 }
@@ -1310,7 +1310,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "33.4°C"
+                 "text": "33,4°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1326,7 +1326,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/09"
+                   "value": "Mo 08/09"
                   }
                  }
                 }
@@ -1335,7 +1335,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "33.2°C"
+                 "text": "33,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1351,7 +1351,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/10"
+                   "value": "Di 08/10"
                   }
                  }
                 }
@@ -1360,7 +1360,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "32.9°C"
+                 "text": "32,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1376,7 +1376,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Wed 08/11"
+                   "value": "Mi 08/11"
                   }
                  }
                 }
@@ -1385,7 +1385,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "32.7°C"
+                 "text": "32,7°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1401,7 +1401,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Thu 08/12"
+                   "value": "Do 08/12"
                   }
                  }
                 }
@@ -1410,7 +1410,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "32.4°C"
+                 "text": "32,4°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1426,7 +1426,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Fri 08/13"
+                   "value": "Fr 08/13"
                   }
                  }
                 }
@@ -1435,7 +1435,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "32.2°C"
+                 "text": "32,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1451,7 +1451,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sat 08/14"
+                   "value": "Sa 08/14"
                   }
                  }
                 }
@@ -1460,7 +1460,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "31.9°C"
+                 "text": "31,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1476,7 +1476,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/15"
+                   "value": "So 08/15"
                   }
                  }
                 }
@@ -1485,7 +1485,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "31.7°C"
+                 "text": "31,7°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1501,7 +1501,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/16"
+                   "value": "Mo 08/16"
                   }
                  }
                 }
@@ -1510,7 +1510,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "31.4°C"
+                 "text": "31,4°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1526,7 +1526,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/17"
+                   "value": "Di 08/17"
                   }
                  }
                 }
@@ -1535,7 +1535,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "31.1°C"
+                 "text": "31,1°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1551,7 +1551,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Wed 08/18"
+                   "value": "Mi 08/18"
                   }
                  }
                 }
@@ -1560,7 +1560,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "30.9°C"
+                 "text": "30,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1576,7 +1576,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Thu 08/19"
+                   "value": "Do 08/19"
                   }
                  }
                 }
@@ -1585,7 +1585,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "30.6°C"
+                 "text": "30,6°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1601,7 +1601,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Fri 08/20"
+                   "value": "Fr 08/20"
                   }
                  }
                 }
@@ -1610,7 +1610,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "30.3°C"
+                 "text": "30,3°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1626,7 +1626,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sat 08/21"
+                   "value": "Sa 08/21"
                   }
                  }
                 }
@@ -1635,7 +1635,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "30.0°C"
+                 "text": "30,0°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1651,7 +1651,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/22"
+                   "value": "So 08/22"
                   }
                  }
                 }
@@ -1660,7 +1660,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.7°C"
+                 "text": "29,7°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1676,7 +1676,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/23"
+                   "value": "Mo 08/23"
                   }
                  }
                 }
@@ -1685,7 +1685,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.4°C"
+                 "text": "29,4°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1701,7 +1701,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/24"
+                   "value": "Di 08/24"
                   }
                  }
                 }
@@ -1710,7 +1710,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "29.1°C"
+                 "text": "29,1°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1726,7 +1726,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Wed 08/25"
+                   "value": "Mi 08/25"
                   }
                  }
                 }
@@ -1735,7 +1735,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.8°C"
+                 "text": "28,8°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1751,7 +1751,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Thu 08/26"
+                   "value": "Do 08/26"
                   }
                  }
                 }
@@ -1760,7 +1760,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.5°C"
+                 "text": "28,5°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1776,7 +1776,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Fri 08/27"
+                   "value": "Fr 08/27"
                   }
                  }
                 }
@@ -1785,7 +1785,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "28.2°C"
+                 "text": "28,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1801,7 +1801,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sat 08/28"
+                   "value": "Sa 08/28"
                   }
                  }
                 }
@@ -1810,7 +1810,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "27.9°C"
+                 "text": "27,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1826,7 +1826,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Sun 08/29"
+                   "value": "So 08/29"
                   }
                  }
                 }
@@ -1835,7 +1835,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "27.6°C"
+                 "text": "27,6°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1851,7 +1851,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Mon 08/30"
+                   "value": "Mo 08/30"
                   }
                  }
                 }
@@ -1860,7 +1860,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "27.2°C"
+                 "text": "27,2°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1876,7 +1876,7 @@
                 "format": {
                  "calls": {
                   "('%a %m/%d')": {
-                   "value": "Tue 08/31"
+                   "value": "Di 08/31"
                   }
                  }
                 }
@@ -1885,7 +1885,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "26.9°C"
+                 "text": "26,9°C"
                 },
                 "maxtime": {
                  "text": "16:00"
@@ -1926,7 +1926,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "-3.6°C"
+                 "text": "-3,6°C"
                 },
                 "maxtime": {
                  "text": "31-Jan-2010 15:00"
@@ -1951,7 +1951,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "3.7°C"
+                 "text": "3,7°C"
                 },
                 "maxtime": {
                  "text": "28-Feb-2010 15:00"
@@ -1967,7 +1967,7 @@
                 "format": {
                  "calls": {
                   "('%b %Y')": {
-                   "value": "Mar 2010"
+                   "value": "Mär 2010"
                   }
                  }
                 }
@@ -1976,10 +1976,10 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "14.9°C"
+                 "text": "14,9°C"
                 },
                 "maxtime": {
-                 "text": "31-Mar-2010 16:00"
+                 "text": "31-Mär-2010 16:00"
                 }
                }
               }
@@ -2001,7 +2001,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "26.0°C"
+                 "text": "26,0°C"
                 },
                 "maxtime": {
                  "text": "30-Apr-2010 16:00"
@@ -2017,7 +2017,7 @@
                 "format": {
                  "calls": {
                   "('%b %Y')": {
-                   "value": "May 2010"
+                   "value": "Mai 2010"
                   }
                  }
                 }
@@ -2026,10 +2026,10 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.5°C"
+                 "text": "34,5°C"
                 },
                 "maxtime": {
-                 "text": "31-May-2010 16:00"
+                 "text": "31-Mai-2010 16:00"
                 }
                }
               }
@@ -2051,7 +2051,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "37.8°C"
+                 "text": "37,8°C"
                 },
                 "maxtime": {
                  "text": "30-Jun-2010 16:00"
@@ -2076,7 +2076,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "37.8°C"
+                 "text": "37,8°C"
                 },
                 "maxtime": {
                  "text": "02-Jul-2010 16:00"
@@ -2101,7 +2101,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "34.9°C"
+                 "text": "34,9°C"
                 },
                 "maxtime": {
                  "text": "01-Aug-2010 16:00"
@@ -2126,7 +2126,7 @@
               "outTemp": {
                "attrs": {
                 "max": {
-                 "text": "26.6°C"
+                 "text": "26,6°C"
                 },
                 "maxtime": {
                  "text": "01-Sep-2010 16:00"
@@ -2142,7 +2142,7 @@
                 "format": {
                  "calls": {
                   "('%b %Y')": {
-                   "value": "Oct 2010"
+                   "value": "Okt 2010"
                   }
                  }
                 }
@@ -2192,7 +2192,7 @@
                 "format": {
                  "calls": {
                   "('%b %Y')": {
-                   "value": "Dec 2010"
+                   "value": "Dez 2010"
                   }
                  }
                 }
@@ -2253,7 +2253,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "6.3°C"
+                 "text": "6,3°C"
                 }
                }
               }
@@ -2286,7 +2286,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "4.7°C"
+                 "text": "4,7°C"
                 }
                }
               }
@@ -2319,7 +2319,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "9.2°C"
+                 "text": "9,2°C"
                 }
                }
               }
@@ -2352,7 +2352,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "17.3°C"
+                 "text": "17,3°C"
                 }
                }
               }
@@ -2385,7 +2385,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "24.2°C"
+                 "text": "24,2°C"
                 }
                }
               }
@@ -2418,7 +2418,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "25.7°C"
+                 "text": "25,7°C"
                 }
                }
               }
@@ -2451,7 +2451,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "21.1°C"
+                 "text": "21,1°C"
                 }
                }
               }
@@ -2484,7 +2484,7 @@
               "outTemp": {
                "attrs": {
                 "avg": {
-                 "text": "12.9°C"
+                 "text": "12,9°C"
                 }
                }
               }
@@ -2512,7 +2512,7 @@
                }
               },
               "outTemp": {
-               "text": "8.6°C"
+               "text": "8,6°C"
               }
              }
             },
@@ -2530,7 +2530,7 @@
                }
               },
               "outTemp": {
-               "text": "7.5°C"
+               "text": "7,5°C"
               }
              }
             },
@@ -2548,7 +2548,7 @@
                }
               },
               "outTemp": {
-               "text": "6.5°C"
+               "text": "6,5°C"
               }
              }
             },
@@ -2566,7 +2566,7 @@
                }
               },
               "outTemp": {
-               "text": "5.7°C"
+               "text": "5,7°C"
               }
              }
             },
@@ -2584,7 +2584,7 @@
                }
               },
               "outTemp": {
-               "text": "5.0°C"
+               "text": "5,0°C"
               }
              }
             },
@@ -2602,7 +2602,7 @@
                }
               },
               "outTemp": {
-               "text": "4.6°C"
+               "text": "4,6°C"
               }
              }
             },
@@ -2620,7 +2620,7 @@
                }
               },
               "outTemp": {
-               "text": "4.3°C"
+               "text": "4,3°C"
               }
              }
             },
@@ -2638,7 +2638,7 @@
                }
               },
               "outTemp": {
-               "text": "4.2°C"
+               "text": "4,2°C"
               }
              }
             },
@@ -2656,7 +2656,7 @@
                }
               },
               "outTemp": {
-               "text": "4.3°C"
+               "text": "4,3°C"
               }
              }
             },
@@ -2674,7 +2674,7 @@
                }
               },
               "outTemp": {
-               "text": "4.5°C"
+               "text": "4,5°C"
               }
              }
             },
@@ -2692,7 +2692,7 @@
                }
               },
               "outTemp": {
-               "text": "5.0°C"
+               "text": "5,0°C"
               }
              }
             },
@@ -2710,7 +2710,7 @@
                }
               },
               "outTemp": {
-               "text": "5.6°C"
+               "text": "5,6°C"
               }
              }
             },
@@ -2728,7 +2728,7 @@
                }
               },
               "outTemp": {
-               "text": "6.4°C"
+               "text": "6,4°C"
               }
              }
             },
@@ -2746,7 +2746,7 @@
                }
               },
               "outTemp": {
-               "text": "7.4°C"
+               "text": "7,4°C"
               }
              }
             },
@@ -2764,7 +2764,7 @@
                }
               },
               "outTemp": {
-               "text": "8.5°C"
+               "text": "8,5°C"
               }
              }
             },
@@ -2782,7 +2782,7 @@
                }
               },
               "outTemp": {
-               "text": "9.7°C"
+               "text": "9,7°C"
               }
              }
             },
@@ -2800,7 +2800,7 @@
                }
               },
               "outTemp": {
-               "text": "11.0°C"
+               "text": "11,0°C"
               }
              }
             },
@@ -2818,7 +2818,7 @@
                }
               },
               "outTemp": {
-               "text": "12.3°C"
+               "text": "12,3°C"
               }
              }
             },
@@ -2836,7 +2836,7 @@
                }
               },
               "outTemp": {
-               "text": "13.8°C"
+               "text": "13,8°C"
               }
              }
             },
@@ -2854,7 +2854,7 @@
                }
               },
               "outTemp": {
-               "text": "15.2°C"
+               "text": "15,2°C"
               }
              }
             },
@@ -2872,7 +2872,7 @@
                }
               },
               "outTemp": {
-               "text": "16.7°C"
+               "text": "16,7°C"
               }
              }
             },
@@ -2890,7 +2890,7 @@
                }
               },
               "outTemp": {
-               "text": "18.1°C"
+               "text": "18,1°C"
               }
              }
             },
@@ -2908,7 +2908,7 @@
                }
               },
               "outTemp": {
-               "text": "19.4°C"
+               "text": "19,4°C"
               }
              }
             },
@@ -2926,7 +2926,7 @@
                }
               },
               "outTemp": {
-               "text": "20.7°C"
+               "text": "20,7°C"
               }
              }
             },
@@ -2944,7 +2944,7 @@
                }
               },
               "outTemp": {
-               "text": "21.9°C"
+               "text": "21,9°C"
               }
              }
             },
@@ -2962,7 +2962,7 @@
                }
               },
               "outTemp": {
-               "text": "23.0°C"
+               "text": "23,0°C"
               }
              }
             },
@@ -2980,7 +2980,7 @@
                }
               },
               "outTemp": {
-               "text": "24.0°C"
+               "text": "24,0°C"
               }
              }
             },
@@ -2998,7 +2998,7 @@
                }
               },
               "outTemp": {
-               "text": "24.8°C"
+               "text": "24,8°C"
               }
              }
             },
@@ -3016,7 +3016,7 @@
                }
               },
               "outTemp": {
-               "text": "25.4°C"
+               "text": "25,4°C"
               }
              }
             },
@@ -3034,7 +3034,7 @@
                }
               },
               "outTemp": {
-               "text": "25.9°C"
+               "text": "25,9°C"
               }
              }
             },
@@ -3052,7 +3052,7 @@
                }
               },
               "outTemp": {
-               "text": "26.1°C"
+               "text": "26,1°C"
               }
              }
             },
@@ -3070,7 +3070,7 @@
                }
               },
               "outTemp": {
-               "text": "26.2°C"
+               "text": "26,2°C"
               }
              }
             },
@@ -3088,7 +3088,7 @@
                }
               },
               "outTemp": {
-               "text": "26.1°C"
+               "text": "26,1°C"
               }
              }
             },
@@ -3106,7 +3106,7 @@
                }
               },
               "outTemp": {
-               "text": "25.8°C"
+               "text": "25,8°C"
               }
              }
             },
@@ -3124,7 +3124,7 @@
                }
               },
               "outTemp": {
-               "text": "25.4°C"
+               "text": "25,4°C"
               }
              }
             },
@@ -3142,7 +3142,7 @@
                }
               },
               "outTemp": {
-               "text": "24.7°C"
+               "text": "24,7°C"
               }
              }
             },
@@ -3160,7 +3160,7 @@
                }
               },
               "outTemp": {
-               "text": "23.9°C"
+               "text": "23,9°C"
               }
              }
             },
@@ -3178,7 +3178,7 @@
                }
               },
               "outTemp": {
-               "text": "22.9°C"
+               "text": "22,9°C"
               }
              }
             },
@@ -3196,7 +3196,7 @@
                }
               },
               "outTemp": {
-               "text": "21.8°C"
+               "text": "21,8°C"
               }
              }
             },
@@ -3214,7 +3214,7 @@
                }
               },
               "outTemp": {
-               "text": "20.6°C"
+               "text": "20,6°C"
               }
              }
             },
@@ -3232,7 +3232,7 @@
                }
               },
               "outTemp": {
-               "text": "19.3°C"
+               "text": "19,3°C"
               }
              }
             },
@@ -3250,7 +3250,7 @@
                }
               },
               "outTemp": {
-               "text": "17.9°C"
+               "text": "17,9°C"
               }
              }
             },
@@ -3268,7 +3268,7 @@
                }
               },
               "outTemp": {
-               "text": "16.5°C"
+               "text": "16,5°C"
               }
              }
             },
@@ -3286,7 +3286,7 @@
                }
               },
               "outTemp": {
-               "text": "15.0°C"
+               "text": "15,0°C"
               }
              }
             },
@@ -3304,7 +3304,7 @@
                }
               },
               "outTemp": {
-               "text": "13.6°C"
+               "text": "13,6°C"
               }
              }
             },
@@ -3322,7 +3322,7 @@
                }
               },
               "outTemp": {
-               "text": "12.2°C"
+               "text": "12,2°C"
               }
              }
             },
@@ -3340,7 +3340,7 @@
                }
               },
               "outTemp": {
-               "text": "10.8°C"
+               "text": "10,8°C"
               }
              }
             },
@@ -3358,7 +3358,7 @@
                }
               },
               "outTemp": {
-               "text": "9.5°C"
+               "text": "9,5°C"
               }
              }
             }
