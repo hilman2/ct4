@@ -1,0 +1,9 @@
+# Der Container fuehrt die Skripte aus dem eingehaengten Repo aus. Mit
+# CRLF findet /bin/sh den Interpreter nicht.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+# Der Korpus wird byteweise verglichen. Zeilenenden darf niemand
+# unterwegs umschreiben.
+*.jsonl -text
