@@ -17,7 +17,8 @@ call and subscript chains, and #for, #if, #while, #unless, #repeat,
 #try, #set, #silent, #echo, #slurp, #break, #continue, #pass, #import
 #from, #def and #block, in their block form and in the colon short
 form, plus #attr, #raise, #set global and the #unicode line ct3
-cuts out before it parses. That is 943 of the 1636 render cases.
+cuts out before it parses, and #stop where it stands at the top
+level. That is 1023 of the 1636 render cases.
 
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
@@ -336,13 +337,13 @@ BRANCHES = ("else", "elif")
 
 def _pieces(root: tree.Node, source: str,
             hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> list[tuple[str, Any]]:
-    return _pieces_of(root.children, source, hoisted, methods)
+            methods: list[ast.stmt]) -> list[tuple[str, Any]]:
+    return _pieces_of(root.children, source, hoisted, methods, top=True)
 
 
 def _pieces_of(nodes: Sequence[tree.Node], source: str,
-               hoisted: list[ast.stmt],
-               methods: list[ast.stmt]) -> list[tuple[str, Any]]:
+               hoisted: list[ast.stmt], methods: list[ast.stmt],
+               top: bool = False) -> list[tuple[str, Any]]:
     """The output of a template, as text and values in order.
 
     A comment writes nothing, but it decides what happens to the
@@ -372,7 +373,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
         elif node.kind == tree.BLOCK:
             if node.name in ("def", "block"):
                 _eat_directive_line(node, source, out)
-                call = _definition(node, source, hoisted, methods)
+                call = _definition(node, source, hoisted, methods, out)
                 if call is not None:
                     out.append((STMT_PIECE, call))
                 continue
@@ -405,6 +406,15 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # other directives carry: a slurp always ends its line.
                 if _line_is_clear(source, node.tokens[0].start):
                     _drop_indent(out)
+            elif node.name == "stop":
+                # ct3 stops generating here and drops the rest of the
+                # template, the closing directives included. Inside a
+                # block that leaves a header with no body, which does
+                # not compile, so only the top level is taken.
+                if not top:
+                    raise Unsupported("#stop inside a block")
+                _eat_directive_line(node, source, out)
+                return out
             elif node.name == "attr":
                 _eat_directive_line(node, source, out)
                 methods.append(_attr_statement(node))
@@ -543,8 +553,30 @@ def _split_arguments(text: str) -> list[str]:
     return [part for part in parts if part.strip()]
 
 
+def _take_trailing_eol(pieces: list[tuple[str, Any]]) -> str:
+    """Takes a line ending off the end of a body, if it ends with one.
+
+    Returns what was taken, or nothing. Only a piece that is a line
+    ending and nothing else: a body ending in "hi\n" keeps its text
+    and gives up the ending.
+    """
+    if not pieces or pieces[-1][0] != TEXT_PIECE:
+        return ""
+    kind, value = pieces[-1]
+    ending = _trailing_eol(value)
+    if not ending:
+        return ""
+    rest = value[:-len(ending)]
+    if rest:
+        pieces[-1] = (kind, rest)
+    else:
+        pieces.pop()
+    return ending
+
+
 def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
-                methods: list[ast.stmt]) -> ast.stmt | None:
+                methods: list[ast.stmt],
+                out: list[tuple[str, Any]]) -> ast.stmt | None:
     """``#def`` and ``#block`` as methods on the generated class.
 
     Returns the call a block makes where it stands, or None for a def,
@@ -558,13 +590,27 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     # header names a parameter and is not a lookup. Running it through
     # _token_source would turn "#def show($x)" into a call to VFFSL.
     header = "".join(t.text for t in node.tokens[1:]).strip()
+    # The colon short form leaves its colon on the header: the tree
+    # cuts the arguments right after it. "#block mid: hi" defines mid
+    # and calls it, same as the long form.
+    header = header.rstrip(":").strip()
     match = DEFINITION.match(header)
     if match is None:
         raise Unsupported("#%s %r" % (node.name, header[:40]))
     params = _parameters(match.group("params"))
     name = match.group("name")
-    body = _statements(_pieces_of(node.children, source, hoisted, methods))
+    pieces = _pieces_of(node.children, source, hoisted, methods)
+    # Only the short form. The long one is closed by an #end, and its
+    # body keeps every line ending it holds.
+    short = not any(child.kind == lex.DIRECTIVE and child.name == "end"
+                    for child in node.children)
+    trailing = _take_trailing_eol(pieces) if short else ""
+    body = _statements(pieces)
     methods.append(_method(name, params, body or [ast.Pass()]))
+    if trailing and not _line_is_clear(source, node.tokens[0].start):
+        # The ending is not part of the method, and it survives where
+        # something else stood on the line before the directive.
+        out.append((TEXT_PIECE, trailing))
     if node.name == "def":
         return None
     return ast.Expr(value=ast.Call(
@@ -587,8 +633,10 @@ def _try_block(node: tree.Node, source: str,
         if directive.name == "finally":
             statement.finalbody = made
             continue
-        header = _framed("try:\n    pass\nexcept %s:"
-                         % (_argument(directive, node) or "Exception"))
+        caught = "".join(_token_source(t)
+                         for t in directive.tokens[1:]).strip()
+        header = _framed("try:\n    pass\nexcept%s:"
+                         % (" " + caught if caught else ""))
         assert isinstance(header, ast.Try)
         handler = header.handlers[0]
         handler.body = made
