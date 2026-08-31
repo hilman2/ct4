@@ -1233,12 +1233,47 @@ Anschluss an das Upstream-Projekt gewünscht ist.
   Wert stand. Jedes dieser vier Stücke hat gefehlt und den Vergleich zum
   Scheitern gebracht. Es können weitere fehlen; ein Fixture ist erst richtig,
   wenn es byte-identisch reproduziert.
-- **Eine gemessene Lücke: Stack-Frames.** Am 31-Aug-2026 gegen den Korpus
-  gemessen, indem einzelne Compiler-Schalter umgelegt wurden. `useNameMapper`
-  aus lässt 46 Prozent der Fälle gleich, `useAutocalling` aus 88 Prozent,
-  `useFilters` aus 97 Prozent. `useStackFrames` aus lässt **alle** Fälle gleich.
-  Der Korpus prüft die Frame-Auflösung also überhaupt nicht, und P5 will sie
-  entfernen. Bevor das passiert, braucht es Fälle, die sie treffen.
+- **Was der Korpus wirklich prüft, ist selbst eine Messung.** 1.772 Fälle sind
+  eine Zahl, solange niemand fragt, was sie treffen. `python -m ct4.corpus
+  coverage` schaltet je einen Mechanismus ab und zählt die Fälle, die es
+  merken. Am 31-Aug-2026:
+
+  | Mechanismus aus | Renderfälle | Compile-Fälle |
+  |---|---|---|
+  | `namemapper` | 882 von 1.636 (54 %) | 136 von 136 |
+  | `locals` | **327 von 1.636 (20 %)** | 0 von 136 |
+  | `autocalling` | 198 von 1.636 (12 %) | 132 von 136 |
+  | `filters` | 57 von 1.636 (3 %) | 136 von 136 |
+  | `stackframes` | **0 von 1.636** | 133 von 136 |
+  | `knownlocals` (Kontrolle) | 0 | 0 |
+
+  Nur die Renderspalte sagt etwas über Verhalten. Ein Compile-Fall vergleicht
+  erzeugten Code, und ein Mechanismus, der dessen Schreibweise ändert, ändert
+  alle, ohne dass sich eine Vorlage anders verhält. Getrennt zu zählen ist
+  nicht Kosmetik: ungetrennt sähe `stackframes` nach 133 betroffenen Fällen
+  aus, und das wäre falsch.
+
+  **`useStackFrames` ändert null Verhalten, und das ist richtig so.** Der
+  Ersatzpfad erzeugt `VFSL([locals()]+SL+[globals(), builtin], …)`, und das
+  durchläuft dieselben vier Namensräume in derselben Reihenfolge wie das C-
+  `VFFSL` (`PyEval_GetLocals`, SearchList, `PyEval_GetGlobals`,
+  `PyEval_GetBuiltins`). Die beiden sind bauartbedingt gleich. Eine frühere
+  Fassung dieses Absatzes las die Null als Loch im Korpus und forderte neue
+  Fälle. Das war ein Fehlschluss.
+
+  Was P5 wirklich angreift, misst die Zeile `locals`: dort wird der
+  Locals-Namensraum selbst entfernt. **327 Renderfälle hängen daran**, verteilt
+  über 79 verschiedene Tests und genau die Konstrukte, die Namen binden: `#for`,
+  `#set`, `#def`, `#call`, `#block`, `#capture`, `#while`, `#break`,
+  `#continue`. Der Korpus deckt das also gut ab.
+
+  Zwei Fallen stecken in der Messung selbst, beide hier hineingelaufen. Ein
+  Mechanismus muss abgeschaltet sein, **bevor** die erste Vorlage übersetzt
+  wird: ein erzeugtes Modul bindet seine Nachschlagefunktionen beim Ausführen,
+  und `Template.compile` legt die Klasse ab. Und `locals` muss
+  `resolveKnownLocals` mit abschalten, weil die Abkürzung selbst eine Auflösung
+  aus den Locals ist und nicht über `VFFSL` läuft; ohne das meldete die Messung
+  301 statt 327.
 - **`_namemapper.c` unter free-threading.** Die Anpassung an Python 3.14t ist
   echte Arbeit. Der reine Python-Pfad (`C_VERSION = False`) wird heute selten
   getestet und muss zuerst abgesichert werden.

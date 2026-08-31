@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 from ct4.corpus import namespaces
 from ct4.corpus.case import COMPILE, Case, decode, read_jsonl
@@ -46,6 +46,17 @@ LOCAL_LOOKUP = re.compile(
 # Below this many cases, starting the worker processes costs more than
 # the distribution brings in.
 PARALLEL_THRESHOLD = 2000
+
+# Compiler settings laid over every case of the run. Empty for a normal
+# check; ct4.corpus.weaken fills it to switch a mechanism off and see
+# how many cases notice. It is state of the process, not an argument,
+# because it has to reach the workers, and those are started from here.
+OVERRIDES: dict[str, Any] = {}
+
+# Which mechanism ct4.corpus.weaken switched off, if any. Named rather
+# than inferred from OVERRIDES, because some mechanisms are no setting
+# and a worker started with spawn inherits nothing at all.
+WEAKENED: str = ""
 
 # The cases of the worker process. It loads them from disk itself
 # instead of having them sent over: a case carries a whole template and
@@ -95,6 +106,7 @@ def compile_code(case: Case) -> str:
 
     settings = dict(decode(case.settings))
     settings["addTimestampsToCompilerOutput"] = False
+    settings.update(OVERRIDES)
     compiler = ModuleCompiler(
         case.template,
         moduleName="ct4_corpus",
@@ -109,9 +121,11 @@ def render(case: Case) -> str:
 
     from ct4.fixture.filters import resolve
 
+    settings = dict(decode(case.settings))
+    settings.update(OVERRIDES)
     template_class = Template.compile(
         source=case.template,
-        compilerSettings=decode(case.settings),
+        compilerSettings=settings,
         **decode(case.compile_kwargs))
     # The filter belongs to the case, not to the test bench: which
     # application renders the template decides what becomes of None and
@@ -169,7 +183,8 @@ def check_files(paths: Sequence[Path],
     # every switch leaves the worker's compilation cache colder.
     chunk = max(1, len(cases) // (jobs * 4))
     context = multiprocessing.get_context()
-    arguments = (_selected_impl(), [str(path) for path in paths])
+    arguments = (_selected_impl(), [str(path) for path in paths],
+                 WEAKENED)
     with context.Pool(jobs, _init_worker, arguments) as pool:
         found = pool.map(_compare_index, range(len(cases)), chunk)
     return len(cases), [m for m in found if m is not None]
@@ -208,12 +223,18 @@ def _selected_impl() -> str:
     return impl.INSTALLED
 
 
-def _init_worker(impl_name: str, paths: Sequence[str]) -> None:
+def _init_worker(impl_name: str, paths: Sequence[str],
+                 weakened: str = "") -> None:
     """Sets up a worker process.
 
     Under ``fork`` Cheetah is already loaded and the choice is settled;
     under ``spawn`` it is made here. Both cases have to work, because
     Linux and Windows have different start methods.
+
+    ``weakened`` is applied again rather than inherited, for the same
+    reason: a spawned worker starts from nothing. Applying it twice
+    under fork is harmless, and it has to happen before this process
+    compiles its first template.
     """
     global _worker_cases
 
@@ -221,6 +242,10 @@ def _init_worker(impl_name: str, paths: Sequence[str]) -> None:
 
     if "Cheetah" not in sys.modules:
         impl.select(impl_name)
+    if weakened:
+        from ct4.corpus import weaken
+
+        weaken.apply(weakened)
     _worker_cases = load([Path(path) for path in paths])
 
 

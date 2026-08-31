@@ -64,6 +64,20 @@ def main(argv: list[str] | None = None) -> int:
     check_cmd.add_argument(
         "--jobs", "-j", type=int, default=0,
         help="worker processes; 0 means all cores (default)")
+    check_cmd.add_argument(
+        "--weaken", default="", metavar="MECHANISM",
+        help="switch a mechanism off first, to see how many cases hold it")
+    check_cmd.add_argument(
+        "--counts", action="store_true",
+        help="print one JSON line instead of a report")
+
+    coverage_cmd = sub.add_parser(
+        "coverage",
+        help="what the corpus holds: cases per mechanism switched off")
+    coverage_cmd.add_argument("paths", type=Path, nargs="+")
+    coverage_cmd.add_argument(
+        "--jobs", "-j", type=int, default=0,
+        help="worker processes per run; 0 means all cores (default)")
 
     args = parser.parse_args(argv)
     impl.select(args.impl)
@@ -77,7 +91,10 @@ def main(argv: list[str] | None = None) -> int:
         return _harvest_fixtures(args.root, args.name, args.out)
     if args.command == "check-templates":
         return _check_templates(args.paths, args.expect)
-    return _check(args.paths, args.show, args.jobs)
+    if args.command == "coverage":
+        return _coverage(args.paths, args.jobs, args.impl)
+    return _check(args.paths, args.show, args.jobs,
+                  args.weaken, args.counts)
 
 
 def _harvest(out: Path) -> int:
@@ -154,15 +171,91 @@ def _check_templates(paths: list[Path], expect: int) -> int:
     return 0
 
 
-def _check(paths: list[Path], show: int, jobs: int) -> int:
+def _coverage(paths: list[Path], jobs: int, impl_name: str) -> int:
+    """What the corpus actually holds, one mechanism at a time.
+
+    Every mechanism runs in a process of its own. It cannot be
+    otherwise: a mechanism has to be switched off before the first
+    template is compiled, and there is no way back inside a process
+    once modules have been generated against it.
+    """
+    import json
+    import subprocess
+
+    from ct4.corpus import weaken
+
+    print("Only the render column says anything about behaviour. A")
+    print("compile case compares generated code, and a mechanism that")
+    print("changes how that code reads changes every one of them")
+    print("without any template behaving differently.")
+    print()
+    print("%-14s %-18s %-18s %s"
+          % ("mechanism", "render", "compile", "what"))
+    for name in weaken.NAMES:
+        result = subprocess.run(
+            [sys.executable, "-m", "ct4.corpus", "--impl", impl_name,
+             "check", *[str(p) for p in paths], "--weaken", name,
+             "--jobs", str(jobs), "--counts"],
+            capture_output=True, text=True)
+        line = result.stdout.strip().splitlines()[-1:]
+        if not line:
+            print("%-14s %-18s" % (name, "failed"))
+            continue
+        counts = json.loads(line[0])
+        print("%-14s %-18s %-18s %s"
+              % (name,
+                 _share(counts["render_changed"], counts["render_total"]),
+                 _share(counts["compile_changed"], counts["compile_total"]),
+                 weaken.describe(name)))
+    return 0
+
+
+def _share(changed: int, total: int) -> str:
+    if not total:
+        return "-"
+    return "%d of %d (%.0f%%)" % (changed, total, 100.0 * changed / total)
+
+
+def _check(paths: list[Path], show: int, jobs: int,
+           weakened: str = "", counts: bool = False) -> int:
+    import json
     import time
 
     from ct4.corpus import check as checker
+
+    if weakened:
+        from ct4.corpus import weaken
+
+        weaken.apply(weakened)
 
     workers = jobs or checker.default_jobs()
     started = time.perf_counter()
     total, mismatches = checker.check_files(paths, jobs=jobs)
     elapsed = time.perf_counter() - started
+
+    if counts:
+        # One machine-readable line, for the coverage run that started
+        # this process. Split by kind, because the two mean different
+        # things: a render case that changes is a change in behaviour,
+        # a compile case that changes may be no more than the generated
+        # text reading differently. Reporting one number would let the
+        # second kind pass for the first.
+        from ct4.corpus.case import COMPILE
+
+        kinds: dict[str, int] = {}
+        for case in checker.load(paths):
+            kinds[case.kind] = kinds.get(case.kind, 0) + 1
+        changed: dict[str, int] = {}
+        for mismatch in mismatches:
+            changed[mismatch.case.kind] = \
+                changed.get(mismatch.case.kind, 0) + 1
+        print(json.dumps({
+            "total": total, "changed": len(mismatches),
+            "render_total": total - kinds.get(COMPILE, 0),
+            "render_changed": len(mismatches) - changed.get(COMPILE, 0),
+            "compile_total": kinds.get(COMPILE, 0),
+            "compile_changed": changed.get(COMPILE, 0)}))
+        return 0
 
     hits = total - len(mismatches)
     share = 100.0 * hits / total if total else 0.0

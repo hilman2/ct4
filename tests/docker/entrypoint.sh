@@ -8,6 +8,7 @@
 #   corpus   the test bench
 #   bench    render times, ct3 against the fork
 #   large    one large series, time and memory
+#   coverage what the corpus holds, per mechanism
 #   all      everything (default)
 #
 # Work happens in /work, a tmpfs. The repo is mounted read-only under
@@ -92,6 +93,15 @@ run_large() {
     PYTHONPATH=/work python tests/bench/large.py
 }
 
+# What the corpus actually holds. Switches one mechanism off at a time
+# and counts the cases that notice. Not part of the default run: it
+# compiles the whole corpus once per mechanism, and its numbers are read
+# when a change to the semantics is weighed, not on every push.
+run_coverage() {
+    echo "== What the corpus holds =="
+    python -m ct4.corpus --impl fork coverage $CORPUS
+}
+
 run_corpus() {
     echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -110,6 +120,7 @@ case "$WHAT" in
     evals)   run_evals ;;
     bench)   run_bench ;;
     large)   run_large ;;
+    coverage) run_coverage ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
              run_check; echo; run_evals; echo; run_bench; echo
              run_corpus ;;
