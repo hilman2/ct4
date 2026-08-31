@@ -42,6 +42,9 @@ Source = "https://github.com/CheetahTemplate3/cheetah3"
 [project.optional-dependencies]
 filters = ["markdown"]
 markdown = ["markdown"]
+# Die statische Schemapruefung braucht nichts. Nur die Pruefung des
+# fertigen Ergebnisses zur Laufzeit braucht eine Bibliothek.
+schema = ["jsonschema"]
 
 [project.scripts]
 # Frueher unter Windows Entry Points und sonst Skripte in bin/. Entry

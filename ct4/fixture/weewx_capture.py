@@ -31,11 +31,18 @@ from ct4.fixture.record import Recorder
 # von pytest geladen wird und keine eigene Kommandozeile hat.
 OUT_ENV = "CT4_FIXTURE_DIR"
 
+# Wenn gesetzt, wird zusaetzlich eine JSON-Vorlage gegen denselben
+# Kontext gerendert. Das ist die Probe aufs Exempel fuer den JSON-Modus:
+# echte weewx-Objekte, keine Aufzeichnung.
+JSON_TEMPLATE_ENV = "CT4_JSON_TEMPLATE"
+JSON_OUT_ENV = "CT4_JSON_OUT"
+
 # Was waehrend des Laufs zusammenkommt. Je erzeugter Seite ein Eintrag
 # mit Vorlage, Ausgabepfad und aufgezeichnetem Kontext. Die Ausgabe
 # selbst wird erst am Ende gelesen: waehrend des Laufs steht sie noch
 # nicht auf der Platte.
 _recorded: list[dict[str, Any]] = []
+_rendered: list[bool] = []
 
 
 def pytest_configure(config: Any) -> None:
@@ -92,6 +99,7 @@ def install() -> None:
             tree: dict[str, Any] = {}
             trees.append(tree)
             wrapped.append(Recorder(namespace, tree))
+        _render_json(search_list)
         _recorded.append({
             "template_path": self._ct4_template,
             "output_path": os.path.join(self._ct4_destination,
@@ -102,6 +110,31 @@ def install() -> None:
 
     CheetahGenerator._prepGen = _prepGen
     CheetahGenerator._getSearchList = _getSearchList
+
+
+def _render_json(search_list: list[Any]) -> None:
+    """Rendert die JSON-Vorlage, falls eine verlangt ist.
+
+    Genommen wird die erste searchList des Laufs. Sie gehoert zu einer
+    beliebigen Seite; fuer die Tags, die die Vorlage benutzt, macht das
+    keinen Unterschied.
+    """
+    source = os.environ.get(JSON_TEMPLATE_ENV)
+    if not source or _rendered:
+        return
+    from ct4.jsonmode import compile_template
+    from ct4.plugins import weewx_adapter
+
+    weewx_adapter.install()
+    path = Path(source)
+    compiled = compile_template(path.read_text(encoding="utf-8"),
+                                base_dir=path.parent)
+    for finding in compiled.check():
+        print("ct4 schema: %s" % finding)
+    text = compiled.render(search_list, indent=1, validate=True)
+    out = Path(os.environ.get(JSON_OUT_ENV, "day.json"))
+    out.write_text(text, encoding="utf-8", newline="\n")
+    _rendered.append(True)
 
 
 def write_all(out_dir: Path) -> int:

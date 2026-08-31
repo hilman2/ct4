@@ -66,8 +66,34 @@ run_verify() {
     fi
 }
 
+# Das Abnahmekriterium fuer P2: ein Skin erzeugt sein JSON im neuen
+# Modus, das Ergebnis haelt sein Schema, und zwei Laeufe liefern
+# dieselben Bytes.
+run_json() {
+    cd "$TESTS"
+    export PYTHONPATH=/work
+    export CT4_JSON_TEMPLATE=/repo/examples/weewx-json/day.json.tmpl
+    for lauf in 1 2; do
+        export CT4_JSON_OUT="/tmp/day-$lauf.json"
+        python -m pytest test_templates.py -q             -p ct4.fixture.weewx_capture -k sqlite 2>&1 |
+            grep -E "^ct4 schema:" || true
+    done
+
+    echo
+    if cmp -s /tmp/day-1.json /tmp/day-2.json; then
+        echo "Zwei Laeufe, dieselben Bytes."
+    else
+        echo "Die Laeufe unterscheiden sich." >&2
+        diff /tmp/day-1.json /tmp/day-2.json | head -20 >&2
+        exit 1
+    fi
+    echo
+    head -40 /tmp/day-1.json
+}
+
 case "${1:-capture}" in
     capture) run_capture ;;
     verify)  run_verify ;;
+    json)    run_json ;;
     *)       echo "Unbekannt: $1" >&2; exit 2 ;;
 esac

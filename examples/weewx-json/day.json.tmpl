@@ -1,0 +1,38 @@
+## Ein Tagesbericht als JSON, gegen echte weewx-Daten.
+##
+## Zu beachten: nirgends ein .raw, nirgends ein $jsonize, nirgends eine
+## Komma-Akrobatik am Schleifenende. Die Werte kommen als Zahlen, weil
+## ct4-weewx den Typ-Adapter angemeldet hat.
+#schema "day.schema.json"
+#missing null
+#precision default = 2
+{
+  "station": "$station.location",
+  "latitude": $station.latitude_f,
+  "longitude": $station.longitude_f,
+
+  "day": {
+    "outTemp": {
+      "min": $day.outTemp.min,
+      "max": $day.outTemp.max,
+      "avg": $day.outTemp.avg
+    },
+    "barometer": {
+      "min": $day.barometer.min,
+      "max": $day.barometer.max
+    },
+    "rain": $day.rain.sum,
+    "windSpeed": {
+      "max": $day.windSpeed.max @ 1
+    }
+  },
+
+  "hours": [
+    #for $hour in $day.hours
+    {
+      "start": $hour.start.raw,
+      "outTemp": $hour.outTemp.avg
+    }
+    #end for
+  ]
+}

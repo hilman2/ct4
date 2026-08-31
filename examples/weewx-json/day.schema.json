@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["station", "latitude", "longitude", "day", "hours"],
+  "properties": {
+    "station": {"type": "string"},
+    "latitude": {"type": "number"},
+    "longitude": {"type": "number"},
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outTemp", "barometer", "rain", "windSpeed"],
+      "properties": {
+        "outTemp": {
+          "type": "object",
+          "required": ["min", "max", "avg"],
+          "properties": {
+            "min": {"type": ["number", "null"]},
+            "max": {"type": ["number", "null"]},
+            "avg": {"type": ["number", "null"]}
+          }
+        },
+        "barometer": {"type": "object"},
+        "rain": {"type": ["number", "null"]},
+        "windSpeed": {"type": "object"}
+      }
+    },
+    "hours": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "outTemp"],
+        "properties": {
+          "start": {"type": ["number", "null"]},
+          "outTemp": {"type": ["number", "null"]}
+        }
+      }
+    }
+  }
+}

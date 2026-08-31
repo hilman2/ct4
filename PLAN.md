@@ -244,14 +244,36 @@ Strings machen. ct4 kennt `precision` als Nachkommastellen:
 
 ```
 #precision default = 2
-#precision outTemp = 1
+#precision max = 1
 
 "max": $day.outTemp.max          ## 12.3
 "max": $day.outTemp.max @ 3      ## 12.345, lokal überschrieben
 ```
 
+`#precision` schlüsselt auf den **Feldnamen der Ausgabe**, nicht auf den
+Messwerttyp. Das ist keine Bequemlichkeit, sondern W4: die Engine kennt keine
+Messwerttypen. Wer die Rundung am Messwert festmachen will, liefert sie über
+`Ct4Value.precision` aus der Anwendung. Bei weewx tut das der Typ-Adapter, und
+zwar aus den Formatstrings, die der Skin ohnehin hat.
+
+Es gilt: Angabe im Template vor Angabe der Anwendung vor `default`.
+
 Die Rundung passiert vor der Serialisierung, auf dem Zahlwert. Das Ergebnis ist
 plattformunabhängig gleich.
+
+### Wert oder Text
+
+An einer Wertposition ist ein Platzhalter ein **Wert** und geht durch
+`__ct4_value__`. In einer Zeichenkette ist er **Text** und behält die
+Formatierung, die das Objekt selbst mitbringt.
+
+```
+"max": $day.outTemp.max     ## 12.3
+"text": "$day.outTemp.max"  ## "12.3 °C"
+```
+
+Der Unterschied ist Absicht. Wer eine Zahl will, schreibt sie an eine
+Wertposition; wer die Anzeige will, schreibt sie in eine Zeichenkette.
 
 ### Serien
 
@@ -400,6 +422,12 @@ class SupportsCt4Json(Protocol):
 weewx' `ValueHelper` implementiert `__ct4_value__`. Danach funktioniert
 `$day.outTemp.max` in JSON, in HTML und in Text richtig, ohne dass irgendwo
 `$jsonize` oder `.raw` steht.
+
+Steht als `ct4/plugins/weewx_adapter.py` und ist das erste Plugin. Es rechnet
+nichts: es liest die Nachkommastellen aus den Formatstrings, die der Skin
+ohnehin hat, und reicht den Rohwert durch. Solange `ct4-weewx` kein eigenes
+Paket ist, hängt es die Methode nachträglich an die Klasse. Das ist der
+Zustand, nicht das Ziel.
 
 #### Output-Sink
 
@@ -784,6 +812,21 @@ Umbau des Textparsers wartet.
 **Fertig, wenn:** ein weewx-Skin seine JSON-Dateien im neuen Modus erzeugt, das
 Ergebnis gegen das Schema validiert, und die Dateien über mehrere Läufe
 byte-stabil sind.
+
+Stand 31-Aug-2026: erfüllt. `examples/weewx-json/day.json.tmpl` läuft gegen die
+echte Report-Engine von weewx, hält sein Schema und liefert in zwei Läufen
+dieselben Bytes. In der Vorlage steht kein `.raw`, kein `$jsonize` und keine
+Komma-Akrobatik.
+
+Der Entwurf, der das trägt: der JSON-Compiler deutet die Ausdrücke nicht. Er
+erzeugt eine Cheetah-`#def`, die einen Bauplatz bedient, und **Cheetah
+übersetzt die Ausdrücke**. Damit gelten im JSON-Modus dieselbe searchList,
+dasselbe Autocalling und dieselbe Punktschreibweise wie im Textmodus. Ein
+zweiter Ausdrucksparser wäre eine zweite Semantik, und eine davon wäre falsch.
+
+Was noch fehlt: Streaming für grosse Serien, die Registry über Entry Points,
+und ein Compiler, der statt einer Cheetah-`#def` direkt Python erzeugt. Der
+Bauplatz hält die Struktur bisher ganz im Speicher.
 
 ### P3 — Werkzeuge und KI-Schicht
 
