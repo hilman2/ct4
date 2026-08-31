@@ -1064,8 +1064,16 @@ Parser und Codegen ist nicht angefangen.
 | Deterministische Ausgabe | steht |
 | Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
+| Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
 | Lexer, CST, AST, Codegen über `ast` | **nicht angefangen** |
 | Direktiven-Plugins auf AST-Ebene | hängt daran |
+
+**Geltungsbereiche.** Der Compiler führt einen Stapel der Namen, die er selbst
+gebunden hat, und löst Platzhalter darauf ohne die SearchList auf. Zahlen und
+Begründung stehen in Abschnitt 12. Der Punkt hier: das ist der erste Teil des
+Compiler-Kerns, der wirklich gebraucht wurde, und er kam über die Performance
+herein, nicht über den Umbau. Der Strict-Modus aus W2 braucht dieselbe
+Buchführung.
 
 **Determinismus.** `addTimestampsToCompilerOutput` steht jetzt auf `False`.
 Zwei Übersetzungen derselben Vorlage liefern dieselben Bytes. Das ist die
