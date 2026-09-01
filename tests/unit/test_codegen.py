@@ -1290,6 +1290,51 @@ def test_a_directive_argument_may_run_past_its_line(source):
     assert codegen.render(source, [context]) == theirs
 
 
+# What stands on the left of a "#set", and between a "#for" and its
+# "in". ct3 reads a target with useNameMapper off and that reaches all
+# the way in: "$d[$k]" is "d[k]", the subscript as plain as the name it
+# hangs off. Six skins keep a dictionary that way.
+TARGET_SHAPES = [
+    "#set $d['x'] = 1\ngot $d.x\n",
+    "#set $d[$k] = 1\ngot $d.x\n",
+    "#set $e = {}\n#set $e['x'] = 2\ngot $e.x\n",
+    "#set $e = {'a': {}}\n#set $e['a']['b'] = 3\ngot $e.a.b\n",
+    "#set $obj.x = 1\ngot $obj.x\n",
+    "#set $a, $b = 1, 2\ngot $a $b\n",
+    "#set ($a, $b) = (1, 2)\ngot $a $b\n",
+    "#set [$a, $b] = [1, 2]\ngot $a $b\n",
+    "#set $n = 1\n#set $n += 2\ngot $n\n",
+    "#set $lst = [1, 2, 3]\n#set $lst[0:2] = [9]\ngot $lst\n",
+    "#set $a = 1\ngot $a\n",
+    "#for $r in $rows\n$r\n#end for\n",
+]
+
+
+@pytest.mark.parametrize("source", TARGET_SHAPES)
+def test_an_assignment_target_is_written_as_plainly_as_ct3_writes_it(source):
+    class Obj:
+        x = 0
+
+    def context():
+        return {"d": {}, "k": "x", "obj": Obj(), "rows": [1, 2]}
+
+    # Three of these raise in both engines: a target whose base comes
+    # from the search list is written as a plain name and there is no
+    # such local. What is compared there is the NameError, message and
+    # all, because that is the behaviour ct3 has and the one a caller
+    # that swapped engines would see.
+    def rendered(work):
+        try:
+            return work()
+        except Exception as error:                      # noqa: BLE001
+            return "!!%s: %s" % (type(error).__name__, error)
+
+    theirs = rendered(lambda: str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[context()]).respond()))
+    assert rendered(lambda: codegen.render(source, [context()])) == theirs
+
+
 def test_a_raw_body_is_never_cut_by_the_argument_scan():
     # The raw body is source the lexer has already measured from end to
     # end. Cutting it at the line ending that closes "#raw" took three

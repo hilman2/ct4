@@ -146,27 +146,7 @@ MARKUP_IMPORT = ("from ct4.markup.escape import write_escaped as %s\n"
 MARKUP_ESCAPES = frozenset({markup_scan.TEXT, markup_scan.ATTRIBUTE,
                             markup_scan.URL_HEAD})
 
-# A placeholder that is a plain dotted name, optionally wrapped in one
-# of the three enclosures. Used where a placeholder is a target rather
-# than a lookup, in "#set $a" and in the head of a "#for": ct3 writes
-# the bare name there, so anything with a call or a subscript in it has
-# to be turned away.
 NAME = r"[A-Za-z_][A-Za-z_0-9]*"
-PLAIN = re.compile(
-    r"^\$(?:"
-    r"(?P<bare>" + NAME + r"(?:\." + NAME + r")*)"
-    r"|[{(\[][ \t\f]*(?P<wrapped>" + NAME + r"(?:\." + NAME + r")*)"
-    r"[ \t\f]*[)}\]]"
-    r")$")
-
-
-def _plain_path(text: str) -> str | None:
-    """The dotted name of a placeholder this layer can take, or None."""
-    match = PLAIN.match(text)
-    if match is None:
-        return None
-    path: str = match.group("bare") or match.group("wrapped")
-    return path
 
 
 # The silence and cache tokens, which belong to a top-level placeholder
@@ -875,7 +855,8 @@ class _Reader:
         found = self.chunks()
         if not found:
             raise Unsupported("placeholder %r" % self.text)
-        made = _expression(found)
+        made = (_expression(found) if self.name_mapper
+                else _plain_expression(found))
         if opener:
             # The blanks behind the chain really do end up in the
             # generated expression: "$( a + 1 )" ends in a space.
@@ -920,11 +901,18 @@ def chunks_of(text: str) -> list[Chunk]:
     return found
 
 
-def placeholder_source(text: str) -> str:
+def placeholder_source(text: str, name_mapper: bool = True) -> str:
     """The Python ct3 writes for a placeholder where it stands.
 
     Called as ``placeholder_source("$a.b($c)")`` with the raw text of a
     PLACEHOLDER token, the modifiers already taken off.
+
+    Args:
+        text (str): the placeholder's own source.
+        name_mapper (bool): whether the names are looked up. False is
+            what ct3 reads an assignment target with, and it reaches
+            all the way in: "$d[$k]" on the left of a "#set" is "d[k]",
+            not "d[VFFSL(SL,'k',True)]".
 
     Raises:
         Unsupported: where ct3 reads the text differently, or not at
@@ -935,6 +923,7 @@ def placeholder_source(text: str) -> str:
     if MODIFIERS.match(text):
         raise Unsupported("placeholder %r" % text)
     reader = _Reader(text)
+    reader.name_mapper = name_mapper
     made = reader.placeholder()
     if not reader.done():
         raise Unsupported("placeholder %r" % text)
@@ -4039,10 +4028,7 @@ def _set_statement(node: tree.Node, allow_global: bool = True) -> ast.stmt:
     target = True
     for token in node.tokens[1:]:
         if target and token.kind == lex.PLACEHOLDER:
-            path = _plain_path(token.text)
-            if path is None or token.children:
-                raise Unsupported("assignment target %r" % token.text)
-            parts.append(path)
+            parts.append(_target_source(token, "assignment target"))
             continue
         if target and token.kind == lex.TEXT and \
                 re.match(r"\s*global\b", token.text):
@@ -4323,16 +4309,28 @@ def _for_argument(node: tree.Node) -> str:
     target = True
     for token in node.tokens[1:]:
         if target and token.kind == lex.PLACEHOLDER:
-            path = _plain_path(token.text)
-            if path is None or token.children:
-                raise Unsupported("loop target %r" % token.text)
-            parts.append(path)
+            parts.append(_target_source(token, "loop target"))
             continue
         parts.append(_token_source(token))
         if target and token.kind == lex.TEXT and \
                 re.search(r"\bin\b", token.text):
             target = False
     return _without_trailing_colon("".join(parts), "for")
+
+
+def _target_source(token: lex.Token, what: str) -> str:
+    """A placeholder standing where something is assigned to.
+
+    ct3 reads a target with useNameMapper off, and that reaches all the
+    way in: "#set $d[$k] = 1" is "d[k] = 1", the subscript written as
+    plainly as the name it hangs off. A target it cannot write, "#set
+    $f(1) = 2" for one, comes back as Python that will not parse, and
+    the caller says so.
+    """
+    try:
+        return placeholder_source(token.text, name_mapper=False)
+    except Unsupported:
+        raise Unsupported("%s %r" % (what, token.text)) from None
 
 
 def _without_trailing_colon(text: str, name: str) -> str:
