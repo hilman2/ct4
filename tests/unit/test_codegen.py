@@ -1460,6 +1460,14 @@ END_TAG_SHAPES = [
     "#raw: one line $v\nB\n",
     # The closing tag stops after the name and TAIL is output.
     "#raw\nX\n#end raw TAIL\nB\n",
+    # #errorCatcher takes one identifier. A line that merely mentions
+    # it is the directive and then plain text, which is how a skin
+    # writes a comment about itself.
+    "a\n// sets #errorCatcher Echo, so Cheetah does not\nb $x\n",
+    "#errorCatcher Echo\n$missing\n",
+    "#errorCatcher Echo\na\n#end errorCatcher\n$missing\n",
+    "Z#errorCatcher Echo tail\n$missing\n",
+    "#errorCatcher BigEcho\n$missing\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at

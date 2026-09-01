@@ -148,11 +148,44 @@ def self_closing_end(source: str, after_end: int) -> int | None:
         return None
     while at < len(source) and source[at] in " \t\f":
         at += 1
+    return _rest_of_tag(source, at, after_end - len("#end"))
+
+
+def identifier_end(source: str, after_name: int) -> int:
+    """Where a directive that takes one identifier stops.
+
+    ``#errorCatcher`` is the one: eatErrorCatcher calls getIdentifier
+    and reads nothing else, so a line that merely mentions it,
+
+        // this file sets #errorCatcher Echo, so Cheetah does not
+
+    is the directive and then the text ", so Cheetah does not". Reading
+    the argument to the end of the line made a name of the whole
+    sentence and cost a skin its file.
+
+    Called with the offset just past the directive name.
+    """
+    at = after_name
+    while at < len(source) and source[at] in " \t\f":
+        at += 1
+    while at < len(source) and source[at] in IDENT:
+        at += 1
+    return _rest_of_tag(source, at, after_name - len("#errorCatcher"))
+
+
+def _rest_of_tag(source: str, at: int, tag_start: int) -> int:
+    """What a directive tag takes after its argument has been read.
+
+    ct3's _eatRestOfDirectiveTag: a directive end token where one
+    stands there, or the line ending where the tag stood alone on its
+    line. Where neither, the tag stops and the rest of the line is
+    output.
+    """
     if source[at:at + 1] == "#":
         return at + 1
     starts = line_starts(source)
-    line = bisect.bisect_right(starts, after_end)
-    if not source[starts[line - 1]:after_end - len("#end")].strip():
+    line = bisect.bisect_right(starts, tag_start)
+    if not source[starts[line - 1]:tag_start].strip():
         match = EOL.match(source, at)
         if match is not None:
             return match.end()
@@ -401,9 +434,13 @@ class _Lexer:
                         # this the string in "#end raw '$unit.x'" is
                         # stepped over as a directive's own literal and
                         # the placeholder in it never becomes a token.
-                        ends_raw = (self_closing_end(source, end)
-                                    if name == "end" else None)
-                        directive_until = (ends_raw if ends_raw is not None
+                        if name == "end":
+                            reach = self_closing_end(source, end)
+                        elif name == "errorCatcher":
+                            reach = identifier_end(source, end)
+                        else:
+                            reach = None
+                        directive_until = (reach if reach is not None
                                            else self.argument_end(end))
                     elif kind == DIRECTIVE_END:
                         directive_until = -1

@@ -204,6 +204,10 @@ class _Builder:
                 # The arguments end at the colon; the rest of the line
                 # is the body and becomes children.
                 stop = self._colon_end(node)
+            elif name == "errorCatcher":
+                # It takes one identifier and no more; see
+                # lex.identifier_end.
+                stop = lex.identifier_end(self.source, token.end)
             # Otherwise everything up to the end of the line belongs to
             # the directive: its arguments.
             index = self._take_arguments(node, index, stop)
