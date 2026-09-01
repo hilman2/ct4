@@ -47,8 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from ct4 import cache, depend, diagnostics, trace, write
-from ct4.markup import mode as markup_mode
+from ct4 import cache, depend, diagnostics, render, trace, write
 
 # Bump on a change of the manifest format. A manifest from the future
 # is refused rather than read optimistically.
@@ -630,64 +629,15 @@ def _bytes_of(manifest: Manifest, target: Target) -> bytes:
     """
     source = (manifest.base / target.template).read_text(encoding="utf-8")
     search_list = _search_list(manifest, target)
-    if target.mode == "json":
-        from ct4 import jsonmode
-
-        text = jsonmode.render(source, search_list, base_dir=manifest.base)
-    elif markup_mode.declared(source):
-        text = _render_markup(source, search_list, manifest.settings,
-                              manifest.base / target.template)
-    else:
-        text = _render_text(source, search_list, manifest.settings)
+    # The manifest may insist on JSON; markup is asked of the source
+    # and of nothing else, because the mode is the template's own
+    # statement about itself and a manifest key would be a second
+    # place to be wrong.
+    text = render.render_source(
+        source, search_list, path=manifest.base / target.template,
+        settings=manifest.settings,
+        mode=render.JSON if target.mode == "json" else None)
     return text.encode(manifest.encoding, manifest.errors)
-
-
-def _render_markup(source: str, search_list: Sequence[Any],
-                   settings: dict[str, Any], path: Path) -> str:
-    """Compiles and renders a template that declared markup mode.
-
-    Asked of the source and not of the manifest, because the mode is
-    the template's own statement about itself and a manifest key would
-    be a second place to be wrong. What the manifest would gain is a
-    way to build the page with the declaration line printed into it,
-    which is the outcome nobody wants.
-
-    Through the code generator rather than through ct3, and directly
-    rather than by installing the generating compiler: installing it
-    would change how every other target in the same run is compiled,
-    and text mode not moving is the promise this whole mode is built
-    around.
-    """
-    from ct4.lang import codegen
-
-    return codegen.render(source, search_list, settings=settings or None,
-                          file=str(path))
-
-
-def _render_text(source: str, search_list: Sequence[Any],
-                 settings: dict[str, Any]) -> str:
-    """Compiles from the source string and renders.
-
-    From the string, not from the file, and that is the whole point:
-    ``ct4.cache`` builds its key only when the compiler is handed a
-    source, so ``Template(file=path)`` gets a key of None and a miss
-    every single time, which looks exactly like a working cache.
-
-    Cheetah's own in-process cache is switched off here. It would
-    answer the second compilation of a source inside one process
-    before the persistent cache is ever asked, which makes the hit
-    count in the report say nothing about the thing it is there to
-    watch.
-    """
-    from Cheetah.Template import Template
-
-    klass = Template.compile(source=source, compilerSettings=dict(settings),
-                             useCache=False, cacheCompilationResults=False)
-    template = klass(searchList=list(search_list))
-    try:
-        return str(template)
-    finally:
-        template.shutdown()
 
 
 def _search_list(manifest: Manifest, target: Target) -> list[Any]:

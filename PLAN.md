@@ -860,8 +860,8 @@ Opt-in und dateiweise. Ein Skin darf halb umgestellt sein.
 Braucht nur ct4, keine weewx-Änderung:
 
 ```
-ct4 fixture capture --from-weewx > fixtures/seasons-day.json
-ct4 render index.json.tmpl --context fixtures/seasons-day.json
+ct4 fixture capture --weewx ~/src/weewx --out fixtures
+ct4 render index.json.tmpl --context fixtures/index.json
 ```
 
 Skin-Entwicklung ohne laufende Wetterstation, ohne Datenbank, in Millisekunden
@@ -926,8 +926,8 @@ Heute kann niemand ein weewx-Template prüfen, ohne weewx samt Datenbank laufen
 zu lassen. Für einen Agent heisst das: keine Rückmeldung, also raten.
 
 ```
-ct4 fixture capture --from-weewx > fixtures/seasons-day.json
-ct4 render index.json.tmpl --context fixtures/seasons-day.json
+ct4 fixture capture --weewx ~/src/weewx --out fixtures
+ct4 render index.json.tmpl --context fixtures/index.json
 ```
 
 Einmal einen echten Kontext einfrieren, danach läuft die Schleife offline, in
@@ -1797,9 +1797,10 @@ Anschluss an das Upstream-Projekt gewünscht ist.
    erzwingen.
 5. **Wo lebt `ct4-weewx`?** Die Frage „Protokoll oder Paket" ist beantwortet:
    beides. Das Protokoll gehört in ct4, die Anbindung wird das erste Plugin.
-   Offen bleibt, wer es pflegt. Im weewx-Repo folgt es Änderungen an
-   `ValueHelper`, im ct4-Repo folgt es Änderungen am Interface. Empfehlung:
-   anfangs im ct4-Repo, Übergabe an weewx, sobald das Interface steht.
+   Entschieden am 02-Sep-2026: es lebt im ct4-Repo und wird hier gepflegt.
+   Es folgt damit Änderungen am Interface sofort und Änderungen an
+   `ValueHelper` über den Capture-Lauf gegen weewx' eigene Testsuite, der
+   in `tests/docker/weewx_json.py` steht.
 6. **Dürfen Plugins Syntax beitragen?** Die Regel aus Abschnitt 6 sagt: nur mit
    explizitem Eintrag in `ct4.toml`. Die Alternative wäre, Direktiven-Plugins
    ganz zu verbieten und Plugins auf Namespaces, Typen und Sinks zu begrenzen.

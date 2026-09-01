@@ -15,7 +15,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from ct4 import diagnostics, engine
 from ct4.declare import Declaration
@@ -76,6 +76,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     declare = sub.add_parser("declare", help="show the declarations")
     declare.add_argument("--json", action="store_true")
 
+    render = sub.add_parser(
+        "render", help="render one template against a context, without"
+                       " the application")
+    render.add_argument("path", type=Path, help="the template")
+    render.add_argument("--context", type=Path, action="append", default=[],
+                        metavar="FILE",
+                        help="JSON: a recording from ct4 fixture capture,"
+                             " a plain object, or a list of namespaces;"
+                             " may be repeated, first searched first")
+    render.add_argument("--out", type=Path,
+                        help="write the output there instead of stdout")
+    render.add_argument("--encoding", default="utf-8")
+
+    fixture = sub.add_parser(
+        "fixture", help="record what templates read from a running"
+                        " application")
+    fixture_sub = fixture.add_subparsers(dest="fixture_command",
+                                         required=True)
+    capture = fixture_sub.add_parser(
+        "capture", help="run weewx' own template tests and record every"
+                        " page's context, one file each")
+    capture.add_argument("--weewx", type=Path, required=True,
+                         metavar="DIR",
+                         help="a weewx source tree; its src/weewx/tests"
+                              " are run")
+    capture.add_argument("--out", type=Path, default=Path("fixtures"),
+                         metavar="DIR", help="where the recordings go")
+
     sub.add_parser("mcp", help="speak as an MCP server over stdio")
 
     args = parser.parse_args(argv)
@@ -91,6 +119,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _reference(args)
     if args.command == "build":
         return _build(args)
+    if args.command == "render":
+        return _render(args)
+    if args.command == "fixture":
+        return _fixture(args)
     if args.command == "mcp":
         from ct4.mcp import serve
 
@@ -193,6 +225,62 @@ def _build(args: argparse.Namespace) -> int:
     if findings:
         print(diagnostics.as_text(findings))
     return build.exit_code(report)
+
+
+def _render(args: argparse.Namespace) -> int:
+    from ct4 import render, trace
+
+    source = args.path.read_text(encoding="utf-8")
+    search_list: list[Any] = []
+    output_filter = None
+    for context_path in args.context:
+        document = json.loads(context_path.read_text(encoding="utf-8"))
+        search_list.extend(render.search_list_from(document))
+        # The first recording that names a filter decides. A page is
+        # rendered by one application, and that application set it.
+        if output_filter is None:
+            output_filter = render.filter_from(document)
+    try:
+        text = render.render_source(source, search_list, path=args.path,
+                                    output_filter=output_filter)
+    except Exception as error:                              # noqa: BLE001
+        # The type and the message, then where in the template: the
+        # traceback is for the engine's own bugs, and this is not one.
+        print("ct4 render: %s: %s" % (type(error).__name__, error),
+              file=sys.stderr)
+        for remark in trace.notes_of(error):
+            print("  " + remark, file=sys.stderr)
+        return 1
+    data = text.encode(args.encoding)
+    if args.out is not None:
+        args.out.write_bytes(data)
+        return 0
+    sys.stdout.buffer.write(data)
+    sys.stdout.flush()
+    return 0
+
+
+def _fixture(args: argparse.Namespace) -> int:
+    import os
+    import subprocess
+
+    from ct4.fixture import weewx_capture
+
+    tests = args.weewx / "src" / "weewx" / "tests" / "test_templates.py"
+    if not tests.is_file():
+        print("ct4 fixture capture: no weewx test suite at %s" % tests,
+              file=sys.stderr)
+        return 2
+    # weewx' own tests do the run: they bring the database, the skins
+    # and the report engine, and the plugin records beside them. The
+    # output directory travels in the environment, because pytest
+    # owns the command line.
+    environment = dict(os.environ)
+    environment[weewx_capture.OUT_ENV] = str(args.out.resolve())
+    return subprocess.call(
+        [sys.executable, "-m", "pytest", str(tests), "-q",
+         "-p", "ct4.fixture.weewx_capture"],
+        cwd=str(args.weewx), env=environment)
 
 
 def _declare(args: argparse.Namespace) -> int:
