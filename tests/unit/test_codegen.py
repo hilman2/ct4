@@ -1334,6 +1334,13 @@ TARGET_SHAPES = [
     "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
     "#@testdecorator\n  #block b():1234",
     "  #block b():1234",
+    # A PSP body with a docstring in it. ct3 indents every line of the
+    # body, the docstring's included, and that changes no byte of the
+    # output because a docstring is written nowhere. SickGear opens
+    # every page with a helper defined this way.
+    "<%\ndef f(v):\n    \"\"\"\n    doc\n    \"\"\"\n    return v\n%>"
+    "$f('ok')\n",
+    "<% def g(v, default=False): return v or default %>#slurp#\n$g(0)\n",
 ]
 
 
@@ -1523,6 +1530,19 @@ END_TAG_SHAPES = [
     # definitions this way.
     "<!--#def f($x)#-->\nhi $x\n<!--#end def#-->\n$f(1)\n",
     "#block b#\nB\n#end block#\n",
+    # Inside a directive's arguments the hash is the end token whatever
+    # follows it, so "#*" there is the end token and a star of text,
+    # not a comment. SickGear writes the first shape.
+    "A#if 1#*<b>x</b>#end if#B\n",
+    "A#if not $z#*#set $y=True##end if##slurp\nB\n",
+    "#set $a = 1 #* c *#\nB\n",
+    "#echo 1#*x\n",
+    "#* a comment *#\nB\n",
+    # Two hashes behind "#end raw": the tag eats one and a directive
+    # name after the other starts a directive. SickGear switches a
+    # JavaScript literal on a flag that way.
+    "#raw\nq: '#end raw##if $z#a#else#b#end if##raw#',\n#end raw\nZ\n",
+    "#raw\nq#end raw##slurp\nB\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
@@ -1550,7 +1570,7 @@ def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
 
     def context():
         return {"v": "1.0", "i": 7, "unit": {"x": "F"}, "k": "x",
-                "o": Obj()}
+                "o": Obj(), "z": 0}
 
     theirs = rendered(lambda: str(Template.compile(
         source=source, useCache=False,

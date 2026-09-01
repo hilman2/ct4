@@ -517,7 +517,13 @@ class _Lexer:
             match = EOL.search(source, index)
             end = len(source) if match is None else match.end()
             return COMMENT, end, "##"
-        if source.startswith("#*", index):
+        if source.startswith("#*", index) and not inside_directive:
+            # Only outside a directive's arguments. Inside them the hash
+            # is the directive end token whatever follows it, because
+            # _eatRestOfDirectiveTag takes it before anything looks at
+            # the star: "#if 1#*<b>x</b>#end if#" writes "*<b>x</b>",
+            # and SickGear writes exactly that. Read as a comment, the
+            # #end if vanished into it and the #if was never closed.
             return BLOCK_COMMENT, _end_of_block_comment(source, index), "#*"
         name = _directive_name(source, index + 1, self.names)
         if name is None:

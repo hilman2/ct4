@@ -107,6 +107,7 @@ not see.
 from __future__ import annotations
 
 import ast
+import copy
 import re
 import threading
 from dataclasses import dataclass, field
@@ -2410,6 +2411,13 @@ def _psp_statements(text: str) -> list[ast.stmt]:
     there. An ast splice cannot reproduce that, so the body is turned
     away rather than rendered without the spaces.
 
+    A docstring is the one string the indent may change. It is a
+    statement that names nothing and is written nowhere, so eight
+    spaces more inside it change no byte of the output, and SickGear
+    puts one at the head of every helper it defines in a PSP block.
+    Both trees are compared with their docstrings blanked; a string
+    that is bound or written is not a docstring and still refuses.
+
     Raises:
         Unsupported: where the body is not Python, or is Python that
             reads differently once indented.
@@ -2422,10 +2430,29 @@ def _psp_statements(text: str) -> list[ast.stmt]:
         raise Unsupported("cannot read a PSP body: %s" % error) from None
     branch = indented.body[0]
     assert isinstance(branch, ast.If)
-    if [ast.dump(one) for one in parsed.body] \
-            != [ast.dump(one) for one in branch.body]:
+    if [ast.dump(one) for one in _without_docstrings(parsed.body)] \
+            != [ast.dump(one) for one in _without_docstrings(branch.body)]:
         raise Unsupported("a PSP body the indentation would change")
     return parsed.body
+
+
+def _without_docstrings(statements: list[ast.stmt]) -> list[ast.stmt]:
+    """A copy of the statements with every docstring blanked.
+
+    The first statement of a def or class body, where it is a bare
+    string, and the same again in every def and class nested inside.
+    """
+    made = copy.deepcopy(statements)
+    for statement in made:
+        for node in ast.walk(statement):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)) and node.body:
+                head = node.body[0]
+                if isinstance(head, ast.Expr) \
+                        and isinstance(head.value, ast.Constant) \
+                        and isinstance(head.value.value, str):
+                    head.value.value = ""
+    return made
 
 
 def _psp_block(nodes: Sequence[tree.Node], at: int, body: str, source: str,
@@ -2702,10 +2729,21 @@ def _raw_body(source: str, start: int, names: frozenset[str],
 
     eol2 = _find_eol(source, p)
     if source.startswith("##", p):
-        # The tag eats one hash and what is left is a comment, or the
-        # EOL slurp token, or the start of a directive. Refused.
-        raise Unsupported("a ## behind #end raw")
-    if source[p:p + 1] == "#":
+        # The tag eats one hash. Where a directive name follows the
+        # other, that is the start of a directive and the tree already
+        # holds it as one: SickGear writes
+        #
+        #     sortBy: '#end raw##if $desc#by_order#else#$saved#end if##raw#',
+        #
+        # inside a JavaScript literal, and ct3 renders the branch. Where
+        # no directive follows, ct3 writes the second hash and the rest
+        # of the line as text, "# note", and this layer's lexer read
+        # the pair as a comment and dropped it. That shape stays
+        # refused.
+        if _directive_at(source, p + 1, names) is None:
+            raise Unsupported("a ## behind #end raw")
+        p += 1
+    elif source[p:p + 1] == "#":
         if _directive_at(source, p, names) is not None:
             # ct3 eats it as the directive end token and reads the rest
             # of the line as text; this layer's lexer sees a directive

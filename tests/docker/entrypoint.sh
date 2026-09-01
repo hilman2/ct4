@@ -180,7 +180,7 @@ run_sabotage() {
 # under it says which rule to write next.
 run_reach() {
     echo "== How far the code generator gets =="
-    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 3435
+    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 3440
 }
 
 run_corpus() {
