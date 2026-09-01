@@ -142,10 +142,12 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # assignment target could be a subscript: seven more, 22 templates
 # having come into reach. 213 until a hash inside a string stopped
 # ending the directive it stands in: two more. 215 until a directive
-# argument was read in one pass: two more again. The number is raised
-# deliberately and only after checking that the byte-difference count
-# is still zero, which is the line this run actually promises.
-CEILING = 217
+# argument was read in one pass: two more again. 217 until #silent,
+# #stop, bare #return and the colon on an #elif: ten more, 21 templates
+# having come into reach. The number is raised deliberately and only
+# after checking that the byte-difference count is still zero, which is
+# the line this run actually promises.
+CEILING = 227
 
 
 def main() -> int:

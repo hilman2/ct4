@@ -1635,6 +1635,12 @@ RAW_PIECE = "raw"
 # had already written out.
 BARRIER_PIECE = "barrier"
 
+# What ct3's addStop writes, word for word. Not "return" alone: a
+# method called on its own collects into a throwaway response and hands
+# back the text, and #stop has to hand back the same thing the method's
+# own ending does.
+STOP_RETURN = 'return _dummyTrans and trans.response().getvalue() or ""'
+
 # Directives that only announce a branch of the block they sit in.
 BRANCHES = ("else", "elif")
 
@@ -1788,26 +1794,19 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                     # and ct3 swallows it with the line ending.
                     index = _swallow_line(nodes, index, out)
             elif node.name == "stop":
-                # ct3 stops generating here and drops the rest of the
-                # template, the closing directives included. Inside a
-                # block that leaves a header with no body, which does
-                # not compile, so only the top level is taken.
-                if not top:
-                    raise Unsupported("#stop inside a block")
+                # addStop writes one line and nothing else: a return of
+                # what has been collected so far. It is not a signal to
+                # stop generating, and everything after it is generated
+                # as usual and simply never reached. Which is why it
+                # works inside a block too, where dropping the rest
+                # would have left a header with no body.
+                #
                 # Called for the indent it drops, not for the ending it
-                # returns: that ending stands after the point where ct3
-                # stopped generating, so nothing writes it. "L#stop"
-                # renders "L" and not "L" and a line ending.
+                # returns: that ending stands after the return, so
+                # nothing writes it. "L#stop" renders "L" and not "L"
+                # and a line ending.
                 _directive_line_ending(node, source, out)
-                # ct3 does not stop reading here. It writes a return and
-                # carries on generating, so the rest of the template is
-                # still parsed and a syntax error in it still raises.
-                # The pieces go nowhere, being unreachable, but the
-                # imports and attributes are hoisted the same as ct3
-                # hoists them, and a shape this layer cannot read is
-                # still refused instead of rendered.
-                _pieces_of(nodes[index:], source, hoisted, methods, top)
-                return out
+                out.append((STMT_PIECE, _framed_statement(STOP_RETURN)))
             elif node.name == "encoding":
                 # Not through _eat_directive_line: it is the one
                 # directive that leaves the whitespace in front of it
@@ -3954,8 +3953,16 @@ def _simple_directive(node: tree.Node) -> list[ast.stmt]:
     if node.name == "continue":
         return [ast.Continue()]
     if node.name == "silent":
-        # The expression is evaluated and its value dropped.
-        return [ast.Expr(value=_parsed(_argument(node, node)))]
+        # addSilent is addChunk: the argument is written out as a line
+        # of the method and whatever it is, it is. Usually an
+        # expression whose value is dropped, and six skins write an
+        # assignment there instead:
+        #
+        #   #silent $xaggs['aggregate_types'] = $list(filter(...))
+        #
+        # which is a lookup with a subscript assigned to, and perfectly
+        # good Python. Read as an expression it is a syntax error.
+        return [_framed_statement(_argument(node, node))]
     if node.name == "echo":
         # The same two statements a placeholder writes, but without a
         # rawExpr: addFilteredChunk is called here without one, and in
@@ -3979,7 +3986,12 @@ def _simple_directive(node: tree.Node) -> list[ast.stmt]:
         # collected so far is dropped rather than written. That is what
         # ct3 does, and a #def is where it makes sense: the method
         # returns a value instead of its output.
-        return [_framed_statement("return %s" % _argument(node, node))]
+        #
+        # And it may stand alone. ct3 writes a bare "return" for a
+        # bare "#return", which is how two skins end a #def early.
+        return [_framed_statement("return %s" % _without_trailing_colon(
+            _read_expression(_argument_text(node)), "return",
+            allow_empty=True))]
     raise Unsupported("#%s" % node.name)
 
 
@@ -4124,14 +4136,24 @@ def _branch_condition(directive: tree.Node) -> str | None:
     ``#else if x`` is a second spelling of ``#elif x``, and a corpus
     template uses it. Read as an else, its body would run whatever the
     condition said.
+
+    Through the same reader and the same colon rule as every other
+    directive argument. This branch had its own two lines for years and
+    they were missing the colon: ``#elif $mac != "":`` came out as
+    ``if ... != ""::``, which is not Python, and two cobbler templates
+    were refused for it.
     """
-    text = "".join(_token_source(t) for t in directive.tokens[1:]).strip()
-    if directive.name == "elif":
-        return text or None
-    if directive.name != "else":
+    text = _argument_text(directive)
+    if directive.name == "else":
+        match = re.match(r"\s*if\b(.*)", text, re.S)
+        if match is None:
+            return None
+        text = match.group(1)
+    elif directive.name != "elif":
         return None
-    match = re.match(r"if\b(.*)", text, re.S)
-    return match.group(1).strip() if match else None
+    if not text.strip():
+        return None
+    return _without_trailing_colon(_read_expression(text), directive.name)
 
 
 def _branches(node: tree.Node,
@@ -4399,17 +4421,24 @@ def _target_source(token: lex.Token, what: str) -> str:
         raise Unsupported("%s %r" % (what, token.text)) from None
 
 
-def _without_trailing_colon(text: str, name: str) -> str:
+def _without_trailing_colon(text: str, name: str,
+                            allow_empty: bool = False) -> str:
     """An argument without the colon that may already close it.
 
     ``#for $i in range(5):`` is written both ways, and the header this
     layer builds adds a colon of its own. Two of them are a syntax
     error, and 88 corpus cases were refused for it.
+
+    Args:
+        allow_empty (bool): whether a directive with no argument at all
+            is one this layer can write. Only #return is: ct3 writes a
+            bare "return" for a bare "#return", and everything else
+            here needs an expression to put in its header.
     """
     stripped = text.strip()
     if stripped.endswith(":"):
         stripped = stripped[:-1].rstrip()
-    if not stripped:
+    if not stripped and not allow_empty:
         raise Unsupported("#%s without an expression" % name)
     return stripped
 

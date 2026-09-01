@@ -1411,6 +1411,43 @@ def test_a_directive_argument_is_read_in_one_pass(source):
         lambda: codegen.render(source, [dict(context)])) == theirs
 
 
+# Three directives that were refused where ct3 writes something
+# perfectly ordinary. #silent is a line of the method and whatever the
+# argument is, it is: six skins assign to a subscript there. #stop is a
+# return and not a signal to stop generating, so it works inside a
+# block. #return may stand alone.
+DIRECTIVE_SHAPES = [
+    "#silent $d['k'] = 1\ngot $d.k\n",
+    "#silent $d.setdefault('k', 2)\ngot $d.k\n",
+    # Not "$items": the name mapper finds the frame's own items first
+    # and both engines raise NotFound on the attribute.
+    "#silent $rows.append(3)\ngot $rows\n",
+    "#if 1\na\n#stop\n#end if\nb\n",
+    "a\n#stop\nb\n",
+    "#for $i in [1, 2]\na\n#stop\n#end for\nb\n",
+    "#if 0\n#stop\n#end if\nb\n",
+    "L#stop\nb\n",
+    "#def f\nx\n#stop\ny\n#end def\n$f()\n",
+    "#def f\nx\n#return\n#end def\n$f()\n",
+    "a\n#return\nb\n",
+    "#def f\nx\n#return 5\n#end def\n$f()\n",
+    # An #elif with the colon ct3 lets you write.
+    '#if 0\na\n#elif $mac != "":\nb\n#end if\n',
+    "#if 0\na\n#else if 1:\nb\n#end if\n",
+]
+
+
+@pytest.mark.parametrize("source", DIRECTIVE_SHAPES)
+def test_directives_ct3_writes_and_this_layer_refused(source):
+    def context():
+        return {"d": {}, "rows": [1, 2], "mac": "x"}
+
+    theirs = str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[context()]).respond())
+    assert codegen.render(source, [context()]) == theirs
+
+
 def test_an_apostrophe_in_prose_opens_no_string():
     # Python has no one-line string that crosses a line ending, so the
     # apostrophe in "today's" opens nothing. A scan that took it for a
