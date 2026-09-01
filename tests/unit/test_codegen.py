@@ -426,12 +426,18 @@ def test_the_colon_short_form_runs():
     assert out("#if $a: yes\nafter\n", [{"a": 0}]) == "after\n"
 
 
-def test_a_chained_short_form_is_refused():
+def test_a_chained_short_form_chains_only_from_the_next_line():
     # "#if 0: a" then "#else: b" chains in the code ct3 generates,
-    # because its dedent puts the else back at the same level. Read as
-    # a stray directive the body would simply vanish, so it is turned
-    # away instead.
-    assert not codegen.supports("#if 0: a\n#else: b\n")
+    # because its dedent puts the else back at the same level. The
+    # tree opens the short form again for a branch that stands at
+    # column zero on the very next line, and for nothing else: an
+    # indent, a blank line between, or an #end if after the chain are
+    # each a ParseError in ct3 and stay refused here.
+    assert codegen.supports("#if 0: a\n#else: b\n")
+    assert out("#if 0: a\n#else: b\n", [{}]) == "b\n"
+    assert not codegen.supports("#if 1: a\n  #elif 0: b\n")
+    assert not codegen.supports("#if 1: a\n\n#elif 0: b\n")
+    assert not codegen.supports("#if 1: a\n#elif 0: b\n#end if\n")
 
 
 def test_none_writes_nothing():
@@ -1117,7 +1123,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "#cache id='a-b'\nx\n#end cache\n",      # ct3 generates a SyntaxError
     "#cache foo\nx\n#end cache\n",           # ct3 dies at compile time
     "#call int: 10#end call\n",              # a ParseError in ct3
-    "#if 0: a\n#else: b\n",                  # the chained short form
     "#include\n",                            # ct3 writes a syntax error
     "#include source=$a ## why\n",           # the comment keeps the indent
     "#extends Foo Bar\n",                    # ct3 glues that into "FooBar"
@@ -1627,6 +1632,22 @@ END_TAG_SHAPES = [
     '$(v, "x", y=2)\n',
     "$( v , 'x' )\n",
     "${v, 'x'}\n",
+    # Read the way a call's arguments are read: a dollar names a
+    # keyword, "${v, $x=5}" writes x=5, and a bare one is a lookup.
+    "${v, $x=5}\n",
+    "${v, $y}\n",
+    "$(v, $y, k=$z)\n",
+    "${v, x=$z}\n",
+    # A branch on the line after a short-form #if. The short form
+    # closed at its line ending and ct3 chains the branch onto it all
+    # the same, because its compiler tracks indentation and not
+    # blocks. Only from the very next line and only at column zero.
+    "#if 1: a\n#elif 0: b\n",
+    "#if 0: a\n#else: b\n",
+    "#if 0: a\n#elif 1: b\n#else: c\nZ\n",
+    "#if 0: a\n#elif 0: b\n#elif 1: c\nZ\n",
+    "X\n#if 0: a\n#else: b\nY\n",
+    "#if 1: a\r\n#elif 0: b\r\nZ\r\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
@@ -1664,7 +1685,8 @@ def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
                 "o": Obj(), "z": 0,
                 "f": lambda *a, **k: "<%s|%s>" % (a, sorted(k.items())),
                 "calls": Calls(),
-                "takers": [lambda body: "[%s]" % body]}
+                "takers": [lambda body: "[%s]" % body],
+                "y": "Y"}
 
     theirs = rendered(lambda: str(Template.compile(
         source=source, useCache=False,

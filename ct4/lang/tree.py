@@ -195,6 +195,27 @@ class _Builder:
                 index = self._close(stack, index)
                 continue
 
+            reopened = self._short_chain(stack, name, token)
+            if reopened is not None:
+                # "#if 1: a" and, on the very next line, "#elif 0: b".
+                # The short form closed at its line ending, and ct3
+                # chains the branch onto it all the same, because its
+                # compiler tracks indentation and not blocks: the #elif
+                # dedents and indents where the #if left off. So the
+                # block is opened again, the branch goes inside as a
+                # short form of its own, and the block closes once
+                # more at that line's ending. Only from the next line
+                # and only at column zero; an indented or a delayed
+                # branch is a ParseError there.
+                stack.append(reopened)
+                index += 1
+                node = Node(lex.DIRECTIVE, [token], name=name)
+                index = self._take_arguments(node, index,
+                                             self._colon_end(node))
+                reopened.children.append(node)
+                self.short.append((reopened, self._line_end(node)))
+                continue
+
             index += 1
             node = Node(BLOCK if name in self.closing else lex.DIRECTIVE,
                         [token], name=name)
@@ -279,6 +300,41 @@ class _Builder:
             self.short.pop()
             stack.pop()
         return index
+
+    def _short_chain(self, stack: list[Node], name: str,
+                     token: Token) -> Node | None:
+        """The short-form block a branch on the next line continues.
+
+        Returns the ``#if`` to open again, or None where this branch
+        is somebody else's. Four things have to hold, and ct3 holds
+        every one of them: the directive is a branch, the last thing
+        before it is a short-form conditional that closed at exactly
+        this offset, the branch stands at column zero, and the branch
+        is a short form itself. A blank line between, an indent, or a
+        branch with a body of its own on the following lines are each
+        a ParseError in ct3.
+        """
+        if name not in ("elif", "else") or not stack[-1].children:
+            return None
+        previous = stack[-1].children[-1]
+        # Only #if. ct3 chains an #else onto a short #unless as well,
+        # but the layer above writes no branches for #unless at all,
+        # and opening the block again here would only move where the
+        # refusal is raised.
+        if previous.kind != BLOCK or previous.name != "if":
+            return None
+        leaves = list(previous.leaves())
+        if not leaves or leaves[-1].end != token.start:
+            return None
+        if token.start and self.source[token.start - 1] not in "\r\n":
+            return None
+        if any(child.kind == lex.DIRECTIVE and child.name == "end"
+               for child in previous.children):
+            return None
+        probe = Node(lex.DIRECTIVE, [token], name=name)
+        if not self._is_short_form(self._rest_of_line(probe)):
+            return None
+        return previous
 
     def _colon_end(self, node: Node) -> int:
         """Just past the colon that opens a short form's body.

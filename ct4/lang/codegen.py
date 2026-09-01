@@ -921,11 +921,21 @@ class _Reader:
                 # writes _filter(_v, 'x', rawExpr=...). Kept on the
                 # reader for the value's writer to pick up, because
                 # what comes back from here is the value.
-                self.at += 1
-                rest = self.expression(enclosed=True, enclosures=[opener])
-                if rest.endswith(lex.CLOSING[opener]):
-                    rest = rest[:-1]
-                self.filter_args = rest.strip()
+                #
+                # Read the way a call's arguments are read, because
+                # that is what they are: "${v, $x=5}" writes x=5, the
+                # dollar naming a keyword and not a lookup, and "$(v,
+                # $y)" writes the lookup. The closer is the token's last
+                # character, so what stands between is wrapped in a
+                # pair of brackets of its own and handed to that reader.
+                inner = _Reader("(" + self.text[self.at + 1:-1] + ")")
+                inner.name_mapper = self.name_mapper
+                arguments = inner.call_arguments()
+                if not inner.done():
+                    raise Unsupported("filter arguments %r"
+                                      % self.text[self.at:])
+                self.filter_args = arguments[1:-1].strip()
+                self.at = len(self.text)
                 return made
             if self.peek() == lex.CLOSING[opener]:
                 self.at += 1
