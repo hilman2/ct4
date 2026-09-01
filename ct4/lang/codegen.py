@@ -1276,6 +1276,11 @@ def generate(source: str, settings: Any = None,
     _ACTIVE.catcher = Catcher(methods)
     _ACTIVE.markup = state
     _ACTIVE.scopes = []
+    # What "#super" names: the class being generated and the method
+    # the directive stands in, which is the main one until a #def
+    # says otherwise.
+    _ACTIVE.class_name = class_name
+    _ACTIVE.method = shape.main
     try:
         body = _statements(_pieces(root, source, hoisted, methods))
     finally:
@@ -1768,7 +1773,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             if node.name == "errorCatcher":
                 _error_catcher(node, source, hoisted, methods, out)
                 continue
-            if node.name in ("filter", "call", "cache"):
+            if node.name in ("filter", "call", "cache", "capture"):
                 # Several statements around the body rather than one
                 # block, and the tags decide about their lines before
                 # any of them is written.
@@ -1856,6 +1861,21 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 _eat_directive_line(node, source, out)
                 decorators.append(_argument(node, node))
                 swallow_indent = True
+            elif node.name == "super":
+                # addSuper: a filtered write of what the parent's
+                # method of the same name returns,
+                #
+                #     _v = super(Klass, self).m(a,b=3)
+                #
+                # with the arguments spelt the way the #def head spells
+                # them, dollar off and joined by bare commas. No
+                # rawExpr, because addFilteredChunk is called without
+                # one. A template that has no #extends still writes
+                # it and finds Template's method, or does not.
+                _eat_directive_line(node, source, out)
+                for statement in _placeholder_value(
+                        _parsed(_super_call(_argument_text(node)))):
+                    out.append((STMT_PIECE, statement))
             elif node.name == "encoding":
                 # Not through _eat_directive_line: it is the one
                 # directive that leaves the whitespace in front of it
@@ -3255,6 +3275,37 @@ def _parameters(text: str | None) -> str:
     return ", ".join(out) + ", "
 
 
+SUPER_ARGS = re.compile(r"^\s*(?:\((?P<params>.*)\))?\s*$", re.S)
+
+
+def _super_call(text: str) -> str:
+    """``super(Klass, self).m(a,b=3)`` for a ``#super($a, $b=3)``.
+
+    eatSuper reads the arguments with getDefArgList, the same reader a
+    #def head uses, drops a leading self, and addSuper joins what is
+    left with bare commas: the name, or name=default. The class is the
+    one being generated and the method is the one the directive stands
+    in, which is the main one outside any #def.
+    """
+    match = SUPER_ARGS.match(text)
+    if match is None:
+        raise Unsupported("#super %r" % text.strip()[:40])
+    parts = []
+    for part in _split_arguments(match.group("params") or ""):
+        if not part.strip():
+            continue
+        name, _, default = part.partition("=")
+        name = PARAM_DOLLAR.sub("", name.strip())
+        if "$" in default:
+            raise Unsupported("a placeholder in a default value")
+        parts.append(name if not default else "%s=%s" % (name, default))
+    if parts and parts[0] == "self":
+        del parts[0]
+    return "super(%s, self).%s(%s)" % (
+        getattr(_ACTIVE, "class_name", CLASS),
+        getattr(_ACTIVE, "method", MAIN), ",".join(parts))
+
+
 def _split_arguments(text: str) -> list[str]:
     """Splits on the commas that are not inside brackets or strings."""
     parts = []
@@ -3385,6 +3436,8 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     _ACTIVE.scopes = []
     inside = getattr(_ACTIVE, "definition", False)
     _ACTIVE.definition = True
+    enclosing = getattr(_ACTIVE, "method", MAIN)
+    _ACTIVE.method = name
     try:
         pieces = _pieces_of(node.children, source, hoisted, methods,
                             escaped=escaped)
@@ -3404,6 +3457,7 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
             catcher.name = was
         _ACTIVE.scopes = outer
         _ACTIVE.definition = inside
+        _ACTIVE.method = enclosing
     made = _method(name, params, body or [ast.Pass()])
     if decorators and inside:
         # A #def inside a #def is a nested function in ct3 and not a
@@ -3552,6 +3606,46 @@ del _ct4_collector%(id)s
 del _ct4_orig_trans%(id)s
 """
 
+# What startCaptureRegion and endCaptureRegion write, with the ID
+# replaced by the region's own. The body's output is collected the way
+# a cache body's is, and then assigned instead of written.
+CAPTURE_OPEN = """\
+_ct4_orig_trans%(id)s = trans
+_ct4_was_buffering%(id)s = self._CHEETAH__isBuffering
+self._CHEETAH__isBuffering = True
+trans = _ct4_collector%(id)s = DummyTransaction()
+write = _ct4_collector%(id)s.response().write
+"""
+
+CAPTURE_CLOSE = """\
+trans = _ct4_orig_trans%(id)s
+write = trans.response().write
+self._CHEETAH__isBuffering = _ct4_was_buffering%(id)s
+%(target)s = _ct4_collector%(id)s.response().getvalue()
+del _ct4_orig_trans%(id)s
+del _ct4_collector%(id)s
+del _ct4_was_buffering%(id)s
+"""
+
+
+def _capture_region(node: tree.Node, identifier: str,
+                    body: list[ast.stmt]) -> list[ast.stmt]:
+    """``#capture cap``: the body's output bound to a name.
+
+    The target is what eatCapture read with getExpression, so it may
+    be an attribute, ``self._foo``, and ct3 writes it as it stands.
+    ``#capture $x`` is a lookup on the left of an assignment, which
+    ct3 generates and Python refuses; that ends up an Unsupported here
+    by the same road.
+    """
+    target = _without_trailing_colon(
+        _read_expression(_argument_text(node)), "capture")
+    return (ast.parse(CAPTURE_OPEN % {"id": identifier}).body + body
+            + [_framed_statement(line) for line in
+               (CAPTURE_CLOSE % {"id": identifier,
+                                 "target": target}).splitlines()])
+
+
 # A filter is named by a bare identifier, which is what getIdentifier
 # reads. The $-class form is turned away: ct3 reads it with
 # getExpression, which is more than a placeholder, and no corpus case
@@ -3614,11 +3708,12 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
     trailing = ""
     if end is not None:
         trailing = _eat_region_line(end, source, pieces)
-    if short and node.name in ("call", "filter"):
-        # ct3 parses these two short forms with findEOL(gobble=False),
+    if short and node.name in ("call", "filter", "capture"):
+        # ct3 parses these three short forms with findEOL(gobble=False),
         # so the line ending stays outside the region. #cache uses
         # gobble=True and keeps it inside. CallDirective.test1#3,
-        # "#call int: 10\n$aStr", is the case that says so.
+        # "#call int: 10\n$aStr", is the case that says so, and
+        # "#capture cap: hi\n[$cap]" renders "\n[hi]".
         trailing = _take_trailing_eol(pieces)
         covered = source[:children[-1].tokens[-1].end]
         if not trailing and _trailing_eol(covered):
@@ -3633,6 +3728,8 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
         made = _filter_region(node, identifier, body)
     elif node.name == "call":
         made = _call_region(node, identifier, body)
+    elif node.name == "capture":
+        made = _capture_region(node, identifier, body)
     else:
         made = _cache_block(node, identifier, body)
     for statement in made:

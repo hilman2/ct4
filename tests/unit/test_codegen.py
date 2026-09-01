@@ -1543,6 +1543,24 @@ END_TAG_SHAPES = [
     # JavaScript literal on a flag that way.
     "#raw\nq: '#end raw##if $z#a#else#b#end if##raw#',\n#end raw\nZ\n",
     "#raw\nq#end raw##slurp\nB\n",
+    # #super is a filtered write of what the parent's method of the
+    # same name returns, the arguments spelt the way a #def head spells
+    # them. Without an #extends the parent is Template, which has no
+    # such method, and both engines raise the same AttributeError.
+    "#def m\nA\n#super\nB\n#end def\n$m()\n",
+    "#def m($a, $b=2)\n#super($a, $b=3)\n#end def\n$m(1)\n",
+    "top\n#super\nend\n",
+    "#block b\n  #super\n#end block\n",
+    # #capture binds the body's output to a name. The short form leaves
+    # its line ending outside, the block form keeps the indent inside,
+    # and an attribute is a target like any other.
+    "#capture cap1\n$(1234+1) foo#slurp\n#end capture\n$cap1#slurp\n",
+    "#capture cap: hi $v\n[$cap]\n",
+    "A\n#capture cap\n  B $v\n#end capture\nC[$cap]\n",
+    "#def m\n#capture c\ninner\n#end capture\n<$c>\n#end def\n$m()\n",
+    "#capture outer\n#capture inner\ni\n#end capture\no[$inner]\n"
+    "#end capture\n[$outer]\n",
+    "#capture self._foo\nq\n#end capture\n$self._foo\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
