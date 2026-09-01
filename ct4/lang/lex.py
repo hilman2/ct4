@@ -329,8 +329,10 @@ class _Lexer:
                 # It also settles the dollar: ct3 copies a string
                 # literal verbatim and does not look for placeholders
                 # in it, and neither does this.
-                index = _end_of_string(source, index)
-                continue
+                closed = string_span(source, index)
+                if closed is not None:
+                    index = closed
+                    continue
 
             if char == "#":
                 inside = index < directive_until
@@ -394,8 +396,10 @@ class _Lexer:
         while index < line_end:
             char = source[index]
             if char in "\"'":
-                index = _end_of_string(source, index)
-                continue
+                closed = string_span(source, index)
+                if closed is not None:
+                    index = closed
+                    continue
             if char == "#":
                 return index + 1
             index += 1
@@ -705,8 +709,10 @@ def line_that_closes(source: str, start: int) -> int:
     while index < length:
         char = source[index]
         if char in "\"'":
-            index = _end_of_string(source, index)
-            continue
+            closed = string_span(source, index)
+            if closed is not None:
+                index = closed
+                continue
         if char in "([{":
             depth += 1
         elif char in ")]}":
@@ -722,6 +728,29 @@ def line_that_closes(source: str, start: int) -> int:
         index += 1
     return length
 
+
+
+def string_span(source: str, index: int) -> int | None:
+    """Past the string literal starting here, or None if it is not one.
+
+    Python has no one-line string that crosses a line ending, so the
+    apostrophe in ``//today's`` opens nothing. A scan that took it for
+    a quote ran on to the next apostrophe, wherever in the file that
+    was, and a real skin has one on a line that reads
+
+        #raw $todayhihumidex = #end raw '$day...'; //today's high
+
+    Called where a scan has to step over a literal and must not walk
+    off the end of the world when the quote was prose.
+    """
+    quote = source[index]
+    triple = source.startswith(quote * 3, index)
+    end = _end_of_string(source, index)
+    if end >= len(source) and not source.endswith(quote, 0, end):
+        return None
+    if not triple and EOL.search(source, index, end):
+        return None
+    return end
 
 
 def _end_of_string(source: str, index: int) -> int:

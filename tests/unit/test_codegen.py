@@ -1367,6 +1367,27 @@ def test_a_hash_inside_a_string_ends_no_directive(source):
     assert codegen.render(source, [context]) == theirs
 
 
+def test_an_apostrophe_in_prose_opens_no_string():
+    # Python has no one-line string that crosses a line ending, so the
+    # apostrophe in "today's" opens nothing. A scan that took it for a
+    # quote ran to the next apostrophe wherever it was, swallowed
+    # whatever stood between, and emptied the block stack: three real
+    # skins stopped refusing and started crashing.
+    prose = "#raw x = #end raw 'a'; //today's high\n"
+    assert lex.string_span(prose, prose.index("//today") + 7) is None
+    assert lex.string_span("'a' and more", 0) == 3
+    assert lex.string_span("'''a\nb''' and more", 0) == 9
+
+    for source in ("#set $a = 1#it's fine\n$a\n",
+                   "#echo 1#it's fine\n",
+                   "#if 1#it's true#end if\n",
+                   "#set $a = 1\nit's fine $a\nand 'quoted'\n"):
+        theirs = str(Template.compile(
+            source=source, useCache=False,
+            cacheCompilationResults=False)(searchList=[{}]).respond())
+        assert codegen.render(source, [{}]) == theirs
+
+
 def test_a_raw_body_is_never_cut_by_the_argument_scan():
     # The raw body is source the lexer has already measured from end to
     # end. Cutting it at the line ending that closes "#raw" took three

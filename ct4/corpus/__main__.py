@@ -293,6 +293,7 @@ def _reach(paths: list[Path], examples: int, floor: int = 0) -> int:
 
     reasons: Counter[str] = Counter()
     named: dict[str, list[str]] = {}
+    crashed: list[tuple[str, str]] = []
     taken = 0
     for template, case_id in seen.items():
         try:
@@ -301,6 +302,7 @@ def _reach(paths: list[Path], examples: int, floor: int = 0) -> int:
             told = str(refused)
         except Exception as error:                      # noqa: BLE001
             told = "%s: %s" % (type(error).__name__, error)
+            crashed.append((case_id, told))
         else:
             taken += 1
             continue
@@ -316,6 +318,21 @@ def _reach(paths: list[Path], examples: int, floor: int = 0) -> int:
         print("  %4d  %s" % (count, reason))
         for case_id in named[reason][:examples]:
             print("        %s" % case_id)
+    # Reported apart from the refusals and always a failure, however
+    # the numbers above look. The two are the same "not taken" to every
+    # other run in the suite, and a change that turned three refusals
+    # into three crashes once went in green: the accepted set had not
+    # moved, the render comparisons never see a template neither engine
+    # takes, and reach counted them under their exception name in a
+    # histogram nobody reads to the bottom.
+    if crashed:
+        print()
+        print("%d template(s) crash rather than refuse. An unsupported "
+              "template has to raise Unsupported and nothing else, or a "
+              "caller that meant to fall back dies instead." % len(crashed))
+        for case_id, told in crashed[:5]:
+            print("  %s: %s" % (case_id, told[:80]))
+        return 1
     if floor and taken < floor:
         print()
         print("Reach fell: %d taken, %d expected. A rule stopped firing."
