@@ -73,6 +73,44 @@ def corpus_templates() -> list[tuple[str, str]]:
     return [(case_id, template) for template, case_id in seen.items()]
 
 
+def corpus_render_wrong() -> int:
+    """Accepted render cases whose bytes differ from what was recorded.
+
+    The oldest instrument and still the sharpest, because its
+    expectation was recorded from a real run rather than made up by a
+    second engine. It only reaches the cases that have a recorded
+    output, which is why the others exist.
+    """
+    from ct4.corpus import namespaces
+    from ct4.corpus.case import RENDER, decode, read_jsonl
+    from ct4.fixture.filters import resolve
+
+    root = corpus_dir()
+    if root is None:
+        return 0
+    wrong = 0
+    for name in ("ct3-tests.jsonl", "weewx-render.jsonl"):
+        path = root / name
+        if not path.exists():
+            continue
+        for case in read_jsonl(path):
+            if case.kind != RENDER:
+                continue
+            settings = decode(case.settings)
+            try:
+                if not codegen.supports(case.template, settings):
+                    continue
+                made = codegen.render(case.template, namespaces.build(case),
+                                      output_filter=resolve(case.filter),
+                                      settings=settings)
+            except Exception:                                  # noqa: BLE001
+                wrong += 1
+                continue
+            if made != case.expected:
+                wrong += 1
+    return wrong
+
+
 def accepted(source: str) -> bool:
     """Whether the generator claims this template."""
     try:

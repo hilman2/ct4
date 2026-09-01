@@ -10,6 +10,7 @@
 #   bench    render times, ct3 against the fork
 #   large    one large series, time and memory
 #   coverage what the corpus holds, per mechanism
+#   sabotage break the generator on purpose, see who notices
 #   all      everything (default)
 #
 # Work happens in /work, a tmpfs. The repo is mounted read-only under
@@ -124,6 +125,17 @@ run_fuzz() {
     PYTHONPATH=/work python tests/fuzz/perturb.py
 }
 
+# Measures the checking rather than the code: one rule of the generator
+# is broken at a time and the run says which instrument sees it. A
+# sabotage nobody sees is a rule nobody holds. Not in the default run,
+# because it compiles the corpus once per sabotage; read when the
+# checking is being weighed, the way coverage is read when the
+# semantics are.
+run_sabotage() {
+    echo "== Break the generator on purpose, see who notices =="
+    PYTHONPATH=/work python tests/fuzz/sabotage.py
+}
+
 run_corpus() {
     echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -144,6 +156,7 @@ case "$WHAT" in
     bench)   run_bench ;;
     large)   run_large ;;
     coverage) run_coverage ;;
+    sabotage) run_sabotage ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
              run_check; echo; run_evals; echo; run_bench; echo
              run_corpus; echo; run_fuzz ;;

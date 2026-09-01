@@ -1193,6 +1193,34 @@ Stand: `hostile` 0 von 1.032, `perturb` 0 Byte-Unterschiede von 3.581,
 ct3 nach dem Verschieben nicht mehr parst und ct4 rendert — gezählt, gedeckelt,
 und mit einer Begründung im Quelltext.
 
+**Und wer prüft die Prüfer.** `tests/fuzz/sabotage.py` bricht je eine Regel des
+Generators absichtlich und schreibt auf, welches Instrument es merkt. Der Sinn
+ist die Gegenprobe: **eine Sabotage, die niemand sieht, ist eine Regel, die
+niemand hält** — und die nächste Änderung daran landet blind.
+
+| Sabotage | wer sieht es zuerst |
+|---|---|
+| Einzug wird nie entfernt | `corpus` (185) |
+| Einzugsabbruch läuft weiter zurück | `whitespace` (185) |
+| Filter bekommt kein `rawExpr` | `corpus` (1) |
+| Blocktag entscheidet nichts über seine Zeile | `corpus` (77) |
+| `#block`-Kurzform entfernt ihren Einzug | `perturb` (4) |
+| `#slurp` lässt den Rest seiner Zeile stehen | `hostile` (1) |
+| Blockkommentar nur bei Mehrzeiligkeit | `corpus` (4) |
+| Compiler-Einstellungen ignoriert | `corpus` (24) |
+| Präambel-Wächter aus | `hostile` (3) |
+| Branch-Tag entscheidet nichts | `corpus` (1) |
+
+Kein Überlebender, und **jedes Instrument ist bei mindestens einer Regel der
+einzige Zeuge**. Keines ist redundant. Zwei Einträge verdienen einen zweiten
+Blick: `rawExpr` und das Branch-Tag hängen an je *einem* Korpusfall. Das ist
+kein Fehler, aber es ist dünn — verschwindet dieser Fall, hält die Regel nur
+noch der Unit-Test.
+
+Die Unit-Suite steht in der Zeugenliste bewusst hinten. Sie fängt alle zehn,
+weil zu jeder Regel ein Fall geschrieben wurde, als sie gefunden wurde. Ein
+Lauf, der dort aufhört, sagt nichts über die Instrumente.
+
 **Zwei Fehler, die beide Messlatten verfehlt haben.** Der Einzug vor `#else`,
 `#elif`, `#except` und `#finally` wurde nie entfernt: der Korpus schreibt
 keinen Text auf die Zeile eines Branch-Tags, und der Fuzzer setzt sein
