@@ -229,6 +229,53 @@ PREAMBLE = frozenset((
     "__doc__", "__file__", "__loader__", "__name__", "__package__",
     "__spec__"))
 
+# Of those, the ones ct3's preamble binds by importing, with the import
+# that binds them. The same object arrives either way, so a template
+# that reaches one of these is given the import rather than turned
+# away: over the corpus and the harvested skins that is 57 templates,
+# and 56 of them want nothing more exotic than os or time.
+#
+# What is deliberately not here is everything ct3's preamble *computes*
+# rather than imports: the class it generates, templateAPIClass, the
+# module constants carrying the source and its timestamp, and the
+# module dunders. Those genuinely differ between the two modules, and
+# a template reaching one of them still gets a refusal.
+#
+# ct3 writes the builtins import inside a try/except for Python 2. This
+# fork runs from 3.10, where the except branch is dead, so the binding
+# is written the one way it can end.
+PREAMBLE_IMPORTS = {
+    "CacheRegion": "from Cheetah.CacheRegion import CacheRegion",
+    "DummyResponse": "from Cheetah.DummyTransaction import DummyResponse",
+    "DummyResponseFailure":
+        "from Cheetah.DummyTransaction import DummyResponseFailure",
+    "Filters": "import Cheetah.Filters as Filters",
+    "RequiredCheetahVersion":
+        "from Cheetah.Version import MinCompatibleVersion"
+        " as RequiredCheetahVersion",
+    "RequiredCheetahVersionTuple":
+        "from Cheetah.Version import MinCompatibleVersionTuple"
+        " as RequiredCheetahVersionTuple",
+    "TransformerResponse":
+        "from Cheetah.DummyTransaction import TransformerResponse",
+    "TransformerTransaction":
+        "from Cheetah.DummyTransaction import TransformerTransaction",
+    "VFSL": "from Cheetah.NameMapper import valueFromSearchList as VFSL",
+    "builtin": "import builtins as builtin",
+    "exists": "from os.path import exists",
+    "getmtime": "from os.path import getmtime",
+    "os": "import os",
+    "sys": "import sys",
+    "time": "import time",
+    "types": "import types",
+    "unicode": "from Cheetah.compat import unicode",
+    "valueForName": "from Cheetah.NameMapper import valueForName",
+    "valueFromFrameOrSearchList":
+        "from Cheetah.NameMapper import valueFromFrameOrSearchList",
+    "valueFromSearchList":
+        "from Cheetah.NameMapper import valueFromSearchList",
+}
+
 # The other direction, and the shorter one. A name this layer's module
 # carries and ct3's does not resolves here and raises NotFound there,
 # which is the same defect with the engines swapped. Today that is the
@@ -1234,7 +1281,11 @@ def generate(source: str, settings: Any = None,
     made.bases = [_parsed(name) for name in shape.bases]
     made.body = (_class_attributes(class_name, shape.main) + methods
                  + [_method(shape.main, shape.arguments, body)])
-    _refuse_preamble_names(module, source, class_name)
+    # At the very head, in front of the skeleton's own imports and in
+    # front of what the template imported: ct3's preamble stands there
+    # too, and a template that binds one of these names itself never
+    # gets one from here.
+    module.body[:0] = _preamble_names(module, source, class_name)
     _refuse_unbound_bases(module, shape.bases, base_class)
     # After the guards, not before: the plumbing call names the class,
     # and the preamble guard asks who reaches for a name. It is asking
@@ -1363,14 +1414,20 @@ PREAMBLE_RE = re.compile(r"\b(?:%s)\b"
                          % "|".join(sorted(PREAMBLE, key=len, reverse=True)))
 
 
-def _refuse_preamble_names(module: ast.Module, source: str,
-                           class_name: str = CLASS) -> None:
-    """Turns away a template that reaches a module name, either way.
+def _preamble_names(module: ast.Module, source: str,
+                    class_name: str = CLASS) -> list[ast.stmt]:
+    """The imports a template needs from ct3's preamble, or a refusal.
 
     Both namespaces, not just ct3's. A name only ct3's module has
     resolves there and raises here; a name only this one has does the
     reverse, and the reverse is worse, because the template renders
     and the difference shows up as output.
+
+    A name ct3 binds by importing is not a difference between the two
+    modules at all, only a difference between what they happen to have
+    imported. Those are handed back as import statements to put at the
+    head of the module, and PREAMBLE_IMPORTS says which they are. The
+    rest is what ct3's preamble computes, and that still refuses.
 
     Checked on the finished module rather than while it is built,
     because that is the one place where both halves of the question are
@@ -1384,7 +1441,7 @@ def _refuse_preamble_names(module: ast.Module, source: str,
     the case this is here for.
     """
     if not PREAMBLE_RE.search(source) and class_name not in source:
-        return
+        return []
     bound: set[str] = set()
     reached: set[str] = set()
     for node in ast.walk(module):
@@ -1400,11 +1457,15 @@ def _refuse_preamble_names(module: ast.Module, source: str,
             looked_up = node.args[1]
             if isinstance(looked_up, ast.Constant):
                 reached.add(str(looked_up.value).split(".")[0])
-    for name in sorted(reached & PREAMBLE - bound):
-        raise Unsupported("%r is a name ct3's own module carries" % name)
+    wanted = sorted(reached & PREAMBLE - bound)
+    for name in wanted:
+        if name not in PREAMBLE_IMPORTS:
+            raise Unsupported(
+                "%r is a name ct3's own module computes" % name)
     for name in sorted(reached & {class_name} - bound):
         raise Unsupported(
             "%r is a name this module carries and ct3's does not" % name)
+    return [ast.parse(PREAMBLE_IMPORTS[name]).body[0] for name in wanted]
 
 
 def render(source: str, search_list: Sequence[Any],

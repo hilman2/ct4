@@ -135,10 +135,12 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # once a directive has been moved. 188 until the chain rule landed:
 # five more templates, all of them the join_ends shape, where gluing
 # the lines together leaves a placeholder that ct3 will not parse and
-# the generator now reads to its end. The number is raised deliberately
-# and only after checking that the byte-difference count is still zero,
-# which is the line this run actually promises.
-CEILING = 193
+# the generator now reads to its end. 193 until the preamble imports:
+# 66 more templates are taken, and once a directive has been moved
+# twelve of them are shapes ct3 stops parsing. The number is raised
+# deliberately and only after checking that the byte-difference count
+# is still zero, which is the line this run actually promises.
+CEILING = 205
 
 
 def main() -> int:

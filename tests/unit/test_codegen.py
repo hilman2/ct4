@@ -1148,14 +1148,12 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     '<% x = """a\nb""" \nwrite(x) %>',       # ct3 indents into the string
     "#if 1\n<% if 1:%>\n#end if\nx<%end%>",  # the two structures cross
     "<%= $anInt %>",                         # a PSP resolves no names
-    "<% write(str(time)) %>",                # a name only ct3's module has
-    "<% write(str(__file__)) %>",            # ... and the same for the module
+    "<% write(str(__file__)) %>",            # a name only ct3's module has
     "$a[\n1]\n",                             # the lexer stopped early
     "${aFunc(\n\n)}\n",                      # ... and left the "}" over
     "$(a, 'x')\n",                           # arguments for the filter
     "#echo ${b}\n",                          # ParseError inside an expression
     "$str(c'$aStr')\n",                      # a c'...' placeholder string
-    "$time\n",                               # a name only ct3's module has
     "$a[1 +]\n",                             # ct3 does not compile it
 ])
 def test_it_refuses_what_it_cannot_do(source):
@@ -1197,6 +1195,72 @@ def test_the_preamble_lists_what_ct3_actually_carries():
     assert ours - theirs == codegen.OURS_ONLY, (
         "this layer carries names the guard does not list: %s"
         % sorted(ours - theirs - codegen.OURS_ONLY))
+
+
+def test_every_name_the_table_carries_is_one_ct3_carries():
+    assert set(codegen.PREAMBLE_IMPORTS) <= codegen.PREAMBLE
+
+
+# Reaching each name in a way that says something about the object
+# rather than about its address. Four of them are functions the name
+# mapper autocalls on the spot, and what is compared there is the
+# TypeError, message and all.
+PREAMBLE_PROBES = {
+    "CacheRegion": "$CacheRegion.__name__",
+    "DummyResponse": "$DummyResponse.__name__",
+    "DummyResponseFailure": "$DummyResponseFailure.__name__",
+    "Filters": "$Filters.Filter.__name__",
+    "RequiredCheetahVersion": "$str($RequiredCheetahVersion)",
+    "RequiredCheetahVersionTuple": "$str($RequiredCheetahVersionTuple)",
+    "TransformerResponse": "$TransformerResponse.__name__",
+    "TransformerTransaction": "$TransformerTransaction.__name__",
+    "VFSL": "$VFSL.__name__",
+    "builtin": "$builtin.len([1, 2])",
+    "exists": "$exists('.')",
+    "getmtime": "$getmtime.__name__",
+    "os": "$os.path.sep",
+    "sys": "$sys.maxsize",
+    "time": "$time.gmtime(0).tm_year",
+    "types": "$types.ModuleType.__name__",
+    "unicode": "$unicode.__name__",
+    "valueForName": "$valueForName.__name__",
+    "valueFromFrameOrSearchList": "$valueFromFrameOrSearchList.__name__",
+    "valueFromSearchList": "$valueFromSearchList.__name__",
+}
+
+
+def test_every_name_in_the_table_has_a_probe():
+    # A row nobody reaches is a row nobody has checked, and the table
+    # is the one place where this layer claims two modules agree.
+    assert sorted(PREAMBLE_PROBES) == sorted(codegen.PREAMBLE_IMPORTS)
+
+
+@pytest.mark.parametrize("name", sorted(PREAMBLE_PROBES))
+def test_a_preamble_name_resolves_to_what_ct3_resolves_it_to(name):
+    source = PREAMBLE_PROBES[name] + "\n"
+
+    def rendered(work):
+        try:
+            return work()
+        except Exception as error:                      # noqa: BLE001
+            return "!!%s: %s" % (type(error).__name__, error)
+
+    theirs = rendered(lambda: str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[{}]).respond()))
+    assert rendered(lambda: codegen.render(source, [{}])) == theirs
+
+
+def test_a_psp_reaches_a_preamble_name_too():
+    # The guard reads the finished module and a PSP body is part of it,
+    # so a plain Python name in one is reached the same way a
+    # placeholder is. Concatenated: a PSP end token is a percent and a
+    # closer, and %-formatting reads it as a conversion.
+    source = "<% write(str(" + "time)) %>\n"
+    theirs = str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[{}]).respond())
+    assert codegen.render(source, [{}]) == theirs
 
 
 @pytest.mark.parametrize("name", ["__loader__", "_Ct4Template"])
