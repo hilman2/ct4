@@ -1311,7 +1311,48 @@ TARGET_SHAPES = [
     # And an #except with the colon ct3 lets you write.
     "#try\na\n#except NameMapper.NotFound:\nb\n#end try\n",
     "#try\n$missing\n#except\nb\n#end try\n",
+    # #breakpoint ends the parse. Nothing after it is read: not the
+    # text, not a #def, not an #end that would close a block.
+    "a\n#breakpoint\nb $x\n",
+    "a\n  #breakpoint\nb\n",
+    "L#breakpoint\nb\n",
+    "a\n#breakpoint\n#end if\n",
+    "a\n#breakpoint\n#def f\nx\n#end def\n",
+    # A decorator for the #def that follows. eatDecorator keeps the "@"
+    # in the expression it reads, so it comes off again here.
+    "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
+    "#@testdecorator\n#def f()\nX\n#end def\n$f()\n",
+    "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
+    "#@testdecorator\n#def f():1234\n$f\n",
+    "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
+    "#@testdecorator\n#@testdecorator\n#def f()\nX\n#end def\n$f()\n",
+    "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
+    "#@testdecorator\n#block b\nB\n#end block\n",
+    # eatDecorator ends with getWhiteSpace(), and by then it has eaten
+    # its own line ending, so what it takes is the indent of the line
+    # the #def stands on.
+    "#from Cheetah.Tests.SyntaxAndOutput import testdecorator\n"
+    "#@testdecorator\n  #block b():1234",
+    "  #block b():1234",
 ]
+
+
+def test_a_decorator_on_a_nested_def_is_refused():
+    # A #def inside a #def is a nested function in ct3 and not a
+    # method, so the decorator is never taken and stays pending for
+    # whatever method comes next. Applying it here rendered a NameError
+    # where ct3 rendered a page, which one repository's test fixture
+    # found and nothing else in three thousand templates did.
+    source = ("ABC\n#def nested()\n    DEF\n    #@foo\n    #def bar()\n"
+              "        foobar!\n    #end def\n#end def nested\n\n")
+    assert not codegen.supports(source)
+    # The same template without the decorator is one this layer takes,
+    # and takes correctly.
+    plain = source.replace("    #@foo\n", "")
+    theirs = str(Template.compile(
+        source=plain, useCache=False,
+        cacheCompilationResults=False)(searchList=[{}]).respond())
+    assert codegen.render(plain, [{}]) == theirs
 
 
 @pytest.mark.parametrize("source", TARGET_SHAPES)

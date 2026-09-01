@@ -35,17 +35,19 @@ def test_it_takes_what_it_can_and_renders_it(hooked):
 
 
 def test_it_falls_back_on_what_it_refuses(hooked):
-    # #breakpoint is a directive this layer has no code for, and the
-    # caller must not be able to tell. Compared against a live ct3
-    # rather than a written-down string: what ct3 does with #breakpoint
-    # is the question, and a guess at it would test the guess.
-    source = "a\n#breakpoint\nb\n"
+    # #compiler-settings is a directive this layer has no code for, and
+    # the caller must not be able to tell. Compared against a live ct3
+    # rather than a written-down string: what ct3 does with a changed
+    # variable token is the question, and a guess at it would test the
+    # guess.
+    source = ("#compiler-settings\ncheetahVarStartToken = @\n"
+              "#end compiler-settings\n@aStr\n")
     backend.uninstall()
-    want = rendered(source, {})
+    want = rendered(source, {"aStr": "blarg"})
     # A fresh install brings a fresh tally, so the count to read is the
     # one this call hands back and not the fixture's.
     counts = backend.install()
-    assert rendered(source, {}) == want
+    assert rendered(source, {"aStr": "blarg"}) == want
     assert (counts.taken, counts.fell_back) == (0, 1)
 
 

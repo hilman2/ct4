@@ -1155,6 +1155,27 @@ class Generated:
 # none of them, so any that is set has to be refused: two of them
 # change what ct3 renders and 24 corpus cases were coming out wrong
 # behind a skip in the test that was supposed to catch exactly that.
+def _before_breakpoint(source: str) -> str:
+    """The source up to a ``#breakpoint``, which ends the parse.
+
+    "Tells the parser to stop parsing at this point and completely
+    ignore everything else", and eatBreakPoint means it: what follows
+    is not parsed at all. Not the rest of the text, not a #def, not an
+    #end that would have closed an open block, which is why a
+    #breakpoint inside one is a ParseError there and a StructureError
+    here.
+
+    Cut before the tree is built rather than while it is walked,
+    because the tree would otherwise go on to read what ct3 never saw.
+    """
+    if "#breakpoint" not in source:
+        return source
+    for token in lex.tokens(source):
+        if token.kind == lex.DIRECTIVE and token.text == "#breakpoint":
+            return source[:token.start]
+    return source
+
+
 def _refuse_settings(settings: Any) -> None:
     """Turns away a template whose compiler settings change ct3.
 
@@ -1232,7 +1253,7 @@ def generate(source: str, settings: Any = None,
         raise Unsupported("markup mode without a %r line"
                           % markup_mode.MODE_LINE)
     declared = source
-    source = _preprocess(source)
+    source = _before_breakpoint(_preprocess(source))
     shift = _lines_cut(declared, source) if markup else 0
     root = tree.parse(source)
     _refuse_raw_in_short_form(source, root)
@@ -1689,6 +1710,16 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
     stamping: tree.Node | None = None
     mark = 0
     index = 0
+    # "#@testdecorator" waiting for the #def it belongs to. ct3 keeps
+    # the same list on the compiler and hands it to the next method
+    # compiler it spawns; here the definition takes it and empties it.
+    decorators: list[str] = []
+    # eatDecorator ends with getWhiteSpace(), and by then it has eaten
+    # its own line ending, so what that call takes is the indent of the
+    # line the #def stands on. Without it "  #@d\n  #block b: x" keeps
+    # two blanks ct3 ate, which is two bytes and the only thing the
+    # perturbation run found wrong about decorators.
+    swallow_indent = False
     while index < len(nodes):
         node = nodes[index]
         index += 1
@@ -1703,6 +1734,13 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 if text:
                     out.append((TEXT_PIECE, text))
                 continue
+        if swallow_indent:
+            swallow_indent = False
+            if node.kind == lex.TEXT:
+                text = node.text().lstrip(" \t\f")
+                if text:
+                    out.append((TEXT_PIECE, text))
+                continue
         if node.kind == lex.COMMENT:
             _line_comment(node, source, out)
             out.append((BARRIER_PIECE, ""))
@@ -1714,7 +1752,8 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 after: list[str] = []
                 call = _definition(node, source, hoisted, methods,
                                    _definition_line(node, source, out),
-                                   after)
+                                   after, decorators)
+                decorators = []
                 if call is not None:
                     out.append((STMT_PIECE, call))
                 for text in after:
@@ -1807,6 +1846,15 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 # and a line ending.
                 _directive_line_ending(node, source, out)
                 out.append((STMT_PIECE, _framed_statement(STOP_RETURN)))
+            elif node.name == "@":
+                # A decorator for the #def that follows. eatDecorator
+                # writes nothing itself and insists on a #def, #block
+                # or another decorator coming next; here an unclaimed
+                # one is simply dropped, the way an unclaimed one in
+                # ct3 would attach to whatever method came later.
+                _eat_directive_line(node, source, out)
+                decorators.append(_argument(node, node))
+                swallow_indent = True
             elif node.name == "encoding":
                 # Not through _eat_directive_line: it is the one
                 # directive that leaves the whitespace in front of it
@@ -3251,7 +3299,8 @@ def _definition_line(node: tree.Node, source: str,
 def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
                 methods: list[ast.stmt],
                 leading: str = "",
-                escaped: list[str] | None = None) -> ast.stmt | None:
+                escaped: list[str] | None = None,
+                decorators: Sequence[str] = ()) -> ast.stmt | None:
     """``#def`` and ``#block`` as methods on the generated class.
 
     Returns the call a block makes where it stands, or None for a def,
@@ -3296,6 +3345,8 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     # reach into it.
     outer = _scopes()
     _ACTIVE.scopes = []
+    inside = getattr(_ACTIVE, "definition", False)
+    _ACTIVE.definition = True
     try:
         pieces = _pieces_of(node.children, source, hoisted, methods,
                             escaped=escaped)
@@ -3314,7 +3365,23 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
         if catcher is not None:
             catcher.name = was
         _ACTIVE.scopes = outer
-    methods.append(_method(name, params, body or [ast.Pass()]))
+        _ACTIVE.definition = inside
+    made = _method(name, params, body or [ast.Pass()])
+    if decorators and inside:
+        # A #def inside a #def is a nested function in ct3 and not a
+        # method, so _spawnMethodCompiler never runs for it and never
+        # takes the decorators: they stay pending for whatever method
+        # comes next. Reproducing where they land is more than this is
+        # worth, and one test fixture in one repository writes it.
+        raise Unsupported("a decorator on a #%s inside a #def" % node.name)
+    if decorators:
+        # "#@testdecorator" before a #def. eatDecorator keeps the "@"
+        # in the expression it reads, so it is taken off here and the
+        # rest is parsed as one.
+        assert isinstance(made, ast.FunctionDef)
+        made.decorator_list = [_parsed(one.lstrip("@").strip())
+                               for one in decorators]
+    methods.append(made)
     if trailing and escaped is not None \
             and not _line_is_clear(source, node.tokens[0].start):
         # The ending is not part of the method, and it survives where

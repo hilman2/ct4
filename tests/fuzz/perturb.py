@@ -145,10 +145,12 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # argument was read in one pass: two more again. 217 until #silent,
 # #stop, bare #return and the colon on an #elif: ten more, 21 templates
 # having come into reach. 227 until #set global and the reach of an
-# #end raw: one more. The number is raised deliberately and only after
-# checking that the byte-difference count is still zero, which is the
-# line this run actually promises.
-CEILING = 228
+# #end raw: one more. 228 until #breakpoint and #@: six more, and both
+# of those take templates the run had never got as far as rendering.
+# The number is raised deliberately and only after checking that the
+# byte-difference count is still zero, which is the line this run
+# actually promises.
+CEILING = 234
 
 
 def main() -> int:

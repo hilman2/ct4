@@ -31,7 +31,7 @@ CORPUS="/repo/corpus/ct3-tests.jsonl /repo/corpus/skins.jsonl"
 CORPUS="$CORPUS /repo/corpus/weewx-render.jsonl"
 # Other people's templates, source only and no recorded output: they
 # are for the differential runs, which make their own expectation by
-# rendering twice. skins-render is 175 weewx skins, apps-render is 85
+# rendering twice. skins-render is 175 weewx skins, apps-render is 116
 # repositories that use Cheetah for something else entirely.
 HARVESTED="/repo/corpus/skins-render.jsonl /repo/corpus/apps-render.jsonl"
 WHAT="${1:-all}"
@@ -180,7 +180,7 @@ run_sabotage() {
 # under it says which rule to write next.
 run_reach() {
     echo "== How far the code generator gets =="
-    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 2985
+    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 3435
 }
 
 run_corpus() {
