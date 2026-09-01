@@ -5,6 +5,7 @@
 #   unit     tests of the tool
 #   cheetah  the test suite that ct3 brings along
 #   evals    the diagnostics tasks
+#   reach    how far the code generator gets, and what stops it
 #   corpus   the test bench
 #   fuzz     built templates, both engines, byte for byte
 #   bench    render times, ct3 against the fork
@@ -163,6 +164,17 @@ run_sabotage() {
     PYTHONPATH=/work python tests/fuzz/sabotage.py
 }
 
+# How far the generator gets, with a floor under it. This is the one
+# number nothing else in the suite reports: a template the generator
+# stops taking still renders, because the caller falls back to ct3, so
+# every other run goes on saying what it said before. The histogram
+# under it says which rule to write next.
+run_reach() {
+    echo "== How far the code generator gets =="
+    python -m ct4.corpus --impl fork reach $CORPUS \
+        /repo/corpus/skins-render.jsonl --floor 1739
+}
+
 run_corpus() {
     echo "== Reference against the checked-in corpus =="
     python -m ct4.corpus --impl installed check $CORPUS
@@ -179,13 +191,15 @@ case "$WHAT" in
     corpus)  run_corpus ;;
     fuzz)    run_fuzz ;;
     check)   run_check ;;
+    reach)   run_reach ;;
     evals)   run_evals ;;
     bench)   run_bench ;;
     large)   run_large ;;
     coverage) run_coverage ;;
     sabotage) run_sabotage ;;
     all)     run_lint; echo; run_unit; echo; run_cheetah; echo
-             run_check; echo; run_evals; echo; run_bench; echo
+             run_check; echo; run_reach; echo; run_evals; echo
+             run_bench; echo
              run_corpus; echo; run_fuzz ;;
     *)       echo "Unknown: $WHAT" >&2; exit 2 ;;
 esac

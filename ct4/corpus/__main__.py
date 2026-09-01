@@ -11,7 +11,9 @@ at the entry point, and not deeper inside the program.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 from ct4 import impl
@@ -73,6 +75,17 @@ def main(argv: list[str] | None = None) -> int:
         "--expect", type=int, default=0,
         help="how many findings are expected; more are an error")
 
+    reach_cmd = sub.add_parser(
+        "reach",
+        help="how far the code generator gets, and what stops it")
+    reach_cmd.add_argument("paths", type=Path, nargs="+")
+    reach_cmd.add_argument(
+        "--examples", type=int, default=0,
+        help="name this many templates per reason")
+    reach_cmd.add_argument(
+        "--floor", type=int, default=0,
+        help="fail if fewer than this many templates are taken")
+
     check_cmd = sub.add_parser(
         "check", help="check the corpus against the implementation")
     check_cmd.add_argument("paths", type=Path, nargs="+")
@@ -113,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         return _harvest_fixtures(args.root, args.name, args.out)
     if args.command == "check-templates":
         return _check_templates(args.paths, args.expect)
+    if args.command == "reach":
+        return _reach(args.paths, args.examples, args.floor)
     if args.command == "coverage":
         return _coverage(args.paths, args.jobs, args.impl)
     return _check(args.paths, args.show, args.jobs,
@@ -237,6 +252,74 @@ def _check_templates(paths: list[Path], expect: int) -> int:
         print("\nFewer findings than expected. Either a declaration "
               "stopped matching or a template was fixed. Both need the "
               "expected number here changed on purpose.")
+        return 1
+    return 0
+
+
+# A refusal message carries the offending text, so counting the
+# messages as they stand counts one group per template. What is wanted
+# is one group per rule, and the text is what tells them apart.
+REFUSAL_DETAIL = re.compile(r"'[^']*'|\"[^\"]*\"|\b\d+\b")
+
+
+def _reach(paths: list[Path], examples: int, floor: int = 0) -> int:
+    """How many templates the generator takes, and what stops the rest.
+
+    The number to watch while the generator is being built. Reach is
+    the whole point of the layer, a refusal is what costs it, and the
+    histogram says which rule to write next rather than which template
+    to look at.
+
+    ``floor`` makes it a check as well. Reach that falls is a rule that
+    stopped firing, and it does not announce itself anywhere else: a
+    template that used to be taken and is now refused still renders,
+    because the caller falls back, and every other run in the suite
+    goes on saying the same thing it said before.
+    """
+    import warnings
+
+    from ct4.corpus.case import read_jsonl
+    from ct4.lang import codegen, tree
+
+    # A template that writes a regular expression puts an invalid
+    # escape in a string constant, and compiling the generated module
+    # says so once per template. That is the template's business.
+    warnings.filterwarnings("ignore", category=SyntaxWarning)
+
+    seen: dict[str, str] = {}
+    for path in paths:
+        for case in read_jsonl(path):
+            seen.setdefault(case.template, case.id)
+
+    reasons: Counter[str] = Counter()
+    named: dict[str, list[str]] = {}
+    taken = 0
+    for template, case_id in seen.items():
+        try:
+            codegen.generate(template)
+        except (codegen.Unsupported, tree.StructureError) as refused:
+            told = str(refused)
+        except Exception as error:                      # noqa: BLE001
+            told = "%s: %s" % (type(error).__name__, error)
+        else:
+            taken += 1
+            continue
+        key = REFUSAL_DETAIL.sub("...", told)[:64]
+        reasons[key] += 1
+        named.setdefault(key, []).append(case_id)
+
+    total = len(seen)
+    print("%d of %d templates taken (%.1f %%)"
+          % (taken, total, 100.0 * taken / total if total else 0.0))
+    print()
+    for reason, count in reasons.most_common():
+        print("  %4d  %s" % (count, reason))
+        for case_id in named[reason][:examples]:
+            print("        %s" % case_id)
+    if floor and taken < floor:
+        print()
+        print("Reach fell: %d taken, %d expected. A rule stopped firing."
+              % (taken, floor))
         return 1
     return 0
 
