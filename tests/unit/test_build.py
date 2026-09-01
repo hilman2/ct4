@@ -185,6 +185,18 @@ def test_a_rewrite_inside_one_clock_tick_is_still_a_change(tmp_path):
     assert "<head lang=de>" in text
 
 
+def test_a_render_error_names_the_template_line(tmp_path):
+    # A NotFound at render time carries no line of its own. The class
+    # ct3 hands back hangs the template's line on it, and the finding
+    # reads it from there.
+    source = "line one\n#for $i in [1]\n  $missing\n#end for\n"
+    manifest = skin(tmp_path, template=source)
+    report = run(manifest)
+    finding = report["findings"][0]
+    assert finding["code"] == "CT4301"
+    assert (finding["line"], finding["column"]) == (3, 3)
+
+
 def test_an_include_that_appears_later_renders_the_parent(tmp_path):
     # belchertown's optional hooks: 69 of 348 constant include names in
     # the corpus have no file. The absent name is recorded, and the

@@ -39,6 +39,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import socket
 import time
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-from ct4 import cache, depend, diagnostics, write
+from ct4 import cache, depend, diagnostics, trace, write
 from ct4.markup import mode as markup_mode
 
 # Bump on a change of the manifest format. A manifest from the future
@@ -1224,10 +1225,11 @@ def _public(result: dict[str, Any]) -> dict[str, Any]:
 def _where(exc: BaseException) -> tuple[int, int]:
     """Line and column of an error, where the raiser names them.
 
-    Three spellings, because three layers raise here and none of them
+    Four spellings, because four layers raise here and none of them
     was written for this: Cheetah's parse errors carry ``lineCol`` or
-    ``lineno``/``col``, and ct4's own structural refusals carry
-    ``line``/``column``.
+    ``lineno``/``col``, ct4's own structural refusals carry
+    ``line``/``column``, and an error at render time carries the
+    remarks ``ct4.trace`` hung on it, one per generated frame.
     """
     place = getattr(exc, "lineCol", None)
     if isinstance(place, tuple) and len(place) == 2:
@@ -1236,7 +1238,20 @@ def _where(exc: BaseException) -> tuple[int, int]:
         getattr(exc, "line", 0))
     column = _number(getattr(exc, "col", 0)) or _number(
         getattr(exc, "column", 0))
-    return (line, column)
+    if line:
+        return (line, column)
+    # The last remark, not the first: an #include annotates before the
+    # template that includes it does, and the template is the target
+    # this finding is about. Within the template, the last frame is
+    # the innermost, which is the placeholder that raised.
+    for remark in reversed(trace.notes_of(exc)):
+        found = TEMPLATE_PLACE.search(remark)
+        if found is not None:
+            return (int(found.group(1)), int(found.group(2)))
+    return (0, 0)
+
+
+TEMPLATE_PLACE = re.compile(r"line (\d+), column (\d+)$")
 
 
 def _number(value: Any) -> int:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import traceback
 
 import pytest
@@ -9,6 +10,7 @@ from Cheetah.Template import Template
 
 from ct4 import cache, trace
 from ct4.jsonmode import compile_template
+from ct4.lang import backend
 
 
 def compile_source(source):
@@ -113,6 +115,65 @@ def test_nothing_is_appended_without_an_error():
     with trace.mapped(code, "x.tmpl"):
         output = cls(searchList=[{"name": "World"}]).respond()
     assert output == "Hello World\n"
+
+
+@contextlib.contextmanager
+def engine(which):
+    """The compiler ct3 brought, or the generator standing in for it."""
+    if which == "generator":
+        backend.install()
+    try:
+        yield
+    finally:
+        if which == "generator":
+            backend.uninstall()
+
+
+@pytest.mark.parametrize("which", ["ct3", "generator"])
+def test_a_render_error_names_its_line_by_itself(which):
+    # Nobody wraps anything here, which is the point: weewx calls
+    # respond() and knows nothing of ct4.trace. The class that
+    # Template.compile hands back carries the mapping itself.
+    with engine(which):
+        cls, _ = compile_source("Line one\nLine two\n$obj.broken()\n")
+    with pytest.raises(ValueError) as error:
+        cls(searchList=[{"obj": Failing()}]).respond()
+    assert trace.notes_of(error.value) == [
+        "template: <template>, line 3, column 1"]
+    text = "".join(traceback.format_exception(error.value))
+    assert "line 3, column 1" in text
+
+    with pytest.raises(ValueError) as error:
+        str(cls(searchList=[{"obj": Failing()}]))
+    assert trace.notes_of(error.value) == [
+        "template: <template>, line 3, column 1"]
+
+
+@pytest.mark.parametrize("which", ["ct3", "generator"])
+def test_an_include_names_its_own_line_before_the_includer(
+        which, tmp_path, monkeypatch):
+    # An #include is compiled at render time into a module of its own,
+    # and each module maps only its own frames. Read against the
+    # includer's map, the include's frames would name lines of the
+    # wrong file.
+    (tmp_path / "inner.inc").write_text("inner one\n$obj.broken()\n",
+                                        encoding="utf-8")
+    (tmp_path / "outer.tmpl").write_text(
+        "outer one\nouter two\n#include 'inner.inc'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with engine(which):
+        with pytest.raises(ValueError) as error:
+            Template(file="outer.tmpl",
+                     searchList=[{"obj": Failing()}]).respond()
+    notes = trace.notes_of(error.value)
+    assert notes[0].endswith("inner.inc, line 2, column 1")
+    # ct3's compiler writes an origin behind a placeholder and behind
+    # nothing else, so in its module the #include line has none and
+    # the includer stays unnamed. The generator records one on every
+    # statement, and that is the one place its traceback says more.
+    if which == "generator":
+        assert notes[1].endswith("outer.tmpl, line 3, column 1")
+    assert len(notes) == (2 if which == "generator" else 1), notes
 
 
 def test_the_mapping_takes_the_last_origin_before_it():

@@ -1627,11 +1627,17 @@ def render(source: str, search_list: Sequence[Any],
             reaches nothing but the message a refused placeholder
             raises in markup mode.
     """
-    klass = generate(source, settings, file=file).compile()
+    from ct4 import trace
+
+    made = generate(source, settings, file=file)
+    klass = made.compile()
     keywords = {"filter": output_filter} if output_filter else {}
     template = klass(searchList=list(search_list), **keywords)
     try:
-        text: str = str(template.respond())
+        # Only this module's frames: an #include is compiled by ct3 at
+        # render time into a module of its own, which maps itself.
+        with trace.mapped(made.code, file or "<template>", GENERATED_FILE):
+            text: str = str(template.respond())
     finally:
         template.shutdown()
     return text

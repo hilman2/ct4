@@ -13,6 +13,7 @@ import logging
 import os.path
 import time                       # used in the cache refresh code
 from random import randrange
+import functools
 import inspect
 import io
 try:
@@ -134,6 +135,50 @@ def updateLinecache(filename, src):
 
 class CompileCacheItem(object):
     pass
+
+
+def _annotateTracebacks(templateClass, generatedModuleCode, moduleFile,
+                        templateFile):
+    """Wraps the main method so a render error names its template line.
+
+    The generated module carries, behind every statement, the line and
+    column of the template it came from, and ct4.trace reads that back
+    into a remark on the exception. Only frames of this module are
+    mapped: an #include is a module of its own and wraps its own
+    method, so an error out of it carries the include's line first and
+    the including template's line after it.
+
+    Nothing is replaced. The traceback keeps pointing at the generated
+    module, and the template's line is added beside it. Precompiled
+    modules imported from disk never pass through here and keep the
+    traceback they had.
+    """
+    attribute = '_mainCheetahMethod_for_' + templateClass.__name__
+    name = getattr(templateClass, attribute, None)
+    if not name or name not in vars(templateClass):
+        return
+    method = vars(templateClass)[name]
+    shown = templateFile or '<template>'
+
+    @functools.wraps(method)
+    def mapped(self, *args, **kws):
+        try:
+            return method(self, *args, **kws)
+        except Exception as error:
+            _noteTemplateLines(error, generatedModuleCode, shown, moduleFile)
+            raise
+
+    setattr(templateClass, name, mapped)
+
+
+def _noteTemplateLines(error, generatedModuleCode, templateFile, moduleFile):
+    # Imported here and not at the top: the engine must import without
+    # the tooling beside it, and this is the one path that needs it.
+    try:
+        from ct4 import trace
+    except ImportError:
+        return
+    trace.annotate(error, generatedModuleCode, templateFile, moduleFile)
 
 
 class TemplatePreprocessor(object):
@@ -840,6 +885,8 @@ class Template(Servlet):
                 klass._CHEETAH_compileLock.release()
 
             templateClass = getattr(mod, className)
+            _annotateTracebacks(templateClass, generatedModuleCode, __file__,
+                                file if isinstance(file, str) else None)
 
             if (cacheCompilationResults and cacheHash
                     and cacheHash not in klass._CHEETAH_compileCache):

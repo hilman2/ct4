@@ -25,8 +25,9 @@ from typing import Any, Iterator, Literal
 ORIGIN = re.compile(r"(?:on|from) line (\d+), col (\d+)")
 LINECOL = re.compile(r"lineCol=\((\d+),\s*(\d+)\)")
 
-# How a generated module is recognized.
-GENERATED = "cheetah"
+# How a generated module is recognized: ct3 names its modules after
+# itself, and codegen.render compiles under the second name.
+GENERATED = ("cheetah", "<ct4>")
 
 
 def line_map(code: str) -> dict[int, tuple[int, int]]:
@@ -83,16 +84,31 @@ def frames(error: BaseException) -> Iterator[TracebackType]:
 
 
 def is_generated(name: str) -> bool:
-    return GENERATED in name.lower()
+    return any(mark in name.lower() for mark in GENERATED)
 
 
 def describe(error: BaseException, code: str,
-             file: str = "<template>") -> list[str]:
-    """The places in the template the error ran through."""
+             file: str = "<template>",
+             module_file: str | None = None) -> list[str]:
+    """The places in the template the error ran through.
+
+    Args:
+        module_file (str|None): The ``__file__`` of the generated
+            module ``code`` is the text of. Given, only frames from
+            that module are mapped; an #include is a module of its
+            own with a map of its own, and its frames read against
+            this map would name the wrong line. Without it every
+            generated frame is taken, for a caller that knows there
+            is only one.
+    """
     mapping = line_map(code)
     out = []
     for frame in frames(error):
-        if not is_generated(frame.tb_frame.f_code.co_filename):
+        name = frame.tb_frame.f_code.co_filename
+        if module_file is not None:
+            if name != module_file:
+                continue
+        elif not is_generated(name):
             continue
         where = position_of(mapping, frame.tb_lineno)
         if where is None:
@@ -102,15 +118,24 @@ def describe(error: BaseException, code: str,
 
 
 def annotate(error: BaseException, code: str,
-             file: str = "<template>") -> BaseException:
+             file: str = "<template>",
+             module_file: str | None = None) -> BaseException:
     """Hangs the places in the template on the exception.
 
     Through ``add_note``, so that they come along when the traceback is
     printed, without anything being replaced.
     """
-    for line in describe(error, code, file):
+    for line in describe(error, code, file, module_file):
         note(error, "template: %s" % line)
     return error
+
+
+def notes_of(error: BaseException) -> list[str]:
+    """The remarks hung on an exception, on any Python this runs on."""
+    found = getattr(error, "__notes__", None)
+    if found is None:
+        found = getattr(error, "ct4_notes", None)
+    return list(found) if found else []
 
 
 class mapped:
@@ -121,9 +146,11 @@ class mapped:
     cost every run.
     """
 
-    def __init__(self, code: Any, file: str = "<template>"):
+    def __init__(self, code: Any, file: str = "<template>",
+                 module_file: str | None = None):
         self.code = code
         self.file = file
+        self.module_file = module_file
 
     def __enter__(self) -> "mapped":
         return self
@@ -133,7 +160,7 @@ class mapped:
         if error is not None:
             code = self.code() if callable(self.code) else self.code
             if code:
-                annotate(error, code, self.file)
+                annotate(error, code, self.file, self.module_file)
         return False
 
 
