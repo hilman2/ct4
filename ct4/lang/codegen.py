@@ -3878,8 +3878,13 @@ def _try_block(node: tree.Node, source: str,
         if directive.name == "finally":
             statement.finalbody = made
             continue
-        caught = "".join(_token_source(t)
-                         for t in directive.tokens[1:]).strip()
+        # Through the same reader and the same colon rule as every
+        # other directive argument. Sick-Beard writes
+        # "#except NameMapper.NotFound:" and the colon it wrote was
+        # kept, which made two of them.
+        caught = _without_trailing_colon(
+            _read_expression(_argument_text(directive)), "except",
+            allow_empty=True)
         header = _framed("try:\n    pass\nexcept%s:"
                          % (" " + caught if caught else ""))
         assert isinstance(header, ast.Try)
@@ -4110,12 +4115,12 @@ def _for_block(node: tree.Node, source: str,
     ct3 writes: ``for r in VFFSL(SL,"rows",True):``. Only the iterable
     is looked up.
     """
-    header = _for_argument(node)
-    statement = _framed("for %s:" % header)
+    header = _for_header(node)
+    statement = _framed(header + ":")
     assert isinstance(statement, ast.For)
     # The targets are bound for the length of the body and no longer,
     # which is where ct3's indent and dedent put them.
-    _scopes().append(loop_targets("for %s" % header))
+    _scopes().append(loop_targets(header))
     try:
         statement.body = _body(node, source, hoisted, methods, leading,
                                escaped)
@@ -4425,38 +4430,23 @@ def _ternary_block(node: tree.Node) -> ast.stmt:
     return statement
 
 
-def _for_argument(node: tree.Node) -> str:
-    """``$r in $rows`` as ``r in VFFSL(...)``.
+def _for_header(node: tree.Node) -> str:
+    """``#for $r in $rows`` as ``for r in VFFSL(...)``.
 
-    Before the ``in`` the placeholders are targets and keep only their
-    name; after it they are looked up.
+    The word "for" is put back in front, because ct3 never took it out:
+    eatSimpleIndentingDirective does not advance past the name for
+    "for", so getExpression reads the whole header and its own rule for
+    the names between a "for" and its "in" does the rest. Only the
+    iterable is looked up.
+
+    That the reader does it and not a walk over the tokens is what
+    lets the iterable hold a comprehension of its own, which is how
+    Sick-Beard lists its providers:
+
+        #for $cur_provider in $providers + [$p for $p in $more if $p.id]
     """
-    parts = []
-    target = True
-    for token in node.tokens[1:]:
-        if target and token.kind == lex.PLACEHOLDER:
-            parts.append(_target_source(token, "loop target"))
-            continue
-        parts.append(_token_source(token))
-        if target and token.kind == lex.TEXT and \
-                re.search(r"\bin\b", token.text):
-            target = False
-    return _without_trailing_colon("".join(parts), "for")
-
-
-def _target_source(token: lex.Token, what: str) -> str:
-    """A placeholder standing where something is assigned to.
-
-    ct3 reads a target with useNameMapper off, and that reaches all the
-    way in: "#set $d[$k] = 1" is "d[k] = 1", the subscript written as
-    plainly as the name it hangs off. A target it cannot write, "#set
-    $f(1) = 2" for one, comes back as Python that will not parse, and
-    the caller says so.
-    """
-    try:
-        return placeholder_source(token.text, name_mapper=False)
-    except Unsupported:
-        raise Unsupported("%s %r" % (what, token.text)) from None
+    return _without_trailing_colon(
+        _read_expression("for" + _argument_text(node)), "for")
 
 
 def _without_trailing_colon(text: str, name: str,

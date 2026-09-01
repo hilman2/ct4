@@ -1303,6 +1303,14 @@ TARGET_SHAPES = [
     "#set $lst = [1, 2, 3]\n#set $lst[0:2] = [9]\ngot $lst\n",
     "#set $a = 1\ngot $a\n",
     "#for $r in $rows\n$r\n#end for\n",
+    "#for $r in $rows:\n$r\n#end for\n",
+    "#for $a, $b in [(1, 2)]\n$a$b\n#end for\n",
+    # A comprehension in the iterable, which needs the header read in
+    # one pass. Sick-Beard lists its providers that way.
+    "#for $p in $rows + [$q for $q in $rows]\n$p\n#end for\n",
+    # And an #except with the colon ct3 lets you write.
+    "#try\na\n#except NameMapper.NotFound:\nb\n#end try\n",
+    "#try\n$missing\n#except\nb\n#end try\n",
 ]
 
 
