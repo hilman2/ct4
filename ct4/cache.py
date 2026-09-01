@@ -23,6 +23,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ct4 import write
+
 # Bump on a change of the format or of how the key is built. Old entries
 # are then not read at all instead of read wrongly.
 FORMAT = 1
@@ -73,13 +75,12 @@ class Store:
         return code
 
     def put(self, key: str, code: str) -> None:
-        path = self.path_for(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Write beside it first, then rename. Two processes compiling
-        # the same template should not leave half a file behind.
-        temporary = path.with_suffix(".%d.tmp" % os.getpid())
-        temporary.write_text(code, encoding="utf-8", newline="\n")
-        os.replace(temporary, path)
+        # Write beside it first, then replace. Two processes compiling
+        # the same template should not leave half a file behind. No
+        # content comparison here: an entry that exists is by
+        # construction the right bytes, because the key is a digest of
+        # everything the code depends on.
+        write.atomic_write(self.path_for(key), code.encode("utf-8"))
 
     def clear(self) -> None:
         import shutil

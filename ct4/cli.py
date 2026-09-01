@@ -52,6 +52,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         "reference", help="directives and settings, machine readable")
     reference.add_argument("--json", action="store_true")
 
+    build = sub.add_parser("build", help="render a manifest of templates")
+    build.add_argument("manifest", type=Path, help="the JSON manifest")
+    build.add_argument("-j", "--jobs", type=int, default=1,
+                       help="worker processes; 1 renders inline, so that"
+                            " a traceback stays readable in cron's mail")
+    build.add_argument("--format", default="text",
+                       choices=("text", "json"))
+    build.add_argument("--report", type=Path,
+                       help="write the report document there as well")
+    build.add_argument("--only", metavar="GLOB", action="append", default=[],
+                       help="output name or pattern; may be repeated")
+    build.add_argument("--force", action="store_true",
+                       help="render everything; still writes only what"
+                            " differs")
+    build.add_argument("--dry-run", action="store_true",
+                       help="render and compare, write nothing")
+    build.add_argument("--no-lock", dest="lock", action="store_false")
+    build.add_argument("--lock-timeout", type=float, default=3600.0,
+                       metavar="SECONDS",
+                       help="age at which a lock counts as left behind")
+
     declare = sub.add_parser("declare", help="show the declarations")
     declare.add_argument("--json", action="store_true")
 
@@ -68,6 +89,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _context(args)
     if args.command == "reference":
         return _reference(args)
+    if args.command == "build":
+        return _build(args)
     if args.command == "mcp":
         from ct4.mcp import serve
 
@@ -131,6 +154,45 @@ def _reference(args: argparse.Namespace) -> int:
     for entry in data["settings"]:
         print("  %-38s %r" % (entry["name"], entry["default"]))
     return 0
+
+
+def _build(args: argparse.Namespace) -> int:
+    from ct4 import build, write
+
+    # Before the build, because it moves into the manifest's base for
+    # the render and a relative --report would land there instead.
+    report_path = args.report.resolve() if args.report else None
+    try:
+        manifest = build.load_manifest(args.manifest)
+    except build.ManifestError as error:
+        report = build.unusable(args.manifest, str(error))
+    else:
+        report = build.build(manifest, jobs=args.jobs, force=args.force,
+                             dry_run=args.dry_run, only=args.only,
+                             lock=args.lock,
+                             lock_timeout=args.lock_timeout)
+    document = json.dumps(report, ensure_ascii=False, indent=1)
+    # Always, whatever --format says: a timer wants a quiet stdout and
+    # a file it can read afterwards.
+    if report_path is not None:
+        try:
+            write.atomic_write(report_path, (document + "\n").encode("utf-8"))
+        except OSError as error:
+            # The report is the documented way a timer reads the run,
+            # so failing to write it is worth an exit code and a line
+            # on stderr, not a traceback that a cron mail turns into
+            # noise nobody reads twice.
+            print("ct4 build: cannot write the report to %s: %s"
+                  % (report_path, error), file=sys.stderr)
+            return 2
+    if args.format == "json":
+        print(document)
+        return build.exit_code(report)
+    print(build.as_text(report))
+    findings = build.findings_of(report)
+    if findings:
+        print(diagnostics.as_text(findings))
+    return build.exit_code(report)
 
 
 def _declare(args: argparse.Namespace) -> int:

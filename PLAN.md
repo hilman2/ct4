@@ -527,9 +527,87 @@ hochlädt. Daran ist der Entwurf ausgerichtet.
   Posten. ct4 legt den Cache mit Hash-Schlüssel auf Platte.
 - **Inkrementelle Erzeugung.** Abhängigkeitsgraph aus Template, Includes,
   Vererbung und benutzten Kontextschlüsseln. Nur erzeugen, was betroffen ist.
-- **Batch-CLI.** `ct4 build manifest.toml -j4`, parallel, mit definierten
+- **Batch-CLI.** `ct4 build manifest.json -j4`, parallel, mit definierten
   Exit-Codes und einem JSON-Bericht, der sich in Cron und systemd auswerten
   lässt.
+
+### Was davon umgesetzt ist
+
+Stand 01-Sep-2026: alle fünf.
+
+| | |
+|---|---|
+| Schreiben, nur bei Unterschied | `ct4/write.py` |
+| Compile-Cache auf Platte | `ct4/cache.py` |
+| Abhängigkeitsgraph | `ct4/depend.py` |
+| Lauf, Zustand, Sperre, Bericht | `ct4/build.py` |
+| Kommando | `ct4 build manifest.json -j4` |
+
+**Die Reihenfolge trägt das Ganze.** Inhaltsbasiertes Schreiben ist der
+Korrektheitsmechanismus, inkrementelle Erzeugung nur eine Optimierung darüber.
+Wo der Graph unsicher ist, lautet die Antwort deshalb "erzeugen": das kostet
+CPU, aber keine neue mtime und damit keine Übertragung. Andersherum kostet es
+eine veraltete Datei auf dem Webserver, und die merkt wochenlang niemand.
+
+**Drei Sicherheiten statt einer Kante.** Über die 390 Skins des Korpus stehen
+399 `#include`: 348 nennen eine Konstante, 40 setzen sie aus Konstanten und
+Platzhaltern zusammen, 11 rufen eine Funktion. Nur die erste löst auf eine
+Datei auf, die zweite auf eine Menge von Dateien, die dritte auf nichts. Wer
+die dritte still fallen lässt, hat genau den Fehler eingebaut, gegen den das
+Ganze existiert. Sie wird darum als opak vermerkt, und opak heisst: jeden Lauf
+erzeugen. `#extends` und `#import` sind keine Template-Kanten, sondern
+Modulkanten; findet importlib eine Datei, wird die gehasht, findet es keine,
+ist der Knoten opak. Ein eingebautes Modul wie `time` ist beides nicht: es hat
+nichts zu hashen und ist trotzdem kein Grund, jeden Lauf zu erzeugen.
+
+**Der Zustand vergleicht Inhalte, nie mtime.** Je Ziel stehen die sha256 des
+Templates, jeder aufgelösten Abhängigkeit, des Kontexts, soweit er hashbar ist,
+und der Ausgabe darin. Übersprungen wird nur, wenn das alles noch stimmt *und*
+die Datei auf der Platte noch den festgehaltenen Hash trägt. Ein gemerkter Hash
+allein ist eine Behauptung: in dasselbe Verzeichnis schreiben auch
+ImageGenerator, CopyGenerator und der Administrator. Ein Kontext aus einem
+Callable ist nicht hashbar, sein Ziel wird nie übersprungen, und das ist
+billig — es wird erzeugt, die Bytes stimmen, nichts wird geschrieben.
+
+**Das Manifest ist JSON, nicht TOML.** `requires-python` ist `>=3.10`,
+`tomllib` kam in 3.11, und das Projekt hat bis heute keine einzige
+Pflichtabhängigkeit. Der Testcontainer ist 3.13, ein blosses `import tomllib`
+liefe also durch jede Prüfung, die dieses Repo fahren kann, und bräche erst
+beim Anwender. Ein Manifest, das auf `.toml` endet, wird mit CT4300 abgelehnt
+und nennt diesen Grund.
+
+**Exit-Codes.** 0 fertig, gleich ob etwas geschrieben wurde; 1 mindestens ein
+Ziel gescheitert; 2 Manifest oder Argumente unbrauchbar; 3 ein anderer Lauf
+hält die Sperre. "Nichts geändert" ist der Normalfall einer
+Fünf-Minuten-Cron und muss 0 sein, sonst meldet jeder Timer der Welt failed.
+Wo 3 zum Betrieb gehört, gehört `SuccessExitStatus=3` in die Unit.
+
+**mtime umzudrehen ist eine Entscheidung, keine Cleverness.** Zwei
+dokumentierte weewx-Merkmale lesen die mtime der Ausgabe als Uhr: `stale_age`
+und `report_timing @createIfMissing`. Wird sie beim Überspringen erhalten,
+altert die Datei nie und die teure Seite wird erst recht jeden Zyklus erzeugt.
+Deshalb gibt es `touch_unchanged` je Ziel im Manifest. ct4s eigener Lauf
+braucht es nicht, er führt eine Zustandsdatei.
+
+### Was nicht da ist
+
+- **Der Scan wird nicht zwischengespeichert.** Das Zustandsformat hat die
+  Felder dafür, die Entscheidung benutzt sie nicht: `ct4.depend` kann einen
+  Scan nicht wiederherstellen, und eine gemerkte Kantenliste unterscheidet
+  glob nicht von exakt. Sie wiederzuverwenden hiesse, eine neu passende Datei
+  zu übersehen, also wieder eine veraltete Ausgabe. Der Graph wird darum jeden
+  Lauf neu gebaut, und das kostet je Template und Lauf `tree.parse` mit
+  1,27 ms und den Compile hinter den Kontextschlüsseln mit 6,2 ms.
+- **Der weewx-Adapter schreibt noch nicht über `ct4/write.py`.** Benutzt wird
+  es von `ct4 build` und vom Compile-Cache. Der Adapter ist die dritte
+  vorgesehene Stelle und die, an der die gemessenen Übertragungen wegfallen.
+- **Keine Reihenfolge und keine Abhängigkeit zwischen Zielen**, und keine Globs
+  für Ziele im Manifest. Beides mit Absicht: weewx' `SummaryBy`-Schleife
+  sammelt `outputted_dict` auf, die N-te Datei sieht damit eine längere Liste
+  als die erste, und die Ausgabe wird eine Funktion der Position im Lauf. Das
+  ist in diesem Manifest nicht ausdrückbar und darf es nicht sein, weil ein
+  paralleler Lauf und ein Teillauf davon falsch wären. Jede Ausgabe wird
+  einzeln benannt, damit sie in der Zustandsdatei eine feste Identität hat.
 
 ---
 

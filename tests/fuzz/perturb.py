@@ -130,7 +130,12 @@ def sources() -> Iterator[tuple[str, str]]:
 # first, and that moves between a run on Windows and a run in the
 # image, without either engine having changed.
 TOLERATED = (CT3_REFUSES, BOTH_FAIL)
-CEILING = 179
+# 179 until #assert, #return and the one-line #if landed. Those took 91
+# more perturbed templates, and 9 of them are shapes ct3 stops parsing
+# once a directive has been moved. The number is raised deliberately
+# and only after checking that the byte-difference count is still zero,
+# which is the line this run actually promises.
+CEILING = 188
 
 
 def main() -> int:
