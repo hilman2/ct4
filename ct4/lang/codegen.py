@@ -3264,10 +3264,16 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     # The raw text, not the resolved one: a dollar in a definition's
     # header names a parameter and is not a lookup. Running it through
     # _token_source would turn "#def show($x)" into a call to VFFSL.
-    # A comment does come off: ct3 eats "#def m ## why" with
-    # _eatRestOfDirectiveTag, which reads the comment and drops it.
+    # A comment does come off, and so does the directive end token:
+    # ct3 eats both with _eatRestOfDirectiveTag, which is how sabnzbd
+    # gets to write its definitions inside an HTML comment,
+    #
+    #     <!--#def show_notify_checkboxes($section_label)#-->
+    #
+    # and have the page still look like a page in an editor.
     header = "".join(t.text for t in node.tokens[1:]
-                     if t.kind not in SILENT_KINDS).strip()
+                     if t.kind not in SILENT_KINDS
+                     and t.kind != lex.DIRECTIVE_END).strip()
     # The colon short form leaves its colon on the header: the tree
     # cuts the arguments right after it. "#block mid: hi" defines mid
     # and calls it, same as the long form.

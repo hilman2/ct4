@@ -23,6 +23,8 @@ DEFAULT_SKINS = Path("corpus/skins.jsonl")
 DEFAULT_FIXTURES = Path("corpus/weewx-render.jsonl")
 DEFAULT_SKIN_SOURCES = Path("corpus/skin-sources.txt")
 DEFAULT_SKINS_RENDER = Path("corpus/skins-render.jsonl")
+DEFAULT_APP_SOURCES = Path("corpus/app-sources.txt")
+DEFAULT_APPS_RENDER = Path("corpus/apps-render.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +61,13 @@ def main(argv: list[str] | None = None) -> int:
                              help="the directory fetch-skins wrote to")
     sources_cmd.add_argument("--out", type=Path,
                              default=DEFAULT_SKINS_RENDER)
+
+    apps_cmd = sub.add_parser(
+        "harvest-app-templates",
+        help="take every Cheetah template under a directory as a case")
+    apps_cmd.add_argument("root", type=Path,
+                          help="the directory fetch-skins wrote to")
+    apps_cmd.add_argument("--out", type=Path, default=DEFAULT_APPS_RENDER)
 
     fixtures_cmd = sub.add_parser(
         "harvest-fixtures",
@@ -122,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
         return _fetch_skins(args.sources, args.out)
     if args.command == "harvest-skin-sources":
         return _harvest_skin_sources(args.root, args.out)
+    if args.command == "harvest-app-templates":
+        return _harvest_app_templates(args.root, args.out)
     if args.command == "harvest-fixtures":
         return _harvest_fixtures(args.root, args.name, args.out)
     if args.command == "check-templates":
@@ -194,6 +205,25 @@ def _harvest_skin_sources(root: Path, out: Path) -> int:
     cases, skipped = skins.harvest_sources(root)
     per_repo = {case.origin for case in cases}
     print("%d templates from %d repositories" % (len(cases), len(per_repo)))
+    for reason, count in sorted(skipped.items()):
+        print("  skipped %-28s %d" % (reason, count))
+    count = write_jsonl(cases, out)
+    print("\n%d cases written to %s" % (count, out))
+    return 0
+
+
+def _harvest_app_templates(root: Path, out: Path) -> int:
+    from ct4.corpus import skins
+    from ct4.corpus.case import read_jsonl, write_jsonl
+
+    known: set[str] = set()
+    for path in (DEFAULT_OUT, DEFAULT_SKINS, DEFAULT_FIXTURES,
+                 DEFAULT_SKINS_RENDER):
+        if path.exists():
+            known.update(case.template for case in read_jsonl(path))
+    cases, skipped = skins.harvest_templates(root, known)
+    print("%d templates from %d repositories"
+          % (len(cases), len({case.origin for case in cases})))
     for reason, count in sorted(skipped.items()):
         print("  skipped %-28s %d" % (reason, count))
     count = write_jsonl(cases, out)

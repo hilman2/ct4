@@ -50,6 +50,14 @@ CORPUS_FILES = ("ct3-tests.jsonl", "skins.jsonl", "weewx-render.jsonl")
 # grow by a factor for no answer either of them can give.
 SKIN_FILES = ("skins-render.jsonl",)
 
+# And the same again for templates that are not skins at all. A corpus
+# of one habit finds only the rules that habit uses, and every other
+# file in this one was written for a weather station or a provisioning
+# server. These come from flight software that generates C++ headers,
+# a satellite receiver's web interface, a voting system. See
+# corpus/app-sources.txt.
+APP_FILES = ("apps-render.jsonl",)
+
 
 def corpus_dir() -> Path | None:
     """Where the corpus is, mounted or in the working tree."""
@@ -81,6 +89,16 @@ def skin_templates() -> list[tuple[str, str]]:
     and how to fetch them again.
     """
     return _templates_from(SKIN_FILES)
+
+
+def app_templates() -> list[tuple[str, str]]:
+    """Every harvested template that is not a skin.
+
+    Eighty-seven repositories that use Cheetah for something else
+    entirely. corpus/app-sources.txt says where they came from and how
+    to fetch them again.
+    """
+    return _templates_from(APP_FILES)
 
 
 def _templates_from(names: Sequence[str]) -> list[tuple[str, str]]:

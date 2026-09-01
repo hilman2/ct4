@@ -1468,6 +1468,12 @@ END_TAG_SHAPES = [
     "#errorCatcher Echo\na\n#end errorCatcher\n$missing\n",
     "Z#errorCatcher Echo tail\n$missing\n",
     "#errorCatcher BigEcho\n$missing\n",
+    # A definition inside an HTML comment, so that the page still looks
+    # like a page in an editor. The directive end token comes off the
+    # header the way a comment does; sabnzbd writes every one of its
+    # definitions this way.
+    "<!--#def f($x)#-->\nhi $x\n<!--#end def#-->\n$f(1)\n",
+    "#block b#\nB\n#end block#\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at

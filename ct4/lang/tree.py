@@ -363,8 +363,23 @@ class _Builder:
         ``#compiler-settings reset`` restores the defaults and closes
         nothing; ct3's eater looks for that word before it starts
         reading to an end directive.
+
+        And ``#raw`` wants its colon straight away. Every other eater
+        reads an expression first and looks for the colon behind it, so
+        a colon anywhere on the line is the short form. eatRaw reads no
+        expression: it takes the blanks and then asks. A line from
+        fprime's code generator turns on it,
+
+            #raw    <%=#end raw render "x", locals: {id: $id} %>
+
+        where the colon after "locals" is inside the raw body. Read as
+        a short form the block was opened twice over and closed once,
+        and the tree builder walked off the end of its own stack.
         """
         line = self._rest_of_line(node)
+        if node.name == "raw":
+            if not line.lstrip(" \t\f").startswith(":"):
+                return OPEN_BLOCK
         if node.name == "compiler-settings":
             if line.split()[:1] == ["reset"]:
                 return None

@@ -39,8 +39,8 @@ from typing import Any, Iterator
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 
 from Cheetah.Filters import Filter                             # noqa: E402
-from harness import (corpus_templates, disagreements,          # noqa: E402
-                     report, skin_templates)
+from harness import (app_templates, corpus_templates,          # noqa: E402
+                     disagreements, report, skin_templates)
 
 # How often a value has been asked whether it is true, by path. A
 # #while over a value that is always true never ends, and a value that
@@ -233,6 +233,17 @@ def main() -> int:
         print()
         seen, taken, found = disagreements(iter(skins), build)
         code = report("Third-party skins against a talking context",
+                      seen, taken, found, examples=examples) or code
+
+    # And the templates that are not skins. Its own line for the same
+    # reason: a corpus of one habit finds only the rules that habit
+    # uses, and these were written for flight software, a satellite
+    # receiver and a voting system.
+    apps = app_templates()
+    if apps:
+        print()
+        seen, taken, found = disagreements(iter(apps), build)
+        code = report("Application templates against a talking context",
                       seen, taken, found, examples=examples) or code
     return code
 
