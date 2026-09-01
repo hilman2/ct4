@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ct4 import cache, depend, diagnostics, write
+from ct4.markup import mode as markup_mode
 
 # Bump on a change of the manifest format. A manifest from the future
 # is refused rather than read optimistically.
@@ -69,6 +70,11 @@ MANIFEST_KEYS = frozenset({
     "cache", "state", "context", "targets"})
 TARGET_KEYS = frozenset({
     "template", "output", "mode", "context", "always", "touch_unchanged"})
+# What a target may say in its "mode" key. Markup is not among them,
+# and that is a decision rather than an omission: the mode is declared
+# in the template's first line and read from there, so a manifest that
+# could say something else would be a second place to be wrong. A
+# target stays "text" and the build asks the source; see _bytes_of.
 MODES = ("text", "json")
 
 # What stands in the state where a dependency did not exist. A file
@@ -609,9 +615,34 @@ def _bytes_of(manifest: Manifest, target: Target) -> bytes:
         from ct4 import jsonmode
 
         text = jsonmode.render(source, search_list, base_dir=manifest.base)
+    elif markup_mode.declared(source):
+        text = _render_markup(source, search_list, manifest.settings,
+                              manifest.base / target.template)
     else:
         text = _render_text(source, search_list, manifest.settings)
     return text.encode(manifest.encoding, manifest.errors)
+
+
+def _render_markup(source: str, search_list: Sequence[Any],
+                   settings: dict[str, Any], path: Path) -> str:
+    """Compiles and renders a template that declared markup mode.
+
+    Asked of the source and not of the manifest, because the mode is
+    the template's own statement about itself and a manifest key would
+    be a second place to be wrong. What the manifest would gain is a
+    way to build the page with the declaration line printed into it,
+    which is the outcome nobody wants.
+
+    Through the code generator rather than through ct3, and directly
+    rather than by installing the generating compiler: installing it
+    would change how every other target in the same run is compiled,
+    and text mode not moving is the promise this whole mode is built
+    around.
+    """
+    from ct4.lang import codegen
+
+    return codegen.render(source, search_list, settings=settings or None,
+                          file=str(path))
 
 
 def _render_text(source: str, search_list: Sequence[Any],
@@ -1173,12 +1204,21 @@ def _public(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _where(exc: BaseException) -> tuple[int, int]:
-    """Line and column of an error, where Cheetah names them."""
+    """Line and column of an error, where the raiser names them.
+
+    Three spellings, because three layers raise here and none of them
+    was written for this: Cheetah's parse errors carry ``lineCol`` or
+    ``lineno``/``col``, and ct4's own structural refusals carry
+    ``line``/``column``.
+    """
     place = getattr(exc, "lineCol", None)
     if isinstance(place, tuple) and len(place) == 2:
         return (_number(place[0]), _number(place[1]))
-    return (_number(getattr(exc, "lineno", 0)),
-            _number(getattr(exc, "col", 0)))
+    line = _number(getattr(exc, "lineno", 0)) or _number(
+        getattr(exc, "line", 0))
+    column = _number(getattr(exc, "col", 0)) or _number(
+        getattr(exc, "column", 0))
+    return (line, column)
 
 
 def _number(value: Any) -> int:

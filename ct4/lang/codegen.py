@@ -109,11 +109,13 @@ from __future__ import annotations
 import ast
 import re
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from tokenize import PseudoToken
 from typing import Any, Sequence
 
 from ct4.lang import lex, tree
+from ct4.markup import mode as markup_mode
+from ct4.markup import scan as markup_scan
 
 # The name the generated function takes its search list under, and the
 # name of the filter. Both match what ct3 generates, so that a
@@ -124,6 +126,25 @@ VALUE = "_v"
 WRITE = "write"
 CLASS = "_Ct4Template"
 MAIN = "respond"
+
+TEXT_MODE = "text"
+MARKUP_MODE = "markup"
+
+# What the two write helpers of ct4.markup.escape are called inside a
+# generated module. Bound by an import that is written only where the
+# template declared markup mode, so a text-mode module carries neither
+# the names nor the import.
+MARKUP_ESCAPED = "_markup_escaped"
+MARKUP_VERBATIM = "_markup_verbatim"
+
+MARKUP_IMPORT = ("from ct4.markup.escape import write_escaped as %s\n"
+                 "from ct4.markup.escape import write_verbatim as %s\n"
+                 % (MARKUP_ESCAPED, MARKUP_VERBATIM))
+
+# The positions markup mode escapes. Everything else, and everything the
+# scan could not place at all, gets the runtime demand for __html__.
+MARKUP_ESCAPES = frozenset({markup_scan.TEXT, markup_scan.ATTRIBUTE,
+                            markup_scan.URL_HEAD})
 
 # A placeholder that is a plain dotted name, optionally wrapped in one
 # of the three enclosures. Used where a placeholder is a target rather
@@ -259,6 +280,123 @@ def _catcher() -> Catcher | None:
     return getattr(_ACTIVE, "catcher", None)
 
 
+# What a note is about. A refusal renders only where the value carries
+# __html__; a URL head is escaped like any attribute value and that
+# stops a quote and not a scheme.
+MARKUP_REFUSED = "refused"
+MARKUP_URL = "url head"
+
+# What stands where the scan has no site at all. Three writes are not
+# placeholders and never stood anywhere the scan looked: #echo, the
+# one-line #if, and the value a #call returns. They are refused like
+# any unescapable position, and this is what their message says they
+# are, because "a position that cannot be escaped" would say nothing
+# about a write that has no position.
+MARKUP_UNPLACED = "a write the scan could not place"
+
+
+@dataclass(frozen=True)
+class MarkupNote:
+    """One placeholder markup mode has something to say about.
+
+    Collected while the code is generated and read by ``ct4.check``,
+    which turns each into a finding. Written here and not worked out a
+    second time over there, because the list has to be the one the
+    render will act on: a note the compiler did not make is a refusal
+    nobody was warned about, and a note it made for a write it did not
+    emit is a warning about nothing.
+
+    Attributes:
+        kind (str): MARKUP_REFUSED or MARKUP_URL.
+        note (str): The position in words, as the scan names it.
+        line (int): Line in the author's file, from one.
+        column (int): Column in the author's file, from one.
+    """
+
+    kind: str
+    note: str
+    line: int
+    column: int
+
+
+@dataclass(frozen=True)
+class MarkupState:
+    """Markup mode, and what the writes need to know while it is on.
+
+    Present only while a template that declared markup mode is being
+    generated, and absent otherwise, which is how text mode is kept out
+    of this by construction rather than by a flag that could be read
+    wrongly: with no state there is no branch to take and the emitted
+    ast is the one that was there before markup mode existed.
+
+    Attributes:
+        sites (dict[int, markup_scan.Site]): Where each placeholder that
+            writes stands, keyed by ``Token.start``. A placeholder that
+            is not in here could not be placed and is refused, which is
+            the fail-closed default both sides of that API agree on.
+        file (str): The template's path, for the message a refused
+            placeholder raises at render time. Empty where the template
+            came from a string and there is no path to name.
+        shift (int): How many lines the preprocessing cut out of the
+            source before it was parsed. Added back to every line this
+            reports; see :meth:`where`.
+        notes (list[MarkupNote]): Filled while the writes are
+            generated, in the order they stand in the template.
+    """
+
+    sites: dict[int, markup_scan.Site]
+    file: str = ""
+    shift: int = 0
+    notes: list[MarkupNote] = field(default_factory=list)
+
+    def refuse(self, site: markup_scan.Site | None,
+               written: "Written | None") -> str:
+        """Records a placeholder that has to prove itself, and says where.
+
+        The line it reports is the author's and not the compiler's.
+        ``#mode markup`` is cut out of the source before anything
+        parses, the way ct3 cuts ``#unicode``, so every line after it
+        has moved up and every placeholder is after it. Putting those
+        lines back is the difference between a message that points at
+        the placeholder and one that points above it.
+
+        Args:
+            site (markup_scan.Site|None): What the scan found, or None
+                where it could not place the placeholder.
+            written (Written|None): The placeholder, where the caller
+                has one. The three writes that are not placeholders
+                (#echo, the one-line #if, the result of a #call) pass
+                what they know instead.
+
+        Returns:
+            str: The position for the message the render raises, as
+            ``'file:line:column (position)'``, or the file alone where
+            neither the scan nor the caller knows a position.
+        """
+        note = site.note if site is not None else MARKUP_UNPLACED
+        if site is not None:
+            line, column = site.line, site.column
+        elif written is not None:
+            line, column = written.line, written.column
+        else:
+            self.notes.append(MarkupNote(MARKUP_REFUSED, note, 0, 0))
+            return "%s (%s)" % (self.file or "<template>", note)
+        line += self.shift
+        self.notes.append(MarkupNote(MARKUP_REFUSED, note, line, column))
+        return "%s:%d:%d (%s)" % (self.file or "<template>", line, column,
+                                  note)
+
+    def url(self, site: markup_scan.Site) -> None:
+        """Records a placeholder that is the whole head of a URL."""
+        self.notes.append(MarkupNote(MARKUP_URL, site.note,
+                                     site.line + self.shift, site.column))
+
+
+def _markup() -> MarkupState | None:
+    """Markup mode of the generate() call this is running inside."""
+    return getattr(_ACTIVE, "markup", None)
+
+
 # -- Names the generator bound itself --------------------------------
 #
 # A lookup that starts at a name the generator put there does not have
@@ -324,12 +462,19 @@ class Written:
     ErrorCatchers.Echo writes in its place, and what the wrappers are
     keyed on. The position goes to ErrorCatchers.ListErrors, which
     records where each failure stood.
+
+    ``start`` is the offset of the placeholder's token in the source,
+    which is what ``ct4.markup.scan`` keys its sites on. It stays -1
+    for the three writes that are not placeholders at all: #echo, the
+    one-line #if and the value a #call returns. In markup mode those
+    are refused, and -1 is how they say they have no site to look up.
     """
 
     code: str
     raw: str
     line: int
     column: int
+    start: int = -1
 
 
 @dataclass(frozen=True)
@@ -949,11 +1094,19 @@ class Unsupported(Exception):
 
 @dataclass(frozen=True)
 class Generated:
-    """The Python of a template, and the source it came from."""
+    """The Python of a template, and the source it came from.
+
+    ``markup`` is None for a text-mode template and carries what markup
+    mode decided for every placeholder otherwise. ``ct4.check`` reads
+    its notes rather than working the same question out a second time,
+    so what an author is warned about and what the render does are the
+    same list by construction.
+    """
 
     code: str
     module: ast.Module
     class_name: str = CLASS
+    markup: MarkupState | None = None
 
     def compile(self) -> Any:
         """The template class, ready to be given a search list."""
@@ -985,17 +1138,24 @@ def _refuse_settings(settings: Any) -> None:
 
 
 def supports(source: str, settings: Any = None) -> bool:
-    """Whether this layer can generate code for the template."""
+    """Whether this layer can generate code for the template.
+
+    A markup-mode template the scan refuses counts as unsupported here,
+    even though the compile itself does not fall back for it. The two
+    questions are different: this one is asked by the test bench about
+    what the layer can carry, and a refused file is one it cannot.
+    """
     try:
         generate(source, settings)
-    except (Unsupported, tree.StructureError):
+    except (Unsupported, tree.StructureError, markup_scan.ScanRefused):
         return False
     return True
 
 
 def generate(source: str, settings: Any = None,
              class_name: str = CLASS, base_class: str | None = None,
-             main_method: str | None = None) -> Generated:
+             main_method: str | None = None, *,
+             mode: str = TEXT_MODE, file: str = "") -> Generated:
     """Python for a template.
 
     Args:
@@ -1009,29 +1169,60 @@ def generate(source: str, settings: Any = None,
             the way it overrides ct3's.
         main_method (str|None): What the template's own body is called.
             Also overridden by #extends and #implements.
+        mode (str): What the caller expects, not what it decides. The
+            mode is read out of the source and out of nothing else, so
+            "markup" here only asserts that the declaration is there
+            and is refused when it is not. The default is text, and
+            text is what a source without the declaration gets whatever
+            is passed.
+        file (str): The template's path, where the caller has one. It
+            reaches nothing but the message a refused placeholder
+            raises in markup mode.
 
     Raises:
         Unsupported: where the template uses something this layer does
-            not understand yet.
+            not understand yet, and where markup mode is asked for a
+            source that does not declare it.
         tree.StructureError: where the template is not well formed.
+        markup_scan.ScanRefused: in markup mode, where the scan cannot
+            be trusted over the file. Nothing is escaped then and the
+            compile fails with the reason.
     """
     _refuse_settings(settings)
+    markup = markup_mode.declared(source)
+    if mode not in (TEXT_MODE, MARKUP_MODE):
+        raise Unsupported("no such mode: %r" % mode[:40])
+    if mode == MARKUP_MODE and not markup:
+        raise Unsupported("markup mode without a %r line"
+                          % markup_mode.MODE_LINE)
+    declared = source
     source = _preprocess(source)
+    shift = _lines_cut(declared, source) if markup else 0
     root = tree.parse(source)
     _refuse_raw_in_short_form(source, root)
     shape = _class_shape(root, base_class, main_method)
     # The imports #extends synthesises stand with the template's own.
     hoisted: list[ast.stmt] = list(shape.imports)
+    if markup:
+        # Before the placeholders are generated, because what each one
+        # becomes is decided from the scan.
+        hoisted[:0] = ast.parse(MARKUP_IMPORT).body
+    # Scanned before anything is put on the thread, so that a refused
+    # file leaves no state of this call standing behind it.
+    state = MarkupState(_scanned(root, shift), file, shift) if markup else None
     methods: list[ast.stmt] = []
     # Torn down whatever happens: a refusal halfway through must not
     # leave a catcher standing for the next template on this thread.
     previous = _catcher()
+    previous_markup = _markup()
     _ACTIVE.catcher = Catcher(methods)
+    _ACTIVE.markup = state
     _ACTIVE.scopes = []
     try:
         body = _statements(_pieces(root, source, hoisted, methods))
     finally:
         _ACTIVE.catcher = previous
+        _ACTIVE.markup = previous_markup
         _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
     # Before the class, the way ct3 puts them at module level. An
@@ -1050,7 +1241,7 @@ def generate(source: str, settings: Any = None,
     # about the template, and this line is not the template's.
     module.body.extend(_plumbing(class_name))
     ast.fix_missing_locations(module)
-    return Generated(ast.unparse(module), module, class_name)
+    return Generated(ast.unparse(module), module, class_name, state)
 
 
 # Every name the guard below asks about, as one search over the source.
@@ -1108,9 +1299,16 @@ def _refuse_preamble_names(module: ast.Module, source: str,
 
 
 def render(source: str, search_list: Sequence[Any],
-           output_filter: Any = None, settings: Any = None) -> str:
-    """Generates, runs, and returns what the template produces."""
-    klass = generate(source, settings).compile()
+           output_filter: Any = None, settings: Any = None,
+           *, file: str = "") -> str:
+    """Generates, runs, and returns what the template produces.
+
+    Args:
+        file (str): The template's path, where the caller has one. It
+            reaches nothing but the message a refused placeholder
+            raises in markup mode.
+    """
+    klass = generate(source, settings, file=file).compile()
     keywords = {"filter": output_filter} if output_filter else {}
     template = klass(searchList=list(search_list), **keywords)
     try:
@@ -1120,8 +1318,70 @@ def render(source: str, search_list: Sequence[Any],
     return text
 
 
+def _scanned(root: tree.Node, shift: int) -> dict[int, markup_scan.Site]:
+    """The scan, with a refusal made to name the author's line.
+
+    Every caller of a refusal reads it as a place in the file the
+    author edits, and one of them is ``ct4.build``, which catches
+    whatever a render raises and has no way to know that the compiler
+    parsed a source one line shorter than the file. So the correction
+    happens once, here, and what leaves this module is already right.
+    """
+    try:
+        return markup_scan.scan(root)
+    except markup_scan.ScanRefused as refused:
+        raise markup_scan.ScanRefused(refused.line + shift, refused.column,
+                                      refused.reason) from None
+
+
+def _lines_cut(before: str, after: str) -> int:
+    """How many lines the preprocessing took out of the source.
+
+    Every one of them stands at the top, ahead of anything that writes:
+    the ``#mode markup`` declaration is on the first line that is not a
+    comment, and ``#unicode`` in front of that or right behind it. So
+    adding this to a line read off the parsed source gives the line in
+    the author's file, for every placeholder there is.
+    """
+    return len(before.splitlines()) - len(after.splitlines())
+
+
+def preparsed(source: str) -> tuple[tree.Node, int]:
+    """The tree the compiler builds, and the lines it cut to get there.
+
+    For a caller that has to walk the same template and point at the
+    same lines: ``ct4.check`` looks for ``#include`` in this tree and
+    raises every line it reports by the second value. It goes through
+    the compiler's own preprocessing, so the two cannot end up reading
+    different bytes or counting different lines.
+
+    Args:
+        source (str): The template as it stands in the file, with the
+            declaration line still in it.
+
+    Returns:
+        tuple[tree.Node, int]: The parsed template, and how many lines
+        the preprocessing cut, which is what a line read off that tree
+        has to be raised by to name the author's file.
+
+    Raises:
+        tree.StructureError: where the template is not well formed.
+    """
+    body = _preprocess(source)
+    return tree.parse(body), _lines_cut(source, body)
+
+
 def _preprocess(source: str) -> str:
     """What ct3 does to a template before it parses it.
+
+    ``#mode markup`` is cut here for the same reason and in the same
+    place. It is no directive either: registering the name would leave
+    ct3's parser spinning on a line it has no eater for, and
+    ``lex.directive_names()`` reads ct3's table at call time, so the
+    registration would move both engines at once and every differential
+    instrument would compare two changed engines. A source that does
+    not declare markup mode comes back from that step unchanged, which
+    is why text mode cannot see it.
 
     ``#unicode`` is no directive at all: ct3 finds the line with a
     regular expression and cuts it out. The same pattern is used here,
@@ -1142,6 +1402,7 @@ def _preprocess(source: str) -> str:
     """
     from Cheetah.Parser import encodingDirectiveRE, unicodeDirectiveRE
 
+    source = markup_mode.strip(source)
     if unicodeDirectiveRE.search(source):
         if encodingDirectiveRE.search(source):
             raise Unsupported("#encoding and #unicode together")
@@ -1478,7 +1739,7 @@ def _piece(node: tree.Node, source: str,
             _modified_placeholder(node, token, marked, out)
             return
         written = Written(placeholder_source(token.text), token.text,
-                          node.line, node.column)
+                          node.line, node.column, token.start)
         catcher = _catcher()
         if catcher is not None and catcher.name is not None:
             # Turned into statements here and not in _statements. The
@@ -1542,7 +1803,7 @@ def _modified_placeholder(node: tree.Node, token: lex.Token,
     # rebuilt as "$aStr   )", which costs 32 corpus cases.
     body = _placeholder(Written(
         placeholder_source("$" + token.text[marked.end("cache"):]),
-        token.text, node.line, node.column))
+        token.text, node.line, node.column, token.start))
     if marked.group("silent"):
         body = [_silenced(body)]
     if marked.group("cache"):
@@ -3275,7 +3536,8 @@ def _call_region(node: tree.Node, identifier: str,
         + ast.parse(CALL_CLOSE % {"id": identifier}).body
     call = "%s(_ct4_call_arg%s%s)" % (
         function, identifier, ", " + arguments if arguments else "")
-    made += _placeholder_value(_parsed(call))
+    made += _placeholder_value(_parsed(call),
+                               Written(call, "", node.line, node.column))
     return made + ast.parse(CALL_DELETE % {"id": identifier}).body
 
 
@@ -3515,8 +3777,13 @@ def _simple_directive(node: tree.Node) -> list[ast.stmt]:
         # The expression is evaluated and its value dropped.
         return [ast.Expr(value=_parsed(_argument(node, node)))]
     if node.name == "echo":
-        # The same two statements a placeholder writes.
-        return _placeholder_value(_parsed(_argument(node, node)))
+        # The same two statements a placeholder writes, but without a
+        # rawExpr: addFilteredChunk is called here without one, and in
+        # markup mode without a site either, because #echo writes an
+        # expression the scan never saw stand anywhere.
+        return _placeholder_value(
+            _parsed(_argument(node, node)),
+            Written(_argument(node, node), "", node.line, node.column))
     if node.name == "set":
         return [_set_statement(node)]
     if node.name == "raise":
@@ -3846,9 +4113,12 @@ def _ternary_block(node: tree.Node) -> ast.stmt:
     statement = _framed("if %s:" % condition.strip())
     assert isinstance(statement, ast.If)
     # No raw text for the filter: addFilteredChunk is called here
-    # without one, so a filter that reads rawExpr sees nothing.
-    statement.body = _placeholder_value(_parsed(yes.strip()))
-    statement.orelse = _placeholder_value(_parsed(no.strip()))
+    # without one, so a filter that reads rawExpr sees nothing. What
+    # the arms do carry is the position, for the refusal markup mode
+    # writes for both of them.
+    arm = Written("", "", node.line, node.column)
+    statement.body = _placeholder_value(_parsed(yes.strip()), arm)
+    statement.orelse = _placeholder_value(_parsed(no.strip()), arm)
     return statement
 
 
@@ -4118,27 +4388,30 @@ def _placeholder(written: Written) -> list[ast.stmt]:
     """
     catcher = _catcher()
     if catcher is not None and catcher.name is not None:
-        return _placeholder_value(_caught(written), written.raw)
-    return _placeholder_value(_parsed(written.code), written.raw)
+        return _placeholder_value(_caught(written), written)
+    return _placeholder_value(_parsed(written.code), written)
 
 
-def _placeholder_value(lookup: ast.expr, raw: str = "") -> list[ast.stmt]:
+def _placeholder_value(lookup: ast.expr,
+                       written: Written | None = None) -> list[ast.stmt]:
     """The value first, then the write behind a guard.
 
     A placeholder that resolves to None writes nothing, and the filter
-    never sees it.
+    never sees it. In markup mode the guard and the lookup are the same
+    and only the write differs; see :func:`_filtered`.
 
     Args:
-        raw (str): The template's own text for the placeholder, which
-            goes to the filter as rawExpr. ct3 adds it to every
-            placeholder write and to nothing else, #echo included, so
-            an empty string is how a caller says "not a placeholder".
+        written (Written|None): The placeholder this write belongs to.
+            Its ``raw`` goes to the filter as rawExpr: ct3 adds that to
+            every placeholder write and to nothing else, #echo
+            included, so None is how a caller says "not a placeholder".
             The default filter ignores it and the corpus was blind to
             it for that reason. weewx's AssureUnicode is not: where
             str(value) raises, it writes rawExpr in its place, which is
             how "$day.foobar.min" on a page comes out as itself rather
             than as "foobar?".
     """
+    raw = written.raw if written is not None else ""
     keywords = [ast.keyword(arg="rawExpr", value=ast.Constant(raw))] \
         if raw else []
     return [
@@ -4147,12 +4420,56 @@ def _placeholder_value(lookup: ast.expr, raw: str = "") -> list[ast.stmt]:
             test=ast.Compare(left=ast.Name(id=VALUE, ctx=ast.Load()),
                              ops=[ast.IsNot()],
                              comparators=[ast.Constant(None)]),
-            body=[_write(ast.Call(
-                func=ast.Name(id=FILTER, ctx=ast.Load()),
-                args=[ast.Name(id=VALUE, ctx=ast.Load())],
-                keywords=keywords))],
+            body=[_write(_filtered(written, keywords))],
             orelse=[]),
     ]
+
+
+def _filtered(written: Written | None,
+              keywords: list[ast.keyword]) -> ast.expr:
+    """What the value is written through, which is where the mode shows.
+
+    In text mode the filter call itself, the same node it has always
+    been. In markup mode a wrapper around the filter, chosen once here
+    from the position the scan put the placeholder in, so that nothing
+    at render time has to decide anything.
+
+    The wrapper takes the filter as an argument rather than the escape
+    being a filter or an argument to one. A filter is the application's
+    and never learns the position: weewx replaces the whole filter
+    library, so ct3's escaping filters are not even reachable there,
+    and a filter written ``def filter(self, val, rawExpr=None)`` dies
+    on a keyword it does not know. So ``rawExpr`` keeps exactly the
+    shape it has in text mode and travels through the wrapper
+    untouched.
+
+    Args:
+        written (Written|None): The placeholder, for the site to look
+            up and for the position a refusal names.
+        keywords (list[ast.keyword]): What goes to the filter, which is
+            rawExpr or nothing.
+
+    Returns:
+        ast.expr: The call whose value is written.
+    """
+    value = ast.Name(id=VALUE, ctx=ast.Load())
+    filter_name = ast.Name(id=FILTER, ctx=ast.Load())
+    state = _markup()
+    if state is None:
+        return ast.Call(func=filter_name, args=[value], keywords=keywords)
+    site = state.sites.get(written.start) if written is not None else None
+    if site is not None and site.context in MARKUP_ESCAPES:
+        if site.context == markup_scan.URL_HEAD:
+            state.url(site)
+        return ast.Call(func=ast.Name(id=MARKUP_ESCAPED, ctx=ast.Load()),
+                        args=[value, filter_name], keywords=keywords)
+    # Everything else, the placeholder the scan could not place
+    # included: the value has to prove it is markup or the render
+    # stops. Fail closed, never a guessed escape.
+    return ast.Call(func=ast.Name(id=MARKUP_VERBATIM, ctx=ast.Load()),
+                    args=[value, filter_name,
+                          ast.Constant(state.refuse(site, written))],
+                    keywords=keywords)
 
 
 # -- Small builders --------------------------------------------------

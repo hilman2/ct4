@@ -11,13 +11,40 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
+
+import pytest
 
 from ct4 import build, cli, diagnostics
 
 TEMPLATE = '#include "inc/head.inc"\nStation: $station\n'
 HEAD = "<head>\n"
 CONTEXT = {"station": "Zuhause"}
+
+
+@pytest.fixture(autouse=True)
+def clean_caches():
+    """Every case starts with nothing remembered from the last one.
+
+    Two caches outlive a test and both decide what a build does. ct3
+    keeps compiled classes in a dict on Template, keyed by the source,
+    so two cases using the same template string share a class and the
+    second one's #include is resolved against the first one's file.
+    ct4.build keeps a compile-cache Store per directory, and a case
+    that reuses a directory name reuses the store.
+
+    Without this the order of the cases decides their result: a serial
+    run failed on a different case than a shuffled one, which is the
+    shape of a leak rather than of a defect in either case.
+    """
+    from Cheetah.Template import Template
+
+    Template._CHEETAH_compileCache.clear()
+    build._STORES.clear()
+    yield
+    Template._CHEETAH_compileCache.clear()
+    build._STORES.clear()
 
 
 def skin(root, template=TEMPLATE, targets=None, **extra):
@@ -580,7 +607,17 @@ def test_an_only_that_matches_nothing_is_exit_two(tmp_path):
 # -- Modules a template imports --------------------------------------
 
 def helper(tmp_path, monkeypatch, text):
-    """A module the template can import, on sys.path."""
+    """A module the template can import, on sys.path.
+
+    Evicted from sys.modules first, and that line is the whole test.
+    importlib.util.find_spec answers out of sys.modules for a module
+    that is already imported, so a helper another test imported from
+    its own tmp_path would be the one ct4.depend fingerprints here: an
+    edited file the build reports as up to date, and a green test that
+    proves nothing. Which of the two tests runs first depends on how
+    xdist spreads them, so it broke on adding an unrelated test file.
+    """
+    sys.modules.pop("ct4_test_helper", None)
     (tmp_path / "ct4_test_helper.py").write_text(text, encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 

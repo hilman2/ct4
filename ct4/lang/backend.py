@@ -17,6 +17,11 @@ notices nothing. That is the whole design: the generator says what it
 can do, and what it cannot costs a fallback and not a failure. Which is
 why ``Unsupported`` has been kept an honest signal all along.
 
+With one exception, and it is the only one: a template that declares
+markup mode is never handed to ct3. ct3 has no such mode, so the
+fallback would print the declaration line into the page and escape
+nothing. There the refusal comes out as :class:`MarkupRefused`.
+
     from ct4.lang import backend
 
     counts = backend.install()
@@ -33,6 +38,40 @@ from dataclasses import dataclass
 from typing import Any
 
 from ct4.lang import codegen, tree
+from ct4.markup import mode as markup_mode
+from ct4.markup import scan as markup_scan
+
+
+class MarkupRefused(Exception):
+    """A markup-mode template the generator will not compile.
+
+    Markup mode is the one place where a refusal may not become a
+    fallback. ct3 knows nothing about the declaration line, so a
+    template handed to it would print ``#mode markup`` as the first
+    line of the page and escape nothing: the wrong page and the missing
+    escape at once, which is worse than either. So the refusal travels
+    out to the caller with its reason instead.
+    """
+
+
+def _declares_markup(path: str) -> bool:
+    """Whether a template file asks for markup mode.
+
+    Read here and not left to the generator because the file form
+    never reaches it. A file that cannot be read is not a declaration:
+    ct3 is about to open it and will raise its own error, which is a
+    better message than one invented here.
+    """
+    if not path:
+        return False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            # The declaration stands in the first lines or nowhere, and
+            # a page is not worth reading whole to find that out.
+            head = handle.read(4096)
+    except OSError:
+        return False
+    return markup_mode.declared(head)
 
 
 @dataclass
@@ -65,11 +104,23 @@ def generating_compiler(counts: Counts) -> type:
             self._ct4_code: str | None = None
             self._ct4_source = source
             self._ct4_kwargs = kwargs
+            # Only for the message a refused placeholder raises in
+            # markup mode. It is empty for the string form, which is
+            # the only form that reaches the generator today.
+            self._ct4_file = file if isinstance(file, str) else ""
 
         def compile(self) -> None:
-            # Only a template from a string. One from a file carries its
-            # path into the generated module, and nothing here writes
-            # that yet.
+            # A template from a file never reaches the generator: its
+            # path goes into the generated module and nothing here
+            # writes that yet. That is fine for text mode and not fine
+            # for markup, where falling back to ct3 prints the
+            # declaration into the page and escapes nothing. So the
+            # file is read for the one line that decides it.
+            if self._ct4_source is None and _declares_markup(self._ct4_file):
+                raise MarkupRefused(
+                    "%s declares markup mode and was compiled from a file;"
+                    " markup mode needs the source, so compile it from a"
+                    " string or keep it in text mode" % self._ct4_file)
             if self._ct4_source is not None:
                 try:
                     made = codegen.generate(
@@ -78,8 +129,13 @@ def generating_compiler(counts: Counts) -> type:
                         class_name=(self._ct4_kwargs.get("mainClassName")
                                     or codegen.CLASS),
                         base_class=self._ct4_kwargs.get("baseclassName"),
-                        main_method=self._ct4_kwargs.get("mainMethodName"))
-                except (codegen.Unsupported, tree.StructureError):
+                        main_method=self._ct4_kwargs.get("mainMethodName"),
+                        file=self._ct4_file)
+                except markup_scan.ScanRefused as refused:
+                    raise MarkupRefused(str(refused)) from refused
+                except (codegen.Unsupported, tree.StructureError) as refused:
+                    if markup_mode.declared(self._ct4_source):
+                        raise MarkupRefused(str(refused)) from refused
                     counts.fell_back += 1
                 else:
                     self._ct4_code = made.code

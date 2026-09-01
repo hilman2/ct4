@@ -9,6 +9,13 @@ Three questions, in this order:
 The second one is the one that matters, and it only became possible once
 an application declares its names. ``$day.outTemp.mx`` shows up here
 without weewx running and without a database answering.
+
+A markup-mode template gets a fourth question, and it is the reason
+this module exists at all: which of its placeholders markup mode will
+not escape. Those refuse at render time, one page at a time and only
+where the value happens to be reached, so an author who has to find
+them by rendering finds them one by one. Here the whole list arrives
+before a page is built.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from typing import Sequence
 from ct4 import analyze
 from ct4.declare import Declaration, resolve
 from ct4.diagnostics import ERROR, WARNING, Diagnostic
+from ct4.markup import mode as markup_mode
 
 # JSON mode is announced, not guessed from the file extension. weewx
 # skins have always shipped .json.tmpl, and those are text templates
@@ -46,6 +54,8 @@ def check_source(source: str, file: str = "",
     """Checks a template and returns the findings."""
     if is_json_template(source):
         return _check_json(source, file, declarations, base_dir)
+    if markup_mode.declared(source):
+        return _check_markup(source, file, declarations)
     return _check_text(source, file, declarations)
 
 
@@ -91,6 +101,89 @@ def _check_json(source: str, file: str, declarations: Sequence[Declaration],
     # into the template. Hence without a line.
     names = analyze.placeholders(_expression_probe(compiled))
     found.extend(_check_names(names, file, declarations, with_position=False))
+    return found
+
+
+def _check_markup(source: str, file: str,
+                  declarations: Sequence[Declaration]) -> list[Diagnostic]:
+    """What markup mode will not escape in this template, all of it.
+
+    Four findings, and each one is a decision the author has to make
+    rather than a defect the tool found:
+
+    * CT4402, an error, is the file being refused whole. Markup mode
+      never falls back to ct3, so this is the compile failing, and it
+      is reported on its own because nothing after it is worth saying.
+    * CT4400, a warning, is a placeholder in a position that cannot be
+      escaped. It renders only if the value was passed through
+      ``ct4.markup.quoted()``.
+    * CT4401, a warning, is a placeholder at the head of a URL
+      attribute. It is escaped like any attribute value, and that stops
+      quote breaking and not ``javascript:``.
+
+    The first two are read off the compiler rather than worked out
+    again from the scan, and that is the point of them: what an author
+    is warned about here is the very list the render will act on, down
+    to the writes that are not placeholders at all. ``#echo`` is one of
+    those, and a scan of the template alone does not find it.
+
+    The line numbers are the author's throughout. The declaration line
+    is cut before anything parses, so a line read off the parsed source
+    is short of the file by however many lines that cut, and every one
+    of them is put back; the names are read off the source with the
+    line still in it and need no such correction.
+    """
+    from ct4.lang import codegen, tree
+    from ct4.markup import scan as markup_scan
+
+    try:
+        # Generated first, because markup mode does not fall back: a
+        # template the generator refuses does not render at all, and
+        # that is the first thing the author has to hear. What comes
+        # back carries the decision taken for every placeholder.
+        made = codegen.generate(source, mode=codegen.MARKUP_MODE, file=file)
+        root, shift = codegen.preparsed(source)
+    except markup_scan.ScanRefused as refused:
+        # Already the author's line: the compiler corrects a refusal on
+        # the way out, because the build catches these too and cannot
+        # know what was cut.
+        return [Diagnostic("CT4402", ERROR, refused.reason, file=file,
+                           line=refused.line, column=refused.column)]
+    except tree.StructureError as refused:
+        # ct3's parser is what is unhappy here, and it counts lines in
+        # the source it was handed. One line was taken out of it.
+        return [Diagnostic("CT4402", ERROR, str(refused), file=file,
+                           line=refused.line + 1, column=refused.column)]
+    except codegen.Unsupported as refused:
+        return [Diagnostic(
+            "CT4402", ERROR,
+            "markup mode does not fall back to ct3, and this template "
+            "cannot be generated: %s" % refused, file=file)]
+    except Exception as error:                          # noqa: BLE001
+        return [Diagnostic("CT4002", ERROR, str(error), file=file)]
+
+    found: list[Diagnostic] = []
+    assert made.markup is not None
+    for note in made.markup.notes:
+        if note.kind == codegen.MARKUP_REFUSED:
+            found.append(Diagnostic(
+                "CT4400", WARNING,
+                "markup mode cannot escape %s; pass the value through "
+                "ct4.markup.quoted() or the render stops" % note.note,
+                file=file, line=note.line, column=note.column))
+        else:
+            found.append(Diagnostic(
+                "CT4401", WARNING,
+                "this placeholder is the whole head of a URL; escaping "
+                "stops a quote and not a javascript: scheme",
+                file=file, line=note.line, column=note.column))
+    # In the order the author reads the file. The compiler writes the
+    # directives as it walks the tree and the plain placeholders in a
+    # pass after that, so its own order is the generator's and not the
+    # template's.
+    found.sort(key=lambda one: (one.line, one.column))
+    found.extend(_check_names(analyze.placeholders(source), file,
+                              declarations))
     return found
 
 

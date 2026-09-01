@@ -133,13 +133,36 @@ weewx-Anwender installieren.
 |----------|---------------------------------------------|-------------------------------|
 | `text`   | ct3-Verhalten, byteweise                    | byte-identisch, das ist die Zusage |
 | `json`   | Struktur bauen, dann serialisieren          | neu                           |
-| `markup` | HTML, XML, PHP mit kontextabhängigem Escaping | opt-in                      |
+| `markup` | HTML mit positionsabhängigem Escaping        | opt-in, je Datei              |
 
-Der Modus kommt aus der Dateiendung oder aus einer `#mode`-Direktive, nicht aus
-einer globalen Einstellung. Ein Skin enthält beides.
+Der Modus steht in einer angemeldeten Zeile im Template, nicht in einer globalen
+Einstellung. Ein Skin enthält beides. Für `markup` ist das `#mode markup` auf der
+ersten Zeile, die weder leer noch ein `##`-Kommentar ist; `ct4.check` liest
+`#mode json` seit jeher nach derselben Regel.
 
-Ein Compiler, der Modus ist ein Flag im Kontext. Kein zweiter Codepfad, sonst
-pflegt man zwei Semantiken und keine davon richtig.
+**Die Dateiendung entscheidet nicht.** `os.path.splitext("index.html.tmpl")` ist
+`.tmpl` — der Teil des Namens, der HTML sagt, ist genau der, den splitext
+wegwirft. weewx liefert `.json.tmpl`-Skins aus, die von Hand JSON schreiben und
+Text-Templates sind; eine Endungsregel bräche sie. Und Build, Korpusprüfer und
+alle drei Instrumente unter `tests/fuzz` übersetzen aus einem Quelltext ohne
+Pfad: eine Regel auf den Namen wäre in keinem Lauf prüfbar, der diese Engine
+kontrolliert.
+
+**Eine `#mode`-Direktive gibt es auch nicht,** und das ist gemessen. Ohne Esser
+bleibt ct3s Parser auf dem Namen stehen, nach sechs Sekunden abgebrochen. Und
+`ct4.lang.lex.directive_names()` liest ct3s `directiveNamesAndParsers` zur
+Aufrufzeit: eine Registrierung verschöbe beide Engines zugleich, und jedes
+differenzielle Instrument verglich danach zwei veränderte Engines und meldete
+null Unterschiede — der eine Fehlschlag, den ein Prüfstand nicht vom Erfolg
+unterscheiden kann. Die Zeile wird deshalb vor dem Parsen herausgeschnitten, in
+`codegen._preprocess`, an derselben Stelle, an der ct3 `#unicode` herausschneidet.
+
+Ein Compiler, der Modus ist ein Flag dieses einen Übersetzungslaufs. Kein
+zweiter Codepfad, sonst pflegt man zwei Semantiken und keine davon richtig.
+Im Text-Modus **fehlt** der Escape-Aufruf im erzeugten AST, er ist nicht
+vorhanden und neutral. Das ist der Unterschied zwischen "tut nichts" und "kann
+nichts tun", und `tests/data/codegen-text-baseline.tsv` friert für 1102
+Korpus-Templates ein, welches Python dabei herauskommt.
 
 ### W3 — Kompatibilität wird gemessen, nicht behauptet
 
@@ -337,18 +360,134 @@ Kopf des Skin-Autors zu stehen.
 
 Kein Schwerpunkt, aber kein Stiefkind.
 
-- **Kontextabhängiges Escaping** im `markup`-Modus. Der Lexer weiss, ob ein
-  Platzhalter im Textknoten, im Attribut, in einer URL oder im `<script>` steht,
-  und escaped entsprechend. Das ist der TODO-Eintrag „Smart HTML filter", der
-  seit Cheetah 2.0 offen ist.
-- **`__html__`-Protokoll** wie bei markupsafe, damit vorbereitetes Markup nicht
-  doppelt escaped wird.
-- Für PHP und andere Sprachen wird kein Escaping geraten. Explizite Filter, aber
-  mit Warnung, wenn ein Platzhalter ungefiltert in eine Position gerät, die
-  offensichtlich Quoting braucht.
+### Was da ist
+
+Der `markup`-Modus escaped **genau zwei Positionen**: Elementtext und einen
+gequoteten Attributwert. Überall sonst verlangt er einen Beweis. Das ist der
+TODO-Eintrag „Smart HTML filter", der seit Cheetah 2.0 offen ist, in der einzigen
+Form, die über den 390 Korpus-Skins messbar richtig bleibt.
+
+| Position | im Korpus | Was passiert |
+|---|---|---|
+| Elementtext | 9178 | escaped |
+| gequotetes Attribut | 745 | escaped |
+| Kopf von `href`, `src`, `action` | 214 | escaped, plus Warnung CT4401 |
+| alles andere | 961 | verweigert, `ct4.markup.quoted()` verlangt |
+
+Escaped wird mit der Tabelle von markupsafe 3.0.3, fünf Zeichen als numerische
+Referenzen. `html.escape` reicht nicht: es schreibt `&quot;` und lässt das
+einfache Anführungszeichen stehen, ein so behandelter Wert bricht aus
+`attr='...'` heraus. markupsafe selbst wird nicht zur Abhängigkeit; die Tabelle
+sind dreissig Zeichen.
+
+**Das `__html__`-Protokoll** wie bei markupsafe, damit vorbereitetes Markup nicht
+doppelt escaped wird. Es wird **vor** dem Filter aufgelöst: weewx' `AssureUnicode`
+ruft `str()` auf allem, was kein `str` ist, und zerstörte damit ein blosses
+Objekt, das nur `__html__` anmeldet. `Markup` ist eine `str`-Unterklasse und
+kommt unverändert durch.
+
+**Für die unescapebaren Positionen reicht `__html__` aber nicht**, und das ist
+eine Korrektur am ersten Entwurf. `__html__` heisst HTML-sicher — das meinen
+seine Erzeuger damit —, und ein markupsafe-`Markup("</script>")` ist korrektes
+HTML, das einen Skriptblock beendet. Als Beweis in einem `<script>` genommen
+akzeptiert man genau den Wert, der ausbricht. Diese Positionen verlangen
+deshalb `ct4.markup.quoted()`, eine eigene Marke mit einer eigenen Zusage: die
+Anwendung hat den Wert für die Sprache gequotet, in der er landet. Ein `Quoted`
+ist ein `Markup`, umgekehrt nicht.
+
+**Das Escaping ist kein Filter und kein Filterargument.** Ein Filter gehört der
+Anwendung und sieht den Wert plus höchstens `rawExpr`; die Position erreicht ihn
+nie. weewx ersetzt die ganze Filterbibliothek (`filtersLib=weewx.cheetahgenerator`),
+`#filter WebSafe` in einem weewx-Skin ist heute ein `AttributeError`, und ct3s
+`WebSafe` escaped nur `&`, `<`, `>` und liesse jedes Attribut injizierbar. Der
+Escape umschliesst deshalb das **Ergebnis** des Filters an der erzeugten
+Aufrufstelle. Der Filteraufruf behält exakt seine Form und sein eines Schlüsselwort.
+Geht die Komposition schief, wird doppelt escaped — sichtbar falsch, nie ungeschützt.
+
+**Die Position wird über dem Blockbaum bestimmt, nicht über dem Tokenstrom.** Ein
+Direktiven-Argument bleibt gewöhnlicher TEXT-Token, `#if $delta < 60` öffnet für
+den Tokenstrom also ein Tag: über den Tokens gelesen stehen 1444 Platzhalter in
+Attributnamen-Position, über dem Baum gelesen sechs. Und gelesen werden die Bytes,
+die das Template **schreibt**, nicht die, die es enthält; ct3s
+Whitespace-Regeln verschieben ganze Zeilen, und drei Modellierungsfehler darin
+haben die Antwort je einmal verändert.
+
+**Kontrollfluss beisst fast nie.** Über 1867 Bedingungsblöcke und 229 Schleifen
+enden fünf Blöcke in verschiedenen Markup-Zuständen, vier davon in sabnzbd, einer
+in belchertown; alle fünf laufen vor dem nächsten Platzhalter wieder zusammen.
+Sieben Korpusdateien werden deswegen abgelehnt, drei mit HTML-Endung, eine davon
+eine echte weewx-Indexseite. Der Scan sieht die Divergenz und lehnt ab — er rät
+nicht, dass sie sich schon wieder einrenken wird.
+
+**`ct4.check` nennt die ganze Liste, bevor eine Seite gebaut wird:** CT4400 je
+unescapebarem Platzhalter, CT4401 je URL-Kopf, CT4402 je Ablehnung der ganzen
+Datei. Die Liste kommt aus dem Compiler selbst, nicht aus
+einem zweiten Scan, damit gewarnt wird, was der Render wirklich tut.
+
+### Was nicht da ist, und warum
+
+- **Kein XML.** `<script>` ist in HTML Rohtext und in XML gewöhnlicher Inhalt,
+  das Escaping ist genau umgekehrt; `&nbsp;` ist in XML undefiniert; U+0000 und
+  U+000C lassen sich in XML überhaupt nicht darstellen. Ein Modus kann nicht
+  beides bedienen. Jede Datei mit `<![CDATA[` wird abgelehnt: das sind die sechs
+  RSS-Feeds im Korpus mit 404 Platzhaltern, die ein grober Scanner mit voller
+  Zuversicht für Elementtext hält.
+- **Kein PHP, kein JavaScript, kein Raten.** Ein Platzhalter im `<script>` wird
+  verweigert, nicht escaped. Zeichenreferenzen werden in Rohtext nicht
+  aufgelöst, `&lt;` käme als vier Zeichen bei der JS-Engine an — HTML-Escaping
+  hilft dort nicht nur nicht, es zerstört. Zwei Untersuchungen haben einen
+  JavaScript-Teilscanner geschrieben, beide verloren den String-Zustand in einer
+  echten ausgelieferten Datei und vergaben danach bis zu 277 falsche Positionen.
+- **Keine Prüfung auf `javascript:`.** In `javascript:alert(1)` ist kein Zeichen
+  HTML-sonderbar, Escaping kann es nicht aufhalten, und weder jinja2 3.1.6 noch
+  markupsafe 3.0.3 schützt davor. Der Wert wird wie jeder Attributwert escaped,
+  die Position wird gemeldet, und der Modus sagt laut, dass er keine Allowlist ist.
+- **Kein `#include`.** Der erste Entwurf liess es stehen und warnte. Der
+  Angriffslauf hat gezeigt, warum das nicht reicht: eine eingebundene Datei kann
+  ein Tag öffnen, der Einbinder scannt weiter im Elementtext, und jeder
+  Platzhalter danach wird für die falsche Position escaped. Prüfbar wäre nur
+  beides zusammen, und der Name eines `#include` ist in 51 Korpusfällen erst zur
+  Laufzeit bekannt. Also abgelehnt.
+- **Kein Öffnungskontext für Fragmente.** Jede Datei wird aus frischem Data-State
+  gescannt. Ein `.inc`, das in einer `<table>` beginnt, ist damit richtig
+  behandelt; eines, das wirklich in einem Tag oder einem `<script>` beginnt,
+  würde still falsch escaped, und nichts in der Datei kann das verraten. Im
+  Korpus gibt es kein solches: alle 390 enden im Data-State, keine HTML-Datei
+  beginnt in einem Tag, keiner von 399 Includes setzt eine Struktur in seinem
+  Einbinder fort. Prüfbar ist nur die Erzeugerseite, und die wird geprüft: eine
+  Datei, die nicht im Data-State endet, wird abgelehnt. Eine Datei, die an eine
+  Nicht-Data-Position eingebunden wird, bleibt im Text-Modus.
+- **Kein `#filter`, kein `#transform`** in einer Markup-Datei. Ein
+  ausgetauschter Filter bricht die Komposition, auf der der Escape steht.
+- **Kein `#raw`, kein PSP, kein `#include`, kein `#extends`.** Alle vier
+  schreiben Ausgabe, an der der Scan vorbeiläuft, und jeder war ein offenes
+  Loch, bis er hier stand — gefunden, indem der fertige Modus angegriffen
+  wurde, nicht indem er gelesen wurde. Ein Tag, das in einem `#raw` aufgeht,
+  lässt die Maschine im Elementtext stehen, während der Browser in einem
+  ungequoteten Attribut ist; der nächste Wert wird für Text escaped und landet
+  scharf. `<%= x %>` schreibt einen Wert, ohne den Platzhalterpfad überhaupt
+  zu berühren. Eine eingebundene Datei kann ein Tag öffnen, und der Einbinder
+  kann es nicht wissen. Und ein Kind, das einen `#block` der Basis überschreibt,
+  wird aus frischem Data-State gescannt, während die Basis ein Tag offen lässt.
+  Das ist ein kleinerer Modus, als der Plan verlangt hat, und die einzige
+  Fassung davon, die stimmt.
+- **Kein `#def` für Markup.** Der Rumpf eines `#def` gehört an die Aufrufstelle,
+  seine Platzhalter werden verweigert, und der Aufruf `$graph` steht im
+  Elementtext und wird escaped. Ein Skin, der seine Seite aus `#def` zusammensetzt,
+  gehört in den Text-Modus. Für `#block` gilt das nicht: ct3 schreibt den Aufruf
+  dort, wo das Tag steht, also landen die Bytes wirklich dort.
+- **Kein Rückfall auf ct3.** Wo der Generator eine Markup-Datei ablehnt,
+  scheitert die Übersetzung mit dem Grund (`MarkupRefused`). Der Rückfall würde
+  `#mode markup` als erste Zeile in die Seite schreiben und nichts escapen: die
+  falsche Seite und das fehlende Escaping zugleich.
+- **Kein `markup` im Build-Manifest.** `build.MODES` bleibt `("text", "json")`.
+  Der Modus steht im Template, ein Manifestschlüssel wäre eine zweite Stelle,
+  an der er falsch sein kann. Der Build fragt die Quelle.
 
 Im `text`-Modus bleibt alles wie in ct3, also ohne Escaping. Alles andere wäre
-ein stiller Bruch.
+ein stiller Bruch. Gemessen nach dem Einbau: Korpus 2026 von 2026 identisch auf
+beiden Engines, `whitespace` 0 falsch, `hostile` 0 Abweichungen, `perturb` 188
+Abweichungen, alle in den tolerierten Klassen — dieselben Zahlen wie davor.
 
 ---
 
