@@ -42,10 +42,18 @@ from ct4.lang import backend                                   # noqa: E402
 # differently with the machine and a tight floor there would fail on
 # somebody else's.
 #
+# Lowered from 0.60 when the origin comments went in. They cost a
+# second parse of the generated module, which is what a compile is
+# mostly made of, and the image reads 0.56 with them. Paid knowingly:
+# without them a template that raises at render time names a generated
+# file that does not exist on disk and no line of the template at all,
+# which is the one thing ct3 does better and the reason the factor is
+# worth spending.
+#
 # The render floor is the load-bearing one. Below 0.95 the generated
 # module is doing something the compiler's is not, and the first place
 # to look is whether the scope rewrite still fires.
-FLOOR = {"compile": 0.60, "render": 0.95}
+FLOOR = {"compile": 0.50, "render": 0.95}
 
 ROWS = [{"name": "r%d" % i, "value": i * 1.5, "flag": i % 2 == 0}
         for i in range(200)]

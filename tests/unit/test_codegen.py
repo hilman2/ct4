@@ -14,6 +14,7 @@ check perfectly by refusing everything.
 
 from __future__ import annotations
 
+import ast
 import sys
 
 import pytest
@@ -212,6 +213,40 @@ def test_a_subscript_swallows_the_bracket_group_behind_it():
     chunks = codegen.chunks_of("$a[1](2)")
     assert [(c.name, c.autocall, c.remainder) for c in chunks] == \
         [("a", True, "[1](2)")]
+
+
+def test_the_generated_code_says_where_it_came_from():
+    # A traceback out of a template points at a module that does not
+    # exist on disk. ct3 writes the origin behind every statement and
+    # ct4.trace reads it back; ast.unparse writes no comments, so the
+    # generator has to put them there itself.
+    made = codegen.generate("one\ntwo\n$aStr\n")
+    assert "# generated from line 3, col 1" in made.code
+
+
+def test_the_origins_are_the_same_ones_ct3_writes():
+    from ct4 import trace
+
+    source = "line one\n#for $r in $rows\n  $r.name\n#end for\n"
+    ours = trace.line_map(codegen.generate(source).code)
+    theirs = trace.line_map(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)._CHEETAH_generatedModuleCode)
+    # Not the same generated lines, the two write different Python.
+    # The same places in the template, and that is what is read.
+    assert sorted(set(ours.values())) == sorted(set(theirs.values()))
+
+
+def test_an_origin_is_never_invented():
+    # The map is recovered by walking the tree that went into
+    # ast.unparse against the one that comes back out of ast.parse. If
+    # those two ever stop lining up the comments have to go, not move:
+    # a line number that sends its reader to the wrong line of their
+    # template is worse than none.
+    module = ast.parse("x = 1\ny = 2\n")
+    setattr(module.body[0], codegen.ORIGIN, (7, 3))
+    with pytest.raises(codegen._Mismatch):
+        codegen._origin_lines(module, ast.parse("x = 1\n"))
 
 
 def test_a_bare_name_behind_a_bracket_carries_the_chain_on():
@@ -1359,7 +1394,11 @@ def test_a_lookup_starts_at_a_local_the_way_ct3_writes_it(source):
     want = [line.strip().split("#")[0].strip()
             for line in theirs._CHEETAH_generatedModuleCode.splitlines()
             if "_v =" in line]
-    got = [line.strip() for line in codegen.generate(source).code.splitlines()
+    # Both sides lose their origin comment: ct3 writes one behind every
+    # statement and so, since the traceback needs it, does the
+    # generator. What is compared is the lookup.
+    got = [line.strip().split("#")[0].strip()
+           for line in codegen.generate(source).code.splitlines()
            if "_v =" in line]
     # ct3 writes no blanks after a comma and quotes with ", where
     # ast.unparse writes a blank and '. Neither is the point here.

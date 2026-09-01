@@ -1241,7 +1241,116 @@ def generate(source: str, settings: Any = None,
     # about the template, and this line is not the template's.
     module.body.extend(_plumbing(class_name))
     ast.fix_missing_locations(module)
-    return Generated(ast.unparse(module), module, class_name, state)
+    return Generated(_with_origins(ast.unparse(module), module),
+                     module, class_name, state)
+
+
+# Where a generated statement came from, as (line, column) in the
+# template. Set on the ast node, because that is the only thing that
+# survives from the piece that built it to the module that is unparsed.
+ORIGIN = "ct4_origin"
+
+
+def _at(statement: ast.stmt, line: int, column: int) -> ast.stmt:
+    """Records where in the template a statement came from.
+
+    The first writer wins. A block writes its own statement here and
+    its body has already been through this on the way up, so an inner
+    statement keeps the position of the placeholder or directive it
+    really came from and only what has none takes the block's.
+    """
+    if not hasattr(statement, ORIGIN):
+        setattr(statement, ORIGIN, (line, column))
+    return statement
+
+
+def _with_origins(code: str, module: ast.Module) -> str:
+    """Writes ct3's origin comments behind the generated statements.
+
+    ``# generated from line 4, col 3``. ct3's compiler emits these as
+    it writes the source, and everything downstream reads them:
+    ``ct4.trace`` turns a traceback into a place in the template, and
+    without them a runtime error names a file that does not exist on
+    disk and nothing else. ``ast.unparse`` writes no comments, so they
+    have to be put back.
+
+    Which generated line belongs to which statement is recovered
+    structurally rather than guessed. Unparsing and parsing again gives
+    a tree of the same shape as the one that was unparsed, so the two
+    can be walked side by side and each generated line read off the
+    node that stands where the origin was recorded.
+
+    That is an assumption about ``ast.unparse``, and it is checked
+    rather than trusted: the walk gives up on the first pair of nodes
+    that do not match and the code goes out without comments. A missing
+    origin costs a line number. A wrong one sends its reader to the
+    wrong line of their template, which is worse than none.
+    """
+    try:
+        found = _origin_lines(module, ast.parse(code))
+    except (SyntaxError, _Mismatch):
+        return code
+    if not found:
+        return code
+    lines = code.splitlines()
+    for number, (line, column) in found.items():
+        if 1 <= number <= len(lines):
+            lines[number - 1] += " # generated from line %d, col %d" % (
+                line, column)
+    return "\n".join(lines) + "\n"
+
+
+class _Mismatch(Exception):
+    """The unparsed code did not parse back to the same shape."""
+
+
+# The fields a statement holds statements in. Descending through these
+# alone reaches every node an origin can sit on, and it skips the
+# expressions, which is nearly all of the tree: over the corpus the
+# walk cost more than the reparse before it was cut down to these.
+BODIES = ("body", "orelse", "finalbody", "handlers")
+
+
+def _sub_statements(node: ast.AST) -> list[ast.AST]:
+    found: list[ast.AST] = []
+    for name in BODIES:
+        held = getattr(node, name, None)
+        if isinstance(held, list):
+            found.extend(held)
+    return found
+
+
+def _origin_lines(made: ast.Module,
+                  back: ast.Module) -> dict[int, tuple[int, int]]:
+    """Generated line number to the template position recorded on it.
+
+    Walked with a stack rather than by recursion: a template nests as
+    deeply as its author nested it, and a page with two hundred nested
+    conditionals should generate slowly, not raise RecursionError.
+
+    Only the statements are walked, and that is enough for the pairing
+    to be sound. ``ast.unparse`` writes the statements of a body in
+    order and one for one, so the nth statement of a body in the tree
+    that went in is the nth statement of that body in the tree that
+    came back. An expression that unparsed differently could not move
+    a statement.
+    """
+    found: dict[int, tuple[int, int]] = {}
+    stack: list[tuple[ast.AST, ast.AST]] = [(made, back)]
+    while stack:
+        one, other = stack.pop()
+        if type(one) is not type(other):
+            raise _Mismatch
+        origin = getattr(one, ORIGIN, None)
+        number = getattr(other, "lineno", None)
+        if origin is not None and number is not None:
+            found.setdefault(number, origin)
+        left = _sub_statements(one)
+        right = _sub_statements(other)
+        if len(left) != len(right):
+            raise _Mismatch
+        stack.extend(zip(left, right))
+    return found
 
 
 # Every name the guard below asks about, as one search over the source.
@@ -1516,10 +1625,20 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
     # to the tree, because the tree has to stay what the layer below
     # built: it is the thing that writes back to the source.
     pending: bool | None = None
+    # The node whose pieces are still to be given their origin, and
+    # where in "out" they start. Stamped one turn late, because the
+    # body below leaves through a dozen different "continue"s and a
+    # single place that runs for every node is worth more than a dozen
+    # calls that have to stay in step with them.
+    stamping: tree.Node | None = None
+    mark = 0
     index = 0
     while index < len(nodes):
         node = nodes[index]
         index += 1
+        if stamping is not None:
+            _stamp(out, mark, stamping)
+        stamping, mark = node, len(out)
         if pending is not None:
             gobble = pending
             pending = None
@@ -1677,7 +1796,20 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             out.append((BARRIER_PIECE, ""))
         else:
             _piece(node, source, out)
+    if stamping is not None:
+        _stamp(out, mark, stamping)
     return out
+
+
+def _stamp(out: list[tuple[str, Any]], mark: int, node: tree.Node) -> None:
+    """Gives the statements a node produced the node's own position.
+
+    Only what has none yet, which is how a placeholder keeps the
+    position of the placeholder rather than of the block it stands in.
+    """
+    for kind, value in out[mark:]:
+        if kind == STMT_PIECE:
+            _at(value, node.line, node.column)
 
 
 def _swallow_line(nodes: Sequence[tree.Node], index: int,
@@ -4412,7 +4544,7 @@ def _placeholder_value(lookup: ast.expr,
     raw = written.raw if written is not None else ""
     keywords = [ast.keyword(arg="rawExpr", value=ast.Constant(raw))] \
         if raw else []
-    return [
+    made: list[ast.stmt] = [
         _assign(VALUE, lookup),
         ast.If(
             test=ast.Compare(left=ast.Name(id=VALUE, ctx=ast.Load()),
@@ -4421,6 +4553,14 @@ def _placeholder_value(lookup: ast.expr,
             body=[_write(_filtered(written, keywords))],
             orelse=[]),
     ]
+    if written is not None:
+        # The lookup is where a template raises, so this is the origin
+        # that matters most: a page that says "line 4, column 3" over
+        # a name that does not resolve is the whole point of keeping
+        # the origins at all.
+        for statement in made:
+            _at(statement, written.line, written.column)
+    return made
 
 
 def _filtered(written: Written | None,
