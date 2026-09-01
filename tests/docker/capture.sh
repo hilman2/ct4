@@ -147,8 +147,27 @@ run_suite() {
 # and not that weewx can reach it.
 run_json_skin() {
     cd /work
+    rm -rf /tmp/skin-ct4 /tmp/skin-plain
     TZ=America/Los_Angeles LANG=en_US.UTF-8 PYTHONPATH=/work \
-        python tests/docker/weewx_json.py
+        python tests/docker/weewx_json.py --out /tmp/skin-ct4
+
+    # The same report with nothing of ours installed, so that the
+    # pages can be held against each other. The JSON file is left out
+    # of the comparison and could not be in it: without ct4 that
+    # template renders as the text it looks like, which is the whole
+    # reason the mode exists.
+    echo
+    TZ=America/Los_Angeles LANG=en_US.UTF-8 PYTHONPATH=/work \
+        python tests/docker/weewx_json.py --plain --out /tmp/skin-plain \
+        2>/dev/null | tail -1
+    rm -f /tmp/skin-ct4/day.json /tmp/skin-plain/day.json
+    if diff -r /tmp/skin-ct4 /tmp/skin-plain >/dev/null; then
+        echo "The pages are the same either way."
+    else
+        echo "The pages differ." >&2
+        diff -r /tmp/skin-ct4 /tmp/skin-plain | head -20 >&2
+        exit 1
+    fi
 }
 
 case "${1:-capture}" in

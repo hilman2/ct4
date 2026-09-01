@@ -88,7 +88,7 @@ SCHEMA = {
 EXTENSIONS = """\
 from ct4.lang import backend
 
-backend.install()
+counts = backend.install()
 """
 
 
@@ -167,14 +167,26 @@ def main() -> int:
     if not WEEWX_TESTS.is_dir():
         print("no weewx here; this runs in the capture image")
         return 0
+    # --plain runs the same report with nothing of ours installed, so
+    # that the caller can diff the two trees. It has to be a second
+    # process and not a second call: a compiled template class outlives
+    # an uninstall, and a comparison against a cached class would be a
+    # comparison with itself.
+    plain = "--plain" in sys.argv
+    into = None
+    if "--out" in sys.argv:
+        into = Path(sys.argv[sys.argv.index("--out") + 1])
     root = Path(tempfile.mkdtemp())
     _user_package(root)
     sys.path.insert(0, str(root))
 
-    # The way weewx does it, weeutil/startup.py line 76. In a real run
-    # this happens at startup; the test harness does not go through
-    # startup, so the driver stands in for it and nothing else.
-    importlib.import_module("user.extensions")
+    extensions = None
+    if not plain:
+        # The way weewx does it, weeutil/startup.py line 76. In a real
+        # run this happens at startup; the test harness does not go
+        # through startup, so the driver stands in for it and nothing
+        # else.
+        extensions = importlib.import_module("user.extensions")
 
     import weewx.accum
     import weewx.manager
@@ -224,13 +236,31 @@ def main() -> int:
         None, parameters.synthetic_dict["stop_ts"])
     engine.run()
 
-    made = Path(out) / config["StdReport"]["StandardTest"]["HTML_ROOT"] \
-        / "day.json"
+    where = Path(out) / config["StdReport"]["StandardTest"]["HTML_ROOT"]
+    if into is not None:
+        into.mkdir(parents=True, exist_ok=True)
+        for path in where.iterdir():
+            if path.is_file():
+                shutil.copy2(path, into / path.name)
+    if plain:
+        print("the same report with nothing of ours installed: %d files"
+              % len(list(where.iterdir())))
+        return 0
+
+    made = where / "day.json"
     if not made.exists():
         print("weewx wrote no %s" % made)
         for path in sorted(Path(out).rglob("*")):
             print("   ", path)
         return 1
+
+    # Which compiler did what over the whole report, and it is worth
+    # printing: the JSON template goes through the bridge, and every
+    # HTML page in the same run goes wherever the counts say.
+    print("compilers: %s" % extensions.counts)
+    pages = sorted(p.name for p in made.parent.glob("*.html"))
+    print("pages in the same run: %d (%s ...)"
+          % (len(pages), ", ".join(pages[:3])))
 
     text = made.read_text(encoding="utf-8")
     print("weewx wrote %s, %d bytes" % (made.name, len(text)))

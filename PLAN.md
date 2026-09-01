@@ -156,6 +156,22 @@ lässt weewx' eigene Report-Engine über weewx' eigenes Testskin laufen, mit ein
 `#mode json`-Vorlage darin, im Skin angemeldet wie jede andere. Heraus kommt
 gültiges JSON, das sein Schema hält, mit Zahlen als Zahlen.
 
+**Und die HTML-Seiten desselben Laufs gehen durch den neuen Generator.** Das war
+bis eben nicht so: weewx übersetzt aus einer Datei, und der Rückfallpfad reichte
+die Dateiform ungesehen an ct3 weiter. Er muss die Datei aber gar nicht selbst
+lesen — `ModuleCompiler.__init__` hat sie bereits geöffnet, mit der Kodierung,
+die die Einstellungen verlangen, und eine `#unicode`-Zeile schon herausgeschnitten.
+Die Quelle steht im Parser, und von dort kommt sie jetzt.
+
+Derselbe Lauf, einmal mit und einmal ohne installiertem Rückfallpfad:
+
+| | |
+|---|---|
+| Vorlagen über den neuen Generator | 8 |
+| zurückgefallen auf ct3 | 1 |
+| über die JSON-Brücke | 1 |
+| Seiten byte-identisch | 33 von 33 |
+
 Der Modus steht in einer angemeldeten Zeile im Template, nicht in einer globalen
 Einstellung. Ein Skin enthält beides. Für `markup` ist das `#mode markup` auf der
 ersten Zeile, die weder leer noch ein `##`-Kommentar ist; `ct4.check` liest

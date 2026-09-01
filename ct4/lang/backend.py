@@ -57,28 +57,6 @@ class MarkupRefused(Exception):
     """
 
 
-def _read(path: str) -> str | None:
-    """A template file's text, or None where it cannot be had.
-
-    A file that cannot be read is not a declaration of anything: ct3 is
-    about to open it and will raise its own error, which is a better
-    message than one invented here.
-    """
-    if not path:
-        return None
-    try:
-        with open(path, encoding="utf-8") as handle:
-            return handle.read()
-    except OSError:
-        return None
-
-
-def _declares_markup(path: str) -> bool:
-    """Whether a template file asks for markup mode."""
-    text = _read(path)
-    return text is not None and markup_mode.declared(text)
-
-
 @dataclass
 class Counts:
     """How the work split between the two compilers.
@@ -109,12 +87,19 @@ def generating_compiler(counts: Counts) -> type:
                      **kwargs: Any) -> None:
             super().__init__(source, file, **kwargs)
             self._ct4_code: str | None = None
-            self._ct4_source = source
             self._ct4_kwargs = kwargs
-            # Only for the message a refused placeholder raises in
-            # markup mode. It is empty for the string form, which is
-            # the only form that reaches the generator today.
             self._ct4_file = file if isinstance(file, str) else ""
+            # Whatever form it came in, this is the text ct3 is about
+            # to parse. Taken off the parser rather than read again:
+            # ModuleCompiler.__init__ has already opened the file with
+            # the encoding the settings asked for and has already cut
+            # a #unicode line out, and reading it a second time here
+            # would be a second answer to both questions. It is also
+            # what makes a template from a file reachable at all,
+            # which is the form weewx uses for every page it renders.
+            self._ct4_source = source
+            if self._ct4_source is None:
+                self._ct4_source = self._parser.src()
 
         def compile(self) -> None:
             # JSON mode first, and for both forms. An application that
@@ -124,8 +109,6 @@ def generating_compiler(counts: Counts) -> type:
             # weewx not at all. What comes out is an ordinary class
             # whose respond() returns the serialised document.
             text = self._ct4_source
-            if text is None:
-                text = _read(self._ct4_file)
             if text is not None and check.is_json_template(text):
                 self._ct4_code = bridge.module_for(
                     text,
@@ -135,18 +118,7 @@ def generating_compiler(counts: Counts) -> type:
                     Path(self._ct4_file).parent if self._ct4_file else None)
                 counts.json += 1
                 return
-            # A template from a file never reaches the generator: its
-            # path goes into the generated module and nothing here
-            # writes that yet. That is fine for text mode and not fine
-            # for markup, where falling back to ct3 prints the
-            # declaration into the page and escapes nothing. So the
-            # file is read for the one line that decides it.
-            if self._ct4_source is None and _declares_markup(self._ct4_file):
-                raise MarkupRefused(
-                    "%s declares markup mode and was compiled from a file;"
-                    " markup mode needs the source, so compile it from a"
-                    " string or keep it in text mode" % self._ct4_file)
-            if self._ct4_source is not None:
+            if text is not None:
                 try:
                     made = codegen.generate(
                         self._ct4_source,
@@ -159,7 +131,7 @@ def generating_compiler(counts: Counts) -> type:
                 except markup_scan.ScanRefused as refused:
                     raise MarkupRefused(str(refused)) from refused
                 except (codegen.Unsupported, tree.StructureError) as refused:
-                    if markup_mode.declared(self._ct4_source):
+                    if markup_mode.declared(text):
                         raise MarkupRefused(str(refused)) from refused
                     counts.fell_back += 1
                 else:
