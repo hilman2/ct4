@@ -135,6 +135,27 @@ weewx-Anwender installieren.
 | `json`   | Struktur bauen, dann serialisieren          | neu                           |
 | `markup` | HTML mit positionsabhängigem Escaping        | opt-in, je Datei              |
 
+**Der Modus sitzt in der Engine, nicht im Aufrufer.** Das ist keine Feinheit:
+weewx reicht `Cheetah.Template.Template` eine Datei und ruft `respond()`, und
+das ist sein ganzer Vertrag mit der Engine. Ein Modus, den nur `ct4 build`
+erreicht, ist für weewx kein Modus. `ct4.jsonmode.bridge` macht deshalb aus
+einer `#mode json`-Vorlage eine gewöhnliche übersetzte Cheetah-Klasse, deren
+`respond()` das serialisierte Dokument liefert; `ct4.lang.backend` hängt das an
+denselben Haken wie der Compile-Cache.
+
+**Was weewx dafür ändern muss: nichts.** Es importiert beim Start
+`user.extensions` (`weeutil/startup.py`, Zeile 76), und dort stehen zwei Zeilen:
+
+```python
+from ct4.lang import backend
+backend.install()
+```
+
+Gemessen: `docker compose -f tests/docker/compose.yml run --rm capture json-skin`
+lässt weewx' eigene Report-Engine über weewx' eigenes Testskin laufen, mit einer
+`#mode json`-Vorlage darin, im Skin angemeldet wie jede andere. Heraus kommt
+gültiges JSON, das sein Schema hält, mit Zahlen als Zahlen.
+
 Der Modus steht in einer angemeldeten Zeile im Template, nicht in einer globalen
 Einstellung. Ein Skin enthält beides. Für `markup` ist das `#mode markup` auf der
 ersten Zeile, die weder leer noch ein `##`-Kommentar ist; `ct4.check` liest

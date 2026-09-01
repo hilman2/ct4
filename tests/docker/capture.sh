@@ -1,10 +1,13 @@
 #!/bin/sh
 # Works against a real weewx.
 #
-#   capture  record contexts from a report run (default)
-#   verify   do the same run once with ct3 and once with the fork and
-#            compare the pages they produce
-#   suite    weewx own test suite against both engines, outcomes compared
+#   capture   record contexts from a report run (default)
+#   verify    do the same run once with ct3 and once with the fork and
+#             compare the pages they produce
+#   json      the JSON mode against real weewx data, twice, same bytes
+#   json-skin weewx' own report engine over its own skin, with one
+#             #mode json template in it and nothing about weewx changed
+#   suite     weewx own test suite against both engines, outcomes compared
 #
 # The recordings land under /out, which the caller mounts.
 set -eu
@@ -138,10 +141,21 @@ run_suite() {
     python /repo/tests/docker/weewx_suite.py
 }
 
+# weewx' own report engine over weewx' own skin, with one JSON template
+# added, and nothing about weewx changed. The run before this one
+# renders the JSON in a fixture of ours, which proves the mode works
+# and not that weewx can reach it.
+run_json_skin() {
+    cd /work
+    TZ=America/Los_Angeles LANG=en_US.UTF-8 PYTHONPATH=/work \
+        python tests/docker/weewx_json.py
+}
+
 case "${1:-capture}" in
-    capture) run_capture ;;
-    verify)  run_verify ;;
-    json)    run_json ;;
-    suite)   run_suite ;;
-    *)       echo "Unknown: $1" >&2; exit 2 ;;
+    capture)   run_capture ;;
+    verify)    run_verify ;;
+    json)      run_json ;;
+    json-skin) run_json_skin ;;
+    suite)     run_suite ;;
+    *)         echo "Unknown: $1" >&2; exit 2 ;;
 esac

@@ -35,8 +35,11 @@ somebody asks for this.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from ct4 import check
+from ct4.jsonmode import bridge
 from ct4.lang import codegen, tree
 from ct4.markup import mode as markup_mode
 from ct4.markup import scan as markup_scan
@@ -54,24 +57,26 @@ class MarkupRefused(Exception):
     """
 
 
-def _declares_markup(path: str) -> bool:
-    """Whether a template file asks for markup mode.
+def _read(path: str) -> str | None:
+    """A template file's text, or None where it cannot be had.
 
-    Read here and not left to the generator because the file form
-    never reaches it. A file that cannot be read is not a declaration:
-    ct3 is about to open it and will raise its own error, which is a
-    better message than one invented here.
+    A file that cannot be read is not a declaration of anything: ct3 is
+    about to open it and will raise its own error, which is a better
+    message than one invented here.
     """
     if not path:
-        return False
+        return None
     try:
-        with open(path, encoding="utf-8", errors="replace") as handle:
-            # The declaration stands in the first lines or nowhere, and
-            # a page is not worth reading whole to find that out.
-            head = handle.read(4096)
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
     except OSError:
-        return False
-    return markup_mode.declared(head)
+        return None
+
+
+def _declares_markup(path: str) -> bool:
+    """Whether a template file asks for markup mode."""
+    text = _read(path)
+    return text is not None and markup_mode.declared(text)
 
 
 @dataclass
@@ -86,9 +91,11 @@ class Counts:
 
     taken: int = 0
     fell_back: int = 0
+    json: int = 0
 
     def __str__(self) -> str:
-        return "taken=%d fell_back=%d" % (self.taken, self.fell_back)
+        return ("taken=%d fell_back=%d json=%d"
+                % (self.taken, self.fell_back, self.json))
 
 
 def generating_compiler(counts: Counts) -> type:
@@ -110,6 +117,24 @@ def generating_compiler(counts: Counts) -> type:
             self._ct4_file = file if isinstance(file, str) else ""
 
         def compile(self) -> None:
+            # JSON mode first, and for both forms. An application that
+            # only knows Cheetah hands the compiler a file and calls
+            # respond() on what comes back, so a mode reachable only
+            # through ct4's own entry points would be reachable from
+            # weewx not at all. What comes out is an ordinary class
+            # whose respond() returns the serialised document.
+            text = self._ct4_source
+            if text is None:
+                text = _read(self._ct4_file)
+            if text is not None and check.is_json_template(text):
+                self._ct4_code = bridge.module_for(
+                    text,
+                    self._ct4_kwargs.get("mainClassName") or codegen.CLASS,
+                    self._ct4_kwargs.get("mainMethodName") or codegen.MAIN,
+                    self._ct4_kwargs.get("baseclassName"),
+                    Path(self._ct4_file).parent if self._ct4_file else None)
+                counts.json += 1
+                return
             # A template from a file never reaches the generator: its
             # path goes into the generated module and nothing here
             # writes that yet. That is fine for text mode and not fine
