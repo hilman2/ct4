@@ -27,6 +27,7 @@ the layer above.
 from __future__ import annotations
 
 import bisect
+import functools
 import re
 import string
 from dataclasses import dataclass, field
@@ -175,18 +176,27 @@ def joined(items: Sequence[Token]) -> str:
     return "".join(token.text for token in leaves(items))
 
 
-def line_starts(source: str) -> list[int]:
+@functools.lru_cache(maxsize=8)
+def line_starts(source: str) -> tuple[int, ...]:
     """Offset of the first character of every line.
 
     Public because the layer above splits tokens at line endings and
     has to give the halves the right position. Computing that from a
     count of newlines is the mistake this file already made once: a
     template with old Mac line endings holds none at all.
+
+    Cached, and a tuple so that a caller cannot write into the cache.
+    The layer above asks whether a line is clear once per directive and
+    once per placeholder, and each of those asks for this: over the 390
+    skin templates it was called ten thousand times and scanned the
+    whole source each time, two seconds of the six the generator took.
+    A string remembers its own hash, so the lookup is cheap after the
+    first call on it.
     """
     starts = [0]
     for match in EOL.finditer(source):
         starts.append(match.end())
-    return starts
+    return tuple(starts)
 
 
 def where(starts: Sequence[int], offset: int) -> tuple[int, int]:

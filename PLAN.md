@@ -1348,13 +1348,40 @@ Drittel der verbleibenden Zeit. Um da heranzukommen, bräuchte es eine Stelle
 zum Einhängen, die ct3 nicht hat. Das ist einer der Gründe für den eigenen
 Compiler.
 
-**Was der Kern noch nicht ist.** Er hat keinen Aufrufer. Gerendert wird weiter
-über ct3s alten Compiler, und `ct4/lang` wird von nichts außerhalb seiner
-selbst importiert. Die nächste Entscheidung ist deshalb keine Fleißarbeit,
-sondern eine Entwurfsfrage: Wann übernimmt er? Naheliegend ist ein
-Rückfallpfad — `supports()` fragen, sonst ct3 —, eingehängt an derselben
-Stelle wie der Compile-Cache. Erst wenn er echte Skins rendert, weiß man, ob
-die 80 Prozent die richtigen 80 Prozent sind.
+**Der Kern hat jetzt einen Aufrufer.** `ct4/lang/backend.py` hängt ihn an
+derselben Stelle ein wie der Compile-Cache, `Template._CHEETAH_compilerClass`.
+Die Schnittstelle ist zwei Methoden, `compile()` und `getModuleCode()`, und was
+zurückkommt ist der Text eines Moduls, das ct3 ausführt und aus dem es eine
+Klasse zieht. Was der Generator ablehnt, übersetzt ct3 selbst, und der Aufrufer
+merkt nichts. Genau dafür wurde `Unsupported` die ganze Zeit ehrlich gehalten.
+
+Über den ganzen Korpus, durch `Template.compile` statt durch `codegen.render`:
+**1.337 übernommen, 301 zurückgefallen, 0 falsche Bytes, 0 Ausnahmen.**
+
+Das hat vier Dinge zutage gefördert, die `codegen.render` nie berührt hatte,
+weil sie erst zählen, wenn ct3 die Klasse in die Hand nimmt:
+
+- ct3 schreibt ein `__init__`, das `_initCheetahInstance` ruft. Ohne das wird
+  eine Vorlage mit fremder Basisklasse nie initialisiert.
+- `_CHEETAH__instanceInitialized`, `_CHEETAH_versionTuple` und
+  `_mainCheetahMethod_for_<Klasse>` sind Klassenattribute, die ct3 von außen
+  liest — das letzte braucht `#include`, um die Methode zu finden.
+- Nach der Klasse steht ein Aufruf von `_addCheetahPlumbingCodeToClass`. Eine
+  Vorlage mit `baseclass=dict` hat sonst keine einzige Cheetah-Methode, und
+  ct3s eigene Testsuite übersetzt jeden Syntaxfall ein zweites Mal so. 338
+  Korpusfälle hingen daran.
+- Eine Methode namens `respond` bekommt ihre Transaktion als Argument, jede
+  andere aus einem Schlüsselwortwörterbuch. ct3 entscheidet das am Namen
+  allein. Ein Test hatte hier vorher die falsche Erwartung stehen.
+
+**Tempo: 0,76x beim Übersetzen.** Der Generator ist langsamer als ct3s
+Zeichenkettenverkettung, und das ist bauartbedingt: er baut einen AST, gibt ihn
+als Text zurück, und Python parst diesen Text noch einmal. Zwei billige
+Reparaturen haben 0,59x auf 0,76x gebracht — `lex.line_starts` wurde bei 390
+Skins zehntausendmal für dieselbe Quelle neu berechnet, und der
+Präambel-Wächter lief über jeden erzeugten Knoten, auch wo die Quelle keinen
+der Namen enthält. Der Rest ist der doppelte Parse. Dafür gibt es den
+persistenten Compile-Cache, der genau diese Kosten einmal zahlt.
 
 Der JSON-Modus bleibt davon zunächst unberührt. Er übersetzt heute über eine
 Cheetah-`#def`; ihn auf eigenen Codegen umzustellen hiesse, einen zweiten

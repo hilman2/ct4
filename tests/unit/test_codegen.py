@@ -628,9 +628,12 @@ def test_implements_arguments_accumulate_and_survive_a_rename():
     # name and adds to it, and setMainMethodName renames that same
     # object, so neither a second #implements nor a later #extends
     # throws the earlier arguments away.
+    # And respond takes its transaction as an argument rather than out
+    # of a keyword dictionary, whatever #implements added: ct3 decides
+    # that on the method's name alone.
     twice = codegen.generate(
         "#implements respond(a=1)\n#implements respond(b=2)\n$a $b\n").code
-    assert "def respond(self, a=1, b=2, **KWS):" in twice
+    assert "def respond(self, a=1, b=2, trans=None):" in twice
     renamed = codegen.generate(
         "#implements respond(foo=9)\n#extends Foo\n$foo\n").code
     assert "def writeBody(self, foo=9, **KWS):" in renamed
@@ -980,7 +983,7 @@ def test_a_psp_value_is_not_the_two_statements_a_placeholder_writes():
     # guard. The two agree under the default filter and part company
     # under one that renders None as something.
     code = codegen.generate("<%= None %>").code
-    assert "_filter(None)" in code and "_v" not in code
+    assert "_filter(None)" in code and "_v =" not in code
     assert out("<%= None %>", [{}]) == ""
 
 

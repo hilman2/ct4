@@ -40,6 +40,11 @@ placeholder moved 15 and 25. ct3's own test suite has no use for a
 directive every weewx skin opens with, so a plan read off the corpus
 alone builds the wrong things first.
 
+ct4/lang/backend.py hooks this in where ct3 provides for it, so a
+caller reaches it through Template.compile and never has to know. What
+this refuses ct3 compiles instead. Over the corpus that is 1337 taken
+and 301 fallen back, with no difference either way.
+
 What it generates is a subclass of ct3's Template, not a plain
 function. A #def has to be a method, and $self and $getVar have to
 resolve, and both need the instance that ct3 puts in the template's
@@ -198,8 +203,7 @@ PREAMBLE = frozenset((
     "unicode", "valueForName", "valueFromFrameOrSearchList",
     "valueFromSearchList",
     "__CHEETAH_docstring__", "__CHEETAH_src__",
-    "__CHEETAH_srcLastModified__", "__CHEETAH_version__",
-    "__CHEETAH_versionTuple__",
+    "__CHEETAH_srcLastModified__",
     "__doc__", "__file__", "__loader__", "__name__", "__package__",
     "__spec__"))
 
@@ -207,6 +211,9 @@ PREAMBLE = frozenset((
 # carries and ct3's does not resolves here and raises NotFound there,
 # which is the same defect with the engines swapped. Today that is the
 # class the skeleton declares: "$_Ct4Template" would write a class.
+# The default name, and the one the test measures against. The guard
+# itself asks about whatever name the module was generated under: a
+# module standing in for ct3's carries the class name ct3 asked for.
 OURS_ONLY = frozenset((CLASS,))
 
 
@@ -714,6 +721,8 @@ from Cheetah.NameMapper import NotFound
 from Cheetah.NameMapper import valueForName as VFN
 from Cheetah.NameMapper import valueFromFrameOrSearchList as VFFSL
 from Cheetah.Template import Template
+from Cheetah.Version import Version as __CHEETAH_version__
+from Cheetah.Version import VersionTuple as __CHEETAH_versionTuple__
 
 
 class %s(Template):
@@ -742,11 +751,103 @@ def %%s(self, %%s**KWS):
 """ % (SEARCH_LIST, FILTER)
 
 
+# The same frame for the one method ct3 signs differently. A method
+# called "respond" takes its transaction as an argument rather than out
+# of a keyword dictionary, and ct3 decides that on the name alone:
+# AutoMethodCompiler._useKWsDictArgForPassingTrans, line 1146. It
+# matters outside the generated module, because Template.respond and
+# _handleCheetahInclude both call it positionally.
+MAIN_PROLOGUE = """\
+def %%s(self, %%strans=None):
+    if (not trans and not self._CHEETAH__isBuffering
+            and not callable(self.transaction)):
+        trans = self.transaction
+    if not trans:
+        trans = DummyTransaction()
+        _dummyTrans = True
+    else:
+        _dummyTrans = False
+    write = trans.response().write
+    %s = self._CHEETAH__searchList
+    %s = self._CHEETAH__currentFilter
+    pass
+    return _dummyTrans and trans.response().getvalue() or ""
+""" % (SEARCH_LIST, FILTER)
+
+# What ct3 puts in a generated class besides its methods. Without the
+# __init__ a template compiled onto a baseclass that is itself a
+# generated template is never initialised, because that base's own
+# __init__ runs and stops at its _CHEETAH__instanceInitialized guard.
+# Zero-argument super() rather than ct3's super(Name, self): the same
+# call, and it does not have to be told the class name.
+INIT = """\
+def __init__(self, *args, **KWs):
+    super().__init__(*args, **KWs)
+    if not self._CHEETAH__instanceInitialized:
+        cheetahKWArgs = {}
+        allowed = "searchList namespaces filter filtersLib errorCatcher"
+        for key, value in KWs.items():
+            if key in allowed.split():
+                cheetahKWArgs[key] = value
+        self._initCheetahInstance(**cheetahKWArgs)
+"""
+
+
+# The class attributes ct3 writes, and every one of them is read
+# somewhere outside the generated module.
+#
+# _CHEETAH__instanceInitialized is what the __init__ above tests, and a
+# template compiled onto a baseclass outside Cheetah's own hierarchy
+# has nowhere else to inherit it from. ct3's own test suite compiles
+# against baseclass=dict, so this is not a corner.
+#
+# _CHEETAH_versionTuple keeps Template.__init__ from going to the
+# module for a version number, and _mainCheetahMethod_for_<class> is
+# what Template._handleCheetahInclude reads to find out what to call.
+ATTRIBUTES = """\
+_CHEETAH__instanceInitialized = False
+_CHEETAH_version = __CHEETAH_version__
+_CHEETAH_versionTuple = __CHEETAH_versionTuple__
+_mainCheetahMethod_for_%s = %r
+"""
+
+
+# What ct3 writes after the class. A template compiled onto a baseclass
+# that is not a Template has none of Cheetah's own methods, and this
+# grafts them on. ct3's own test suite compiles every syntax case a
+# second time against baseclass=dict, so a module that leaves this out
+# fails 338 corpus cases at the first instantiation.
+PLUMBING = """\
+if not hasattr(%s, "_initCheetahAttributes"):
+    getattr(%s, "_CHEETAH_templateClass",
+            Template)._addCheetahPlumbingCodeToClass(%s)
+"""
+
+
+def _class_attributes(class_name: str, main: str) -> list[ast.stmt]:
+    """The __init__ and the attributes ct3 puts beside the methods."""
+    made = ast.parse("%s\n%s" % (INIT, ATTRIBUTES % (class_name, main)))
+    return made.body
+
+
+def _plumbing(class_name: str) -> list[ast.stmt]:
+    """The call that gives a foreign baseclass Cheetah's own methods."""
+    return ast.parse(PLUMBING % (class_name, class_name, class_name)).body
+
+
 def _method(name: str, arguments: str,
             body: list[ast.stmt]) -> ast.stmt:
     """One generated method, with the body in ct3's frame."""
+    shape = PROLOGUE
+    if name == MAIN:
+        if "*" in arguments or re.search(r"\btrans\b", arguments):
+            # ct3 turns streaming off for these and writes a different
+            # body: the transaction is always a throwaway one. Rare
+            # enough to refuse rather than reproduce.
+            raise Unsupported("#implements %s with %r" % (name, arguments))
+        shape = MAIN_PROLOGUE
     try:
-        made = ast.parse(PROLOGUE % (name, arguments)).body[0]
+        made = ast.parse(shape % (name, arguments)).body[0]
     except SyntaxError as error:
         # A parameter list this layer cannot read must be refused, not
         # let out as a SyntaxError: a caller falls back on Unsupported
@@ -774,12 +875,13 @@ class Generated:
 
     code: str
     module: ast.Module
+    class_name: str = CLASS
 
     def compile(self) -> Any:
         """The template class, ready to be given a search list."""
         namespace: dict[str, Any] = {}
         exec(compile(self.module, "<ct4>", "exec"), namespace)
-        return namespace[CLASS]
+        return namespace[self.class_name]
 
 
 # Compiler settings this layer knows it does not honour. It reads
@@ -813,8 +915,22 @@ def supports(source: str, settings: Any = None) -> bool:
     return True
 
 
-def generate(source: str, settings: Any = None) -> Generated:
+def generate(source: str, settings: Any = None,
+             class_name: str = CLASS, base_class: str | None = None,
+             main_method: str | None = None) -> Generated:
     """Python for a template.
+
+    Args:
+        class_name (str): What the generated class is called. ct3 hands
+            its compiler a mainClassName and then pulls that name out
+            of the module it execs, so a module meant to stand in for
+            ct3's has to use it.
+        base_class (str|None): The name ct3 will have bound in the
+            module before it execs it, from the baseclass argument of
+            Template.compile. An #extends in the template overrides it,
+            the way it overrides ct3's.
+        main_method (str|None): What the template's own body is called.
+            Also overridden by #extends and #implements.
 
     Raises:
         Unsupported: where the template uses something this layer does
@@ -825,7 +941,7 @@ def generate(source: str, settings: Any = None) -> Generated:
     source = _preprocess(source)
     root = tree.parse(source)
     _refuse_raw_in_short_form(source, root)
-    shape = _class_shape(root)
+    shape = _class_shape(root, base_class, main_method)
     # The imports #extends synthesises stand with the template's own.
     hoisted: list[ast.stmt] = list(shape.imports)
     methods: list[ast.stmt] = []
@@ -843,15 +959,32 @@ def generate(source: str, settings: Any = None) -> Generated:
     module.body[-1:-1] = hoisted
     made = module.body[-1]
     assert isinstance(made, ast.ClassDef)
+    made.name = class_name
     made.bases = [_parsed(name) for name in shape.bases]
-    made.body = methods + [_method(shape.main, shape.arguments, body)]
+    made.body = (_class_attributes(class_name, shape.main) + methods
+                 + [_method(shape.main, shape.arguments, body)])
+    _refuse_preamble_names(module, source, class_name)
+    _refuse_unbound_bases(module, shape.bases, base_class)
+    # After the guards, not before: the plumbing call names the class,
+    # and the preamble guard asks who reaches for a name. It is asking
+    # about the template, and this line is not the template's.
+    module.body.extend(_plumbing(class_name))
     ast.fix_missing_locations(module)
-    _refuse_preamble_names(module)
-    _refuse_unbound_bases(module, shape.bases)
-    return Generated(ast.unparse(module), module)
+    return Generated(ast.unparse(module), module, class_name)
 
 
-def _refuse_preamble_names(module: ast.Module) -> None:
+# Every name the guard below asks about, as one search over the source.
+# A name can only be reached in the generated module if it stood in the
+# template: an #extends base, a placeholder, a PSP body. So a source
+# that mentions none of them cannot trip the guard, and the walk over
+# the whole module can be skipped. That walk was the single largest
+# item in generating the 390 skin templates.
+PREAMBLE_RE = re.compile(r"\b(?:%s)\b"
+                         % "|".join(sorted(PREAMBLE, key=len, reverse=True)))
+
+
+def _refuse_preamble_names(module: ast.Module, source: str,
+                           class_name: str = CLASS) -> None:
     """Turns away a template that reaches a module name, either way.
 
     Both namespaces, not just ct3's. A name only ct3's module has
@@ -870,6 +1003,8 @@ def _refuse_preamble_names(module: ast.Module) -> None:
     either way; a name bound in another method does not, and that is
     the case this is here for.
     """
+    if not PREAMBLE_RE.search(source) and class_name not in source:
+        return
     bound: set[str] = set()
     reached: set[str] = set()
     for node in ast.walk(module):
@@ -887,7 +1022,7 @@ def _refuse_preamble_names(module: ast.Module) -> None:
                 reached.add(str(looked_up.value).split(".")[0])
     for name in sorted(reached & PREAMBLE - bound):
         raise Unsupported("%r is a name ct3's own module carries" % name)
-    for name in sorted(reached & OURS_ONLY - bound):
+    for name in sorted(reached & {class_name} - bound):
         raise Unsupported(
             "%r is a name this module carries and ct3's does not" % name)
 
@@ -2141,7 +2276,8 @@ class _ClassShape:
     imports: list[ast.stmt]
 
 
-def _class_shape(root: tree.Node) -> _ClassShape:
+def _class_shape(root: tree.Node, base_class: str | None = None,
+                 main_method: str | None = None) -> _ClassShape:
     """The base list, the main method and the imports #extends needs.
 
     ct3 has no such pass: eatExtends and eatImplements call the
@@ -2154,8 +2290,11 @@ def _class_shape(root: tree.Node) -> _ClassShape:
     (Cheetah/Compiler.py lines 1435 and 1936).
     """
     _refuse_nested_class_directives(root)
-    bases = ["Template"]
-    main = MAIN
+    # What the caller asked for, until the template says otherwise.
+    # ct3 hands both to its compiler and lets eatExtends and
+    # eatImplements overwrite them where they appear.
+    bases = [base_class or "Template"]
+    main = main_method or MAIN
     arguments = ""
     imports: list[ast.stmt] = []
     known = list(CT3_IMPORTED)
@@ -2327,7 +2466,8 @@ def _class_directive_argument(node: tree.Node, name: str) -> str:
     return text[:found.start()] if found else text
 
 
-def _refuse_unbound_bases(module: ast.Module, bases: list[str]) -> None:
+def _refuse_unbound_bases(module: ast.Module, bases: list[str],
+                          given: str | None = None) -> None:
     """A base class whose name this module never binds.
 
     ct3's generated module imports eleven names this one does not, and
@@ -2336,7 +2476,10 @@ def _refuse_unbound_bases(module: ast.Module, bases: list[str]) -> None:
     because ``os`` is already in _importedVarNames, and the class
     statement then reads a name that only ct3's preamble has.
     """
-    bound = {"object"}
+    # ct3 binds the baseclass it was handed into the module before it
+    # execs it, so a name that came in that way is bound even though
+    # nothing here imports it.
+    bound = {"object"} | ({given} if given else set())
     for statement in module.body:
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             for alias in statement.names:
