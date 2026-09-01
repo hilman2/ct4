@@ -781,8 +781,12 @@ def _balanced(source: str, index: int, opening: str) -> int | None:
     """Past the bracket that closes the one at ``index``.
 
     Strings are stepped over, because a bracket inside one closes
-    nothing. Returns None where nothing closes it, and then the caller
-    treats what it has as the end.
+    nothing. A line ending is not an end either: ct3's getExpressionParts
+    reads across it while a bracket is open, so ``$b[\\n0]`` is one
+    placeholder whose subscript spans two lines, and the reader drops
+    the ending when it writes the expression out. Returns None where
+    nothing closes it, and then the caller treats what it has as the
+    end.
     """
     closing = CLOSING[opening]
     depth = 0
@@ -798,8 +802,6 @@ def _balanced(source: str, index: int, opening: str) -> int | None:
             depth -= 1
             if depth == 0:
                 return index + 1
-        elif char == "\n" and opening != "(":
-            return None
         index += 1
     return None
 

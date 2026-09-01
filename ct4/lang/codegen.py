@@ -2135,12 +2135,13 @@ def _piece(node: tree.Node, source: str,
 def _refuse_a_short_token(token: lex.Token, source: str) -> None:
     """Where ct3 reads further than the placeholder token reaches.
 
-    lex._balanced gives up at a line ending inside a bracket, so
-    ``$a[\\n1]`` is the token ``$a`` while ct3 reads the subscript and
-    writes VFFSL(SL,"a",True)[1]. Nothing inside the token says so; the
-    character after it does. A token ending on a call is the one case
-    where a bracket may follow legitimately, because there ct3 stops
-    too: ``$a(1)[2]`` is a placeholder and then the text ``[2]``.
+    lex._balanced gives up on a bracket nothing closes, so ``$a[1``
+    with no ``]`` anywhere behind it is the token ``$a`` while ct3
+    reads to the end of the file and stops with a ParseError. Nothing
+    inside the token says so; the character after it does. A token
+    ending on a call is the one case where a bracket may follow
+    legitimately, because there ct3 stops too: ``$a(1)[2]`` is a
+    placeholder and then the text ``[2]``.
 
     The enclosure forms end where ct3 ends them, so they are left
     alone: ``${a}[1]`` writes the same bytes either way.

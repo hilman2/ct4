@@ -1149,8 +1149,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "#if 1\n<% if 1:%>\n#end if\nx<%end%>",  # the two structures cross
     "<%= $anInt %>",                         # a PSP resolves no names
     "<% write(str(__file__)) %>",            # a name only ct3's module has
-    "$a[\n1]\n",                             # the lexer stopped early
-    "${aFunc(\n\n)}\n",                      # ... and left the "}" over
     "#echo ${b}\n",                          # ParseError inside an expression
     "$a[1 +]\n",                             # ct3 does not compile it
 ])
@@ -1598,6 +1596,17 @@ END_TAG_SHAPES = [
     "#i18n: hi",
     "  #i18n\n  hi\n  #end i18n\nB\n",
     '#i18n plural="x", n=2\n$v\n#end i18n\n',
+    # A bracket that a line ending falls inside. ct3 reads across it
+    # and drops it, so the subscript spans two lines and the value is
+    # written where the placeholder began; an enclosure stops at its
+    # brace and the bracket after it is text.
+    "$unit[\n'x']\n",
+    "text $unit[\n  'x'] more\n",
+    "${f(\n\n)}\n",
+    "#set $q = $unit[\n'x']\n$q\n",
+    "#if $unit[\n'x']\nyes\n#end if\n",
+    "$takers[\n0]('a')\n",
+    "${unit}[\n'x']\n",
     # A placeholder in a #def default loses its dollar like the
     # parameter names do and resolves against the module the way any
     # default does: a NameError the moment the class is defined, or a

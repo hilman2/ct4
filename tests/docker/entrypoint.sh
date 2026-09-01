@@ -6,6 +6,7 @@
 #   cheetah  the test suite that ct3 brings along
 #   evals    the diagnostics tasks
 #   reach    how far the code generator gets, and what stops it
+#   quick    lint, unit, check and reach: what one change needs
 #   corpus   the test bench
 #   fuzz     built templates, both engines, byte for byte
 #   bench    render times, ct3 against the fork
@@ -180,7 +181,16 @@ run_sabotage() {
 # under it says which rule to write next.
 run_reach() {
     echo "== How far the code generator gets =="
-    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 3495
+    python -m ct4.corpus --impl fork reach $CORPUS $HARVESTED --floor 3498
+}
+
+# What one change needs before the next: the checks that finish in
+# under a minute. The bench, the corpus run against both engines and
+# the three fuzz instruments say nothing a single rule cannot be
+# measured for locally, and they are what makes "all" take ten
+# minutes. Run "all" once before a commit, "quick" after every edit.
+run_quick() {
+    run_lint; echo; run_unit; echo; run_check; echo; run_reach
 }
 
 run_corpus() {
@@ -200,6 +210,7 @@ case "$WHAT" in
     fuzz)    run_fuzz ;;
     check)   run_check ;;
     reach)   run_reach ;;
+    quick)   run_quick ;;
     evals)   run_evals ;;
     bench)   run_bench ;;
     large)   run_large ;;

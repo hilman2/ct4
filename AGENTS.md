@@ -17,7 +17,10 @@ docker compose -f tests/docker/compose.yml run --rm tests
 Das macht ruff, mypy, die Tests des Werkzeugs, die Testsuite von ct3,
 `ct4 check` über alle Skins, die Aufgaben zur Diagnostik und den
 Korpus-Prüfstand. Einzeln geht `... run --rm tests lint|unit|cheetah|
-check|evals|corpus`.
+check|reach|evals|corpus`. Nach einer Änderung reicht `... run --rm
+tests quick`: ruff, mypy, die Tests des Werkzeugs, `ct4 check` und die
+Reichweite, in zwei Minuten. Alles zusammen dauert zehn und läuft
+einmal vor dem Commit.
 
 ## Eine Vorlage prüfen
 
