@@ -34,7 +34,11 @@ from ct4.lang.lex import Token
 # _eatToThisEndDirective: raw, compiler-settings and defmacro do it by
 # name, and every macro directive does it under whatever name it was
 # registered as, i18n being the one ct3 ships.
-SELF_CLOSING = frozenset({"raw", "compiler-settings", "defmacro", "i18n"})
+#
+# The set lives in lex, because how far their "#end" tag reaches is a
+# question about where the tokens are and the lexer has to answer it
+# before this layer sees anything.
+SELF_CLOSING = lex.SELF_CLOSING
 
 
 _required: frozenset[str] | None = None
@@ -422,7 +426,8 @@ class _Builder:
         """Handles an ``#end`` and pops the block it closes."""
         token = self.tokens[index]
         node = Node(lex.DIRECTIVE, [token], name="end")
-        index = self._take_arguments(node, index + 1)
+        index = self._take_arguments(
+            node, index + 1, lex.self_closing_end(self.source, token.end))
         closes = _end_target(node)
         if len(stack) == 1:
             raise StructureError(

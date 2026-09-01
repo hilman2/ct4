@@ -4007,25 +4007,48 @@ def _attr_statement(node: tree.Node) -> ast.stmt:
     return made
 
 
-NAME_ONLY = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
-
-
 def _global_set(node: tree.Node) -> ast.stmt:
     """``#set global $a = 1`` writes into the template instance.
 
     ct3 generates self._CHEETAH__globalSetVars["a"] = 1, so the value
     outlives the method it was set in and every later lookup finds it.
     """
-    raw = "".join(t.text for t in node.tokens[1:])
-    raw = re.sub(r"^\s*global\b", "", raw, count=1)
-    name, sign, _ = raw.partition("=")
-    name = name.strip().lstrip("$")
-    if not sign or not NAME_ONLY.match(name):
-        raise Unsupported("#set global %r" % raw.strip()[:40])
-    resolved = "".join(_token_source(t) for t in node.tokens[1:])
-    _, _, value = resolved.partition("=")
+    left, operator, right = _assignment_parts(
+        re.sub(r"^\s*global\b", "", _argument_text(node), count=1))
+    primary, secondary = _global_target(left)
     return _framed_statement(
-        'self._CHEETAH__globalSetVars["%s"] =%s' % (name, value))
+        'self._CHEETAH__globalSetVars["%s"]%s %s %s'
+        % (primary, secondary, operator, right))
+
+
+def _global_target(lvalue: str) -> tuple[str, str]:
+    """A global target cut into the name and what hangs off it.
+
+    ``$forecast_settings[$k]`` becomes globalSetVars["forecast_settings"]
+    and then ``[k]``, which is how two skins keep a dictionary that
+    outlives the method. Only the name goes in the quotes.
+
+    ct3's own arithmetic, transliterated rather than tidied
+    (Compiler.addSet). Where a dot and a bracket both stand in the
+    target it takes whichever is first, except that a bracket at
+    offset zero counts as no bracket at all, which is what the max()
+    in the original is for.
+
+    Returns:
+        tuple[str, str]: the name, and the rest including its opening
+            dot or bracket. The rest is empty for a plain name.
+    """
+    dot = lvalue.find(".")
+    bracket = lvalue.find("[")
+    if dot > 0 and bracket == -1:
+        at = dot
+    elif dot > 0 and dot < max(bracket, 0):
+        at = dot
+    else:
+        at = bracket
+    if at > 0:
+        return lvalue[:at], lvalue[at:]
+    return lvalue, ""
 
 
 def _set_statement(node: tree.Node, allow_global: bool = True) -> ast.stmt:
@@ -4270,12 +4293,16 @@ def _argument_text(directive: tree.Node) -> str:
     return "".join(parts)
 
 
-def _assignment(text: str) -> str:
-    """``$a = 1`` as ``a = 1``, cut the way ct3's eatSet cuts it.
+def _assignment_parts(text: str) -> tuple[str, str, str]:
+    """``$a = 1`` cut the way ct3's eatSet cuts it.
 
     Three reads: the target with the name mapper off and stopping at
-    an assignment operator, the operator, and the value. ct3 joins them
-    with single blanks whatever the template wrote.
+    an assignment operator, the operator, and the value.
+
+    Returns:
+        tuple[str, str, str]: the target, the operator, and the value,
+            each already stripped. ct3 joins them with single blanks
+            whatever the template wrote.
     """
     from Cheetah.Parser import assignmentOps
 
@@ -4292,7 +4319,12 @@ def _assignment(text: str) -> str:
     if text[reader.at:].strip():
         raise Unsupported("cannot read %r from %r"
                           % (text[reader.at:reader.at + 20], text))
-    return "%s %s %s" % (left, operator, right)
+    return left, operator, right
+
+
+def _assignment(text: str) -> str:
+    """``$a = 1`` as ``a = 1``."""
+    return "%s %s %s" % _assignment_parts(text)
 
 
 def _read_expression(text: str) -> str:

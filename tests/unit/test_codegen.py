@@ -545,9 +545,6 @@ def test_a_placeholder_inside_a_raw_body_is_not_resolved():
     # lex.raw_end looks for "#end raw" as a literal string, so it
     # misses this one and the span check turns that into a refusal.
     "#raw\nA\n#end   raw\nB\n",
-    # The closing tag eats the hash and TAIL becomes text; the lexer
-    # reads the line ending as part of the tag.
-    "#raw\nX\n#end raw TAIL\nB\n",
     # The drop of the closing tag reaches back onto the #raw line and
     # ct3 deletes the "A  " there. Reproducing that needs ct3's chunk
     # boundaries rather than this layer's pieces.
@@ -1446,6 +1443,56 @@ def test_directives_ct3_writes_and_this_layer_refused(source):
         source=source, useCache=False,
         cacheCompilationResults=False)(searchList=[context()]).respond())
     assert codegen.render(source, [context()]) == theirs
+
+
+# How far an "#end" tag reaches. eatEndDirective reads an expression
+# after the name and throws it away; _eatToThisEndDirective, which
+# closes raw, stops right after the name. Three skins turn on it, one
+# of them writing "#raw $u = #end raw '$unit...'" where the
+# placeholder inside the quotes really is resolved.
+END_TAG_SHAPES = [
+    "#raw\nA v#end raw$v#raw\nB\n#end raw\nC\n",
+    "#raw $u = #end raw '$unit.x'; //c\n",
+    "#for $i in [1]\nx\n#end for $i\n",
+    "#for $i in [1]\nx\nZ#end for $i\n",
+    "#raw\nA\n#end raw\nB\n",
+    "#raw\nA\n#end raw#\nB\n",
+    "#raw: one line $v\nB\n",
+    # The closing tag stops after the name and TAIL is output.
+    "#raw\nX\n#end raw TAIL\nB\n",
+]
+
+# A global set whose target is not a plain name. ct3 cuts the target at
+# the first dot or bracket and only the name goes into the quotes.
+GLOBAL_SET_SHAPES = [
+    "#set global $a = 1\ngot $a\n",
+    '#set global $d = {}\n#set global $d["k"] = 2\ngot $d.k\n',
+    "#set global $d = {}\n#set global $d[$k] = 3\ngot $d.x\n",
+    "#set global $o.x = 4\ngot $o.x\n",
+    "#set global $n = 1\n#set global $n += 2\ngot $n\n",
+    "#def f\n#set global $g = 9\n#end def\n$f()$g\n",
+]
+
+
+@pytest.mark.parametrize("source", END_TAG_SHAPES + GLOBAL_SET_SHAPES)
+def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
+    class Obj:
+        x = 0
+
+    def rendered(work):
+        try:
+            return work()
+        except Exception as error:                      # noqa: BLE001
+            return "!!%s: %s" % (type(error).__name__, error)
+
+    def context():
+        return {"v": "1.0", "i": 7, "unit": {"x": "F"}, "k": "x",
+                "o": Obj()}
+
+    theirs = rendered(lambda: str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[context()]).respond()))
+    assert rendered(lambda: codegen.render(source, [context()])) == theirs
 
 
 def test_an_apostrophe_in_prose_opens_no_string():

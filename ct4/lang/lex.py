@@ -112,6 +112,53 @@ def start_of(text: str) -> re.Match[str] | None:
     return START.match(text) or EXPRESSION_START.match(text)
 
 
+# Blocks closed by _eatToThisEndDirective rather than by
+# eatEndDirective. The difference is how far their "#end" tag reaches,
+# which is a question about where the tokens are, so it is settled
+# here; the layer above reads the same set for its own purposes.
+SELF_CLOSING = frozenset({"raw", "compiler-settings", "defmacro", "i18n"})
+
+
+def self_closing_end(source: str, after_end: int) -> int | None:
+    """Where an ``#end raw`` stops, or None for every other end.
+
+    Called with the offset just past the ``#end`` token itself.
+
+    Two eaters, and they end differently. eatEndDirective reads an
+    expression after the name and throws it away, so ``#end for $i``
+    writes nothing and the ``$i`` is not output.
+    _eatToThisEndDirective, which closes raw and the three other
+    self-closing blocks, stops right after the name and the blanks
+    behind it, so what follows on the line is output. Three skins write
+
+        #raw $uomtemp = #end raw '$unit.unit_type.outTemp[-1:]';
+
+    where the placeholder inside the quotes really is resolved.
+
+    After the name goes a directive end token where there is one, or
+    the line ending where the tag stood alone on its line.
+    """
+    at = after_end
+    while at < len(source) and source[at] in " \t\f":
+        at += 1
+    start = at
+    while at < len(source) and source[at] in NAME_CHARS:
+        at += 1
+    if source[start:at] not in SELF_CLOSING:
+        return None
+    while at < len(source) and source[at] in " \t\f":
+        at += 1
+    if source[at:at + 1] == "#":
+        return at + 1
+    starts = line_starts(source)
+    line = bisect.bisect_right(starts, after_end)
+    if not source[starts[line - 1]:after_end - len("#end")].strip():
+        match = EOL.match(source, at)
+        if match is not None:
+            return match.end()
+    return at
+
+
 def directive_names() -> frozenset[str]:
     """The directive names ct3 knows, read from ct3.
 
@@ -349,7 +396,15 @@ class _Lexer:
                             index = text_from = stop
                         directive_until = -1
                     elif kind == DIRECTIVE:
-                        directive_until = self.argument_end(end)
+                        # An "#end raw" reaches only to the end of the
+                        # name, and what follows is output. Without
+                        # this the string in "#end raw '$unit.x'" is
+                        # stepped over as a directive's own literal and
+                        # the placeholder in it never becomes a token.
+                        ends_raw = (self_closing_end(source, end)
+                                    if name == "end" else None)
+                        directive_until = (ends_raw if ends_raw is not None
+                                           else self.argument_end(end))
                     elif kind == DIRECTIVE_END:
                         directive_until = -1
                     continue

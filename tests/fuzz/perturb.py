@@ -144,10 +144,11 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # ending the directive it stands in: two more. 215 until a directive
 # argument was read in one pass: two more again. 217 until #silent,
 # #stop, bare #return and the colon on an #elif: ten more, 21 templates
-# having come into reach. The number is raised deliberately and only
-# after checking that the byte-difference count is still zero, which is
-# the line this run actually promises.
-CEILING = 227
+# having come into reach. 227 until #set global and the reach of an
+# #end raw: one more. The number is raised deliberately and only after
+# checking that the byte-difference count is still zero, which is the
+# line this run actually promises.
+CEILING = 228
 
 
 def main() -> int:

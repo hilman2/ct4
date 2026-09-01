@@ -172,7 +172,7 @@ run_sabotage() {
 run_reach() {
     echo "== How far the code generator gets =="
     python -m ct4.corpus --impl fork reach $CORPUS \
-        /repo/corpus/skins-render.jsonl --floor 1860
+        /repo/corpus/skins-render.jsonl --floor 1865
 }
 
 run_corpus() {
