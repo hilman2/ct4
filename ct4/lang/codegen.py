@@ -79,14 +79,23 @@ for that form only while it is scanning text, so "#if $(6)" is a
 ParseError there. Such a template is refused rather than resolved.
 
 The whitespace around a directive is decided here from the source and
-in ct3 from a buffer of text not yet written, and the two answers part
-company in one place: a #def or #block carries its body off into a
-method, so text before its opening tag is still pending when a later
-directive on a clear line truncates the buffer. ct3 deletes that text.
-Reproducing it needs ct3's chunk boundaries rather than this layer's
-pieces, so the template is refused; see _drop_indent. Every other shape
-agrees, which tests/fuzz/whitespace.py measures over 12765 built
-templates the corpus does not contain.
+in ct3 from a buffer of text not yet written. Mostly the two agree, and
+where they do not this layer follows the buffer: an indent drop takes
+one pending chunk and stops, never the one before it, which is why
+"  #encoding x" followed by "  #import os" writes two blanks. Where it
+cannot tell whether a piece here is a whole chunk there, the template
+is refused rather than guessed at; see _drop_indent.
+
+Three instruments hold that to account, and the point is that their
+blind spots are different ones. tests/fuzz/whitespace.py builds
+templates out of fragments, so it sees the shapes nobody writes.
+tests/fuzz/hostile.py renders the real ones against a context that
+answers everything and writes down what it was asked, which is how a
+difference both engines spell the same way in bytes becomes visible,
+and it is the only run that renders the 390 skin templates at all.
+tests/fuzz/perturb.py takes the real ones and moves the directives
+around inside them. Each of the three found a rule the other two could
+not see.
 """
 
 from __future__ import annotations
@@ -1053,7 +1062,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             if node.name in ("def", "block"):
                 after: list[str] = []
                 call = _definition(node, source, hoisted, methods,
-                                   _eat_region_line(node, source, out),
+                                   _definition_line(node, source, out),
                                    after)
                 if call is not None:
                     out.append((STMT_PIECE, call))
@@ -1114,6 +1123,14 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 if _line_is_clear(source, node.tokens[0].start):
                     _drop_indent(out)
                 out.append((BARRIER_PIECE, ""))
+                if node.tokens[-1].kind == lex.DIRECTIVE_END:
+                    # eatSlurp ends with readToEOL(gobble=True), which
+                    # takes the rest of the line whatever stands on it.
+                    # Where the tag stopped at a directive end token
+                    # that rest is still in the stream:
+                    # "$job <!--#slurp#-->" leaves the "-->" a sibling,
+                    # and ct3 swallows it with the line ending.
+                    index = _swallow_line(nodes, index, out)
             elif node.name == "stop":
                 # ct3 stops generating here and drops the rest of the
                 # template, the closing directives included. Inside a
@@ -1174,6 +1191,40 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
         else:
             _piece(node, source, out)
     return out
+
+
+def _swallow_line(nodes: Sequence[tree.Node], index: int,
+                  out: list[tuple[str, Any]]) -> int:
+    """Drops what stands after a #slurp on its line, the ending too.
+
+    Called as ``_swallow_line(nodes, index, out)`` where index is the
+    first sibling after the slurp. Returns the index to carry on from.
+    A node that runs past the line ending keeps the part beyond it, so
+    the next line is written.
+
+    ct3 reads characters here and does not parse them, which is why a
+    directive on the rest of the line is refused rather than swallowed:
+    ct3 never sees it, and everything after it would then be read
+    differently, body and all.
+
+    Raises:
+        Unsupported: where a directive or a comment stands on the rest
+            of the line.
+    """
+    while index < len(nodes):
+        node = nodes[index]
+        if node.kind not in (lex.TEXT, lex.PLACEHOLDER, lex.ESCAPE):
+            raise Unsupported("a %s on the rest of a #slurp line"
+                              % node.kind)
+        index += 1
+        match = lex.EOL.search(node.text())
+        if match is None:
+            continue
+        rest = node.text()[match.end():]
+        if rest:
+            out.append((TEXT_PIECE, rest))
+        return index
+    return index
 
 
 def _piece(node: tree.Node, source: str,
@@ -2484,6 +2535,41 @@ def _take_trailing_eol(pieces: list[tuple[str, Any]]) -> str:
     return ending
 
 
+def _definition_line(node: tree.Node, source: str,
+                     out: list[tuple[str, Any]]) -> str:
+    """The line a #def or #block tag stands on.
+
+    The long form is the ordinary case and _eat_region_line settles it.
+    The short form is not: its tag stops at the colon and its body runs
+    to the line ending, so the tag itself never carries one, and a
+    reader that asks the tag whether it reached the end of its line
+    always hears no. ct3 asks after the body instead: _eatDefOrBlock
+    hands _eatRestOfDirectiveTag the position of that line ending, and
+    the indent goes wherever the line was clear.
+
+    Missing that left the two blanks of ``  #def m: hi`` in the output.
+    The corpus writes its short forms at column zero; the perturbation
+    run indents every directive in the corpus and found 20 of them.
+    """
+    short = not any(child.kind == lex.DIRECTIVE and child.name == "end"
+                    for child in node.children)
+    if not short:
+        return _eat_region_line(node, source, out)
+    if node.name == "block":
+        # And #block is the one that does not drop it. closeBlock
+        # writes the call where the tag stood, addChunk commits the
+        # pending text before it, and only then does ct3 ask about the
+        # whitespace, by which time there is none left pending. So
+        # "  #block m: hi" keeps its two blanks and "  #def m: hi",
+        # which writes nothing there, does not. The long form of both
+        # drops it, because there the asking comes first.
+        return ""
+    if _line_is_clear(source, node.tokens[0].start):
+        _drop_indent(out)
+    # Never a leading ending: the body starts on the tag's own line.
+    return ""
+
+
 def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
                 methods: list[ast.stmt],
                 leading: str = "",
@@ -3595,6 +3681,11 @@ def _drop_indent(out: list[tuple[str, Any]]) -> None:
             raise Unsupported("an indent drop that reaches a #raw body")
         if kind != TEXT_PIECE:
             return
+        if not text:
+            # ct3 never had a chunk here: commitStrConst drops an empty
+            # one. Skipping it is not walking back a chunk.
+            out.pop()
+            continue
         match = lex.EOL.search(text[::-1])
         if match is not None:
             keep = len(text) - match.start()
@@ -3605,7 +3696,13 @@ def _drop_indent(out: list[tuple[str, Any]]) -> None:
             return
         if text.strip():
             raise Unsupported("an indent drop that removes %r" % text[:20])
+        # One chunk and no further. ct3 truncates
+        # _pendingStrConstChunks[-1] and never looks at the one before
+        # it, so where a directive has eaten a line ending and left its
+        # own indent pending, that indent survives the next drop:
+        # "  #encoding x" then "  #import os" writes two blanks.
         out.pop()
+        return
 
 
 # -- Statements ------------------------------------------------------

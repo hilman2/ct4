@@ -103,14 +103,25 @@ run_coverage() {
     python -m ct4.corpus --impl fork coverage $CORPUS
 }
 
-# The corpus is 2026 real templates and every one of them puts its
-# directives on lines of their own. This builds the templates that do
-# not, which is where the whitespace rules live, and holds the code
-# generator to the same rule: what it accepts renders byte for byte
-# what the compiler renders.
+# Three instruments, three blind spots, and the point is that they are
+# different blind spots.
+#
+# whitespace builds templates out of fragments, so it sees the shapes
+# nobody writes and nothing else. hostile takes the real templates and
+# renders them against a context that answers everything and writes
+# down what it was asked, which is how a difference that both engines
+# spell the same way in bytes becomes visible; it is also the only run
+# that renders the 390 skin templates at all, because those need a live
+# weewx otherwise. perturb takes the real templates and moves the
+# directives around inside them, which is the one that finds a rule
+# whose shape the fragment list never composed.
 run_fuzz() {
     echo "== Built templates, generator against the compiler =="
     PYTHONPATH=/work python tests/fuzz/whitespace.py
+    echo
+    PYTHONPATH=/work python tests/fuzz/hostile.py
+    echo
+    PYTHONPATH=/work python tests/fuzz/perturb.py
 }
 
 run_corpus() {

@@ -1157,6 +1157,42 @@ ct3s eigene Testsuite hat keine Verwendung für eine Direktive, mit der jede
 weewx-Skin anfängt. Wer nur die Korpuszahl liest, baut die falschen Dinge
 zuerst.
 
+**Drei Messgeräte mit verschiedenen blinden Flecken.** Jeder Fehler dieser
+Phase wurde von genau einem gefunden, und keines hätte die Funde der anderen
+sehen können. Das ist kein Zufall, sondern die Bauart: ein Messgerät ist blind
+gegen das, was seine Erzeugungsregel nicht hervorbringt.
+
+| Instrument | woher die Vorlagen | blind gegen |
+|---|---|---|
+| `corpus` | 2.026 echte, unverändert | alles, was echte Autoren nicht schreiben |
+| `fuzz/whitespace` | aus Fragmenten gebaut | alles, was nicht in der Fragmentliste steht |
+| `fuzz/hostile` | echte, gegen einen redseligen Kontext | die Form der Vorlage |
+| `fuzz/perturb` | echte, mechanisch verunreinigt | die Umgebung |
+
+**Der redselige Kontext** ist der lehrreichste Bau. Der `rawExpr`-Fehler war
+unsichtbar, weil beide Engines dieselben Bytes schrieben — bei allen 2.026
+Fällen. Sichtbar wurde er erst, als ein Filter auftauchte, der das Argument
+*liest*. Also nicht die Engine instrumentieren, sondern die **Daten**: jeder
+Wert beantwortet jede Frage und schreibt auf, was gefragt wurde, und der Filter
+schreibt jedes Schlüsselwort mit, das er bekommt. Die Interaktion landet in den
+Bytes, und der Vergleich, der schon dasteht, vergleicht sie mit.
+
+Nebeneffekt, der für sich lohnt: `skins.jsonl` hält 390 echte Skin-Vorlagen als
+Compile-Fälle, weil sie zum Rendern ein lebendes weewx bräuchten. Gegen einen
+Kontext, der alles beantwortet, rendern sie. **Die Vorlagen, auf die es
+ankommt, sind damit keine unrenderbaren mehr.**
+
+**Die Perturbation** nimmt denselben Korpus und schiebt die Direktiven darin
+herum: jede Direktivenzeile einrücken, ein `L` davorsetzen, jedes `#end` an die
+Vorzeile hängen, CRLF, altes Mac-CR, letztes Zeilenende weg. 4.704 Vorlagen aus
+vorhandenem Material, echter Inhalt in Formen, die niemand schreibt. Sie fand
+den Einzug vor der `#def`-Kurzform und die Ein-Chunk-Regel.
+
+Stand: `hostile` 0 von 1.032, `perturb` 0 Byte-Unterschiede von 3.581,
+`whitespace` 0 von 12.765. Was `perturb` stehen lässt, sind 179 Vorlagen, die
+ct3 nach dem Verschieben nicht mehr parst und ct4 rendert — gezählt, gedeckelt,
+und mit einer Begründung im Quelltext.
+
 **Zwei Fehler, die beide Messlatten verfehlt haben.** Der Einzug vor `#else`,
 `#elif`, `#except` und `#finally` wurde nie entfernt: der Korpus schreibt
 keinen Text auf die Zeile eines Branch-Tags, und der Fuzzer setzt sein

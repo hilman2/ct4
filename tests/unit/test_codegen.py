@@ -1212,6 +1212,59 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
 
 
+# -- What the perturbation run found ---------------------------------
+#
+# tests/fuzz/perturb.py takes the corpus and indents every directive,
+# dirties every directive line, and pulls every #end onto the line
+# above. Real content in shapes nobody writes. These are the rules it
+# turned up, each one wrong in the corpus's own templates the moment
+# they were moved.
+
+PERTURBED_SHAPES = [
+    # eatSlurp ends with readToEOL(gobble=True), so a #slurp closed by
+    # a directive end token swallows the rest of its line, text,
+    # placeholders and all. "$job <!--#slurp#-->" is how a real skin
+    # writes it.
+    "A#slurp#-->\nC\n",
+    "A#slurp# B\nC\n",
+    "A#slurp#$x\nC\n",
+    "  #slurp#-->\nC\n",
+    "A#slurp#-->",
+    "A#slurp B\nC\n",
+    "A#slurp##c\nC\n",
+    # The short form of #def drops the indent in front of it and the
+    # short form of #block does not: closeBlock writes the call where
+    # the tag stood and commits the pending text before ct3 asks about
+    # the whitespace. The long form of both drops it.
+    "  #def m: hi\nX\n",
+    "  #def m: hi",
+    "  #block m: hi\nX\n",
+    "  #block m: hi",
+    "  #block m\nhi\n  #end block\nX\n",
+    "  #def m\nhi\n  #end def\nX$m\n",
+    "A  #block m: hi\nX\n",
+    "A  #def m: hi\nX\n",
+    # handleWSBeforeDirective truncates one pending chunk and never
+    # the one before it. #encoding leaves its own indent pending, so
+    # the next directive's drop takes its own indent and stops, and
+    # two blanks reach the output.
+    "  #encoding UTF-8\n  #import os\nX\n",
+    "  #encoding UTF-8\nX\n",
+    "  #encoding UTF-8\n\nX\n",
+    "A\n  #encoding UTF-8\nX\n",
+]
+
+
+@pytest.mark.parametrize("source", PERTURBED_SHAPES)
+def test_the_shapes_the_perturbation_run_found(source):
+    context = {"x": 1}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[dict(context)]).respond())
+    assert codegen.supports(source), "refused: %r" % source
+    assert codegen.render(source, [dict(context)]) == want
+
+
 # -- The expression placeholder --------------------------------------
 #
 # ct3's second placeholder start, where the enclosure holds an
