@@ -299,12 +299,30 @@ class _Builder:
         token, a bare hash. The line ending belongs to the directive,
         which is why a template full of directives leaves no blank
         lines behind.
+
+        Which line ending that is, is line_that_closes' business: one
+        inside an open bracket does not end anything. The caller passes
+        a stop of its own only for the colon short form, where the
+        arguments end at the colon and the rest of the line is body.
         """
+        if stop is None:
+            stop = line_that_closes(self.source, node.tokens[0].end)
         while index < len(self.tokens):
             token = self.tokens[index]
-            if stop is not None and token.start >= stop:
+            if token.kind == lex.RAW:
+                # Whole or not at all. A raw body is source the lexer
+                # has already measured from end to end, and a line
+                # ending inside it ends nothing: "#raw" and its body
+                # are one thing.
+                node.tokens.append(token)
+                index += 1
+                continue
+            if token.start >= stop:
                 return index
-            if stop is not None and token.end > stop:
+            if token.end > stop:
+                # The lexer hands up "\nbody\n" as one run of text: it
+                # has no reason to care where lines end. Here it does,
+                # because everything after the ending is the body.
                 head, rest = lex.split(token, stop, self.starts)
                 node.tokens.append(head)
                 self.tokens[index] = rest
@@ -316,20 +334,6 @@ class _Builder:
                 # A directive on the same line starts something of its
                 # own. Its arguments are not ours.
                 return index
-            if token.kind in (lex.TEXT, lex.COMMENT):
-                match = lex.EOL.search(token.text)
-                if match is not None:
-                    # The lexer hands up "\nbody\n" as one run of text:
-                    # it has no reason to care where lines end. Here it
-                    # matters, because the newline closes the directive
-                    # and everything after it is the body.
-                    head, rest = lex.split(
-                        token, token.start + match.end(), self.starts)
-                    node.tokens.append(head)
-                    if rest.text:
-                        self.tokens[index] = rest
-                        return index
-                    return index + 1
             node.tokens.append(token)
             index += 1
         return index
@@ -374,8 +378,13 @@ class _Builder:
         them would find a colon with nothing behind it.
         """
         start = node.tokens[0].end
-        match = lex.EOL.search(self.source, start)
-        end = match.start() if match else len(self.source)
+        # To the ending that closes the directive, not the first one:
+        # "#def f($a,\n$b): body" is a short form and its colon stands
+        # on the second line.
+        end = line_that_closes(self.source, start)
+        match = lex.EOL.search(self.source, max(end - 2, start))
+        if match is not None and match.end() >= end:
+            end = match.start()
         # And no further than the directive end token, where there is
         # one on this line. ct3 parses the expression and stops there,
         # so what comes after is output and not argument. Without this
@@ -453,6 +462,53 @@ def _bare_words(text: str) -> Iterator[str]:
                 yield text[start:index]
             continue
         index += 1
+
+
+def line_that_closes(source: str, start: int) -> int:
+    """Offset just past the line ending that closes a directive.
+
+    Not the first line ending. ct3's getExpressionParts opens a bracket
+    before it tests whether the expression has ended, and that test is
+    never reached while one is open, so a line ending inside brackets
+    is read and thrown away and the expression carries on. The skins
+    write their lists that way and so does jas:
+
+        #set $params = [
+            {'name': 'barometer', 'agg': None},
+            {'name': 'outTemp', 'agg': None},
+        ]
+
+    is one directive whose argument holds no line ending at all. ct3
+    writes it out as ``params = [    {...},    {...},]``: the endings
+    are gone and the indent that stood after each of them is still
+    there, harmlessly, inside the brackets.
+
+    Returns the end of the source where a bracket is still open at the
+    end of it. ct3 raises a ParseError there and the caller will refuse
+    what it cannot read, which is the same outcome by a shorter road.
+    """
+    depth = 0
+    index = start
+    length = len(source)
+    while index < length:
+        char = source[index]
+        if char in "\"'":
+            index = lex._end_of_string(source, index)
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            # Never below zero: a stray closer in a directive's
+            # arguments is the template's problem, and letting it open
+            # a negative depth would make the next line ending close
+            # nothing.
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            match = lex.EOL.match(source, index)
+            if match is not None:
+                return match.end()
+        index += 1
+    return length
 
 
 def _top_level_colon(text: str) -> int:

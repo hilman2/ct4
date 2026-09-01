@@ -1251,6 +1251,53 @@ def test_a_preamble_name_resolves_to_what_ct3_resolves_it_to(name):
     assert rendered(lambda: codegen.render(source, [{}])) == theirs
 
 
+# A directive whose argument runs past the end of its line. ct3's
+# getExpressionParts opens a bracket before it tests whether the
+# expression has ended, so a line ending inside one is read and thrown
+# away. Every skin that writes a list of station fields writes it this
+# way, and 19 templates in the corpus and the harvested skins turn on
+# it.
+SPANNING_SHAPES = [
+    "#set $a = [1,\n2]\ngot $a\n",
+    "#set $a = [\n    1,\n    2,\n]\ngot $a\n",
+    "#set $d = {'x': 1,\n 'y': 2}\ngot $d.x\n",
+    "#set $a = [1,\n2] \ngot $a\n",
+    "#set $a = str(\n1)\ngot $a\n",
+    "#set $a = [$b,\n2]\ngot $a\n",
+    "#set $a = [1,\n2]\n#set $c = 3\ngot $a $c\n",
+    "#if [1,\n2]\nyes\n#end if\n",
+    "#echo [1,\n2]\n",
+    # The ending still closes the directive once the bracket is shut,
+    # and the indent that stood on the continuation line stays inside
+    # the brackets where it does no harm.
+    "#set $a = [1,\n      2]\ngot $a\n",
+    # Nested, so that the first closing bracket does not end it.
+    "#set $a = [[1,\n2],\n[3]]\ngot $a\n",
+    # A bracket inside a string opens nothing.
+    "#set $a = ['[',\n']']\ngot $a\n",
+    # And the plain single-line forms still end where they did.
+    "#set $a = [1, 2]\ngot $a\n",
+    "#set $a = 1\ngot $a\n",
+]
+
+
+@pytest.mark.parametrize("source", SPANNING_SHAPES)
+def test_a_directive_argument_may_run_past_its_line(source):
+    context = {"b": [7, 8, 9]}
+    theirs = str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[context]).respond())
+    assert codegen.render(source, [context]) == theirs
+
+
+def test_a_raw_body_is_never_cut_by_the_argument_scan():
+    # The raw body is source the lexer has already measured from end to
+    # end. Cutting it at the line ending that closes "#raw" took three
+    # corpus cases out of reach and nothing else noticed.
+    source = "#raw\n$aFunc().\n\n"
+    assert codegen.render(source, [{}]) == "$aFunc().\n\n"
+
+
 def test_a_psp_reaches_a_preamble_name_too():
     # The guard reads the finished module and a PSP body is part of it,
     # so a plain Python name in one is reached the same way a

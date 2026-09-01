@@ -137,10 +137,11 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # the lines together leaves a placeholder that ct3 will not parse and
 # the generator now reads to its end. 193 until the preamble imports:
 # 66 more templates are taken, and once a directive has been moved
-# twelve of them are shapes ct3 stops parsing. The number is raised
-# deliberately and only after checking that the byte-difference count
-# is still zero, which is the line this run actually promises.
-CEILING = 205
+# twelve of them are shapes ct3 stops parsing. 205 until a directive
+# argument was allowed to run past its line: one more. The number is
+# raised deliberately and only after checking that the byte-difference
+# count is still zero, which is the line this run actually promises.
+CEILING = 206
 
 
 def main() -> int:
