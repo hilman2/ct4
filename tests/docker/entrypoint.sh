@@ -69,6 +69,22 @@ run_cheetah() {
 run_check() {
     echo "== ct4 check over the whole corpus =="
     python -m ct4.corpus --impl fork check-templates $CORPUS --expect 4
+
+    # And over the harvested skins, where the findings are somebody
+    # else's and there are eighty-five of them. Guarded the same way and
+    # for the same reason: the number may only move when a rule
+    # changes, and then it is read.
+    #
+    # 80 are CT4103, nearly all of them one skin writing $day.outTemp
+    # .maxTime where weewx spells every aggregate in lower case. 4 are
+    # CT4005, in three separate projects: "$station.latitude[0]lstrip"
+    # and twice "$span($hour_delta=3)lightning_strike_count.sum", both
+    # of them a dot somebody dropped and got away with. 1 is a #for
+    # with no #end for, which ct3 will not parse either.
+    echo
+    echo "== ct4 check over the harvested skins =="
+    python -m ct4.corpus --impl fork check-templates \
+        /repo/corpus/skins-render.jsonl --expect 85
 }
 
 # "AI ready" is checkable or it is marketing. What gets measured is not

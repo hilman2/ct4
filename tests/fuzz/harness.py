@@ -41,6 +41,15 @@ from ct4.lang import codegen, tree                             # noqa: E402
 # makes its own expectation by rendering twice.
 CORPUS_FILES = ("ct3-tests.jsonl", "skins.jsonl", "weewx-render.jsonl")
 
+# Held apart from the corpus on purpose. These are a thousand templates
+# out of a hundred other people's skins, and they have no recorded
+# output and no recorded module code: what they are for is the
+# differential runs, which make their own expectation by rendering
+# twice. Reading them into corpus_templates() would put them into the
+# perturbation run and into the frozen baseline as well, and both would
+# grow by a factor for no answer either of them can give.
+SKIN_FILES = ("skins-render.jsonl",)
+
 
 def corpus_dir() -> Path | None:
     """Where the corpus is, mounted or in the working tree."""
@@ -60,11 +69,26 @@ def corpus_templates() -> list[tuple[str, str]]:
     the 390 skin templates are the reason this reads skins.jsonl too:
     they are compile cases, so nothing has ever rendered them.
     """
+    return _templates_from(CORPUS_FILES)
+
+
+def skin_templates() -> list[tuple[str, str]]:
+    """Every template of the harvested third-party skins, with an id.
+
+    A hundred and four repositories, a hundred and seventy-five skins,
+    and what they are here for is that nobody wrote them with this
+    engine in mind. corpus/skin-sources.txt says where they came from
+    and how to fetch them again.
+    """
+    return _templates_from(SKIN_FILES)
+
+
+def _templates_from(names: Sequence[str]) -> list[tuple[str, str]]:
     root = corpus_dir()
     if root is None:
         return []
     seen: dict[str, str] = {}
-    for name in CORPUS_FILES:
+    for name in names:
         path = root / name
         if not path.exists():
             continue

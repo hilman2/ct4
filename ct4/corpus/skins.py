@@ -66,3 +66,99 @@ def harvest(root: Path, name: str) -> tuple[list[Case], Counter[str]]:
 def _templates(root: Path) -> Iterator[Path]:
     for suffix in SUFFIXES:
         yield from root.rglob("*" + suffix)
+
+
+# What marks a directory as a skin. weewx reads this file to find out
+# which reports a skin produces and what to call them, so a directory
+# that has one is a skin and one that has not is a checkout with some
+# templates lying around in it.
+SKIN_CONF = "skin.conf"
+
+
+def fetch(urls: list[str], out: Path) -> tuple[int, list[tuple[str, str]]]:
+    """Clones the listed repositories under ``out``, one level deep.
+
+    Args:
+        urls (list[str]): clone URLs, as corpus/skin-sources.txt holds
+            them.
+        out (pathlib.Path): the directory the checkouts go in, one per
+            repository, named owner--repo.
+
+    Returns:
+        tuple[int, list[tuple[str, str]]]: how many are there now, and
+            the ones that could not be cloned with the reason. A
+            repository that has been deleted or renamed is reported
+            rather than raised: the list is a hundred and fifty other
+            people's projects and one of them going away is not a
+            reason to fetch none of the rest.
+    """
+    import subprocess
+    from concurrent.futures import ThreadPoolExecutor
+
+    def clone(url: str) -> tuple[str, str]:
+        parts = url.removesuffix(".git").split("/")
+        name = "%s--%s" % (parts[-2], parts[-1])
+        target = out / name
+        if target.exists():
+            return name, ""
+        done = subprocess.run(
+            ["git", "clone", "--depth", "1", "--quiet", url, str(target)],
+            capture_output=True, text=True, timeout=300)
+        if done.returncode != 0:
+            return name, (done.stderr.strip().splitlines() or ["failed"])[-1]
+        return name, ""
+
+    out.mkdir(parents=True, exist_ok=True)
+    failed = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for name, why in pool.map(clone, urls):
+            if why:
+                failed.append((name, why))
+    return len(urls) - len(failed), failed
+
+
+def harvest_sources(root: Path) -> tuple[list[Case], Counter[str]]:
+    """Every template of every skin under ``root``, as a render case.
+
+    Deduplicated by content, which takes out a lot: half of these
+    repositories are forks of the other half, and a skin that was
+    copied and had its colours changed brings the same #include files
+    along untouched.
+
+    No expected output and no compile, unlike :func:`harvest`. These
+    are for the differential runs, which make their own expectation by
+    rendering twice, and recording the module code of a thousand more
+    templates would put twenty megabytes in the repository to say what
+    the render already says.
+
+    Args:
+        root (pathlib.Path): the directory the checkouts are in.
+
+    Returns:
+        tuple[list[ct4.corpus.case.Case], collections.Counter[str]]:
+            the cases, and a count of what was passed over.
+    """
+    rows: dict[str, str] = {}
+    skipped: Counter[str] = Counter()
+    for conf in sorted(root.rglob(SKIN_CONF)):
+        skin = conf.parent
+        inside = skin.relative_to(root).as_posix()
+        for path in sorted(_templates(skin)):
+            try:
+                source = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                skipped["not UTF-8"] += 1
+                continue
+            if not source.strip():
+                skipped["empty"] += 1
+                continue
+            name = "%s/%s" % (inside, path.relative_to(skin).as_posix())
+            if source in rows:
+                skipped["a copy of another skin's"] += 1
+                continue
+            rows[source] = name
+    return ([Case(id=case_id, template=source, expected="", kind=COMPILE,
+                  origin=case_id.split("/")[0])
+             for source, case_id in sorted(rows.items(),
+                                           key=lambda pair: pair[1])],
+            skipped)

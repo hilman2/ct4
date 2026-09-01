@@ -19,6 +19,8 @@ from ct4 import impl
 DEFAULT_OUT = Path("corpus/ct3-tests.jsonl")
 DEFAULT_SKINS = Path("corpus/skins.jsonl")
 DEFAULT_FIXTURES = Path("corpus/weewx-render.jsonl")
+DEFAULT_SKIN_SOURCES = Path("corpus/skin-sources.txt")
+DEFAULT_SKINS_RENDER = Path("corpus/skins-render.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +41,22 @@ def main(argv: list[str] | None = None) -> int:
         "sources", nargs="+", metavar="NAME=PATH",
         help="name of the skin and root directory of its templates")
     skins_cmd.add_argument("--out", type=Path, default=DEFAULT_SKINS)
+
+    fetch_cmd = sub.add_parser(
+        "fetch-skins",
+        help="clone the skin repositories corpus/skin-sources.txt names")
+    fetch_cmd.add_argument("--out", type=Path, required=True,
+                           metavar="DIR", help="where the checkouts go")
+    fetch_cmd.add_argument("--sources", type=Path,
+                           default=DEFAULT_SKIN_SOURCES)
+
+    sources_cmd = sub.add_parser(
+        "harvest-skin-sources",
+        help="take the templates of every fetched skin in as render cases")
+    sources_cmd.add_argument("root", type=Path,
+                             help="the directory fetch-skins wrote to")
+    sources_cmd.add_argument("--out", type=Path,
+                             default=DEFAULT_SKINS_RENDER)
 
     fixtures_cmd = sub.add_parser(
         "harvest-fixtures",
@@ -87,6 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         return _harvest(args.out)
     if args.command == "harvest-skins":
         return _harvest_skins(args.sources, args.out)
+    if args.command == "fetch-skins":
+        return _fetch_skins(args.sources, args.out)
+    if args.command == "harvest-skin-sources":
+        return _harvest_skin_sources(args.root, args.out)
     if args.command == "harvest-fixtures":
         return _harvest_fixtures(args.root, args.name, args.out)
     if args.command == "check-templates":
@@ -129,6 +151,36 @@ def _harvest_skins(sources: list[str], out: Path) -> int:
         note = "  (skipped: %s)" % detail if detail else ""
         print("%-22s %4d templates%s" % (name, len(found), note))
 
+    count = write_jsonl(cases, out)
+    print("\n%d cases written to %s" % (count, out))
+    return 0
+
+
+def _fetch_skins(sources: Path, out: Path) -> int:
+    from ct4.corpus import skins
+
+    urls = [line.strip() for line in
+            sources.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")]
+    if not urls:
+        print("no repositories listed in %s" % sources, file=sys.stderr)
+        return 2
+    count, failed = skins.fetch(urls, out)
+    print("%d of %d repositories in %s" % (count, len(urls), out))
+    for name, why in failed:
+        print("  missing %-40s %s" % (name, why))
+    return 0
+
+
+def _harvest_skin_sources(root: Path, out: Path) -> int:
+    from ct4.corpus import skins
+    from ct4.corpus.case import write_jsonl
+
+    cases, skipped = skins.harvest_sources(root)
+    per_repo = {case.origin for case in cases}
+    print("%d templates from %d repositories" % (len(cases), len(per_repo)))
+    for reason, count in sorted(skipped.items()):
+        print("  skipped %-28s %d" % (reason, count))
     count = write_jsonl(cases, out)
     print("\n%d cases written to %s" % (count, out))
     return 0

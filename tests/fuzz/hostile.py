@@ -19,6 +19,11 @@ templates as compile cases, because rendering them needs a live weewx.
 Against a context that answers everything they render here, so the
 templates that matter most stop being unrenderable.
 
+That is also what the harvested skins are for, and they are the wider
+half of this run: 974 templates out of 175 skins from a hundred
+repositories, reported on a line of their own. Nobody wrote any of them
+with this engine in mind. See corpus/skin-sources.txt.
+
     python tests/fuzz/hostile.py
     python tests/fuzz/hostile.py --examples
 
@@ -35,7 +40,7 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 
 from Cheetah.Filters import Filter                             # noqa: E402
 from harness import (corpus_templates, disagreements,          # noqa: E402
-                     report)
+                     report, skin_templates)
 
 # How often a value has been asked whether it is true, by path. A
 # #while over a value that is always true never ends, and a value that
@@ -213,10 +218,23 @@ def main() -> int:
     if not sources:
         print("no corpus found")
         return 0
+    examples = 6 if "--examples" in sys.argv else 0
     seen, taken, found = disagreements(iter(sources), build)
-    return report("Corpus templates against a context that talks back",
-                  seen, taken, found,
-                  examples=6 if "--examples" in sys.argv else 0)
+    code = report("Corpus templates against a context that talks back",
+                  seen, taken, found, examples=examples)
+
+    # The harvested skins, reported on their own line. Same instrument,
+    # and the reason for the separate line is that these are the ones
+    # nobody wrote with this engine in mind: a rule that only ever met
+    # the templates the corpus was built from would look finished here
+    # and would not be.
+    skins = skin_templates()
+    if skins:
+        print()
+        seen, taken, found = disagreements(iter(skins), build)
+        code = report("Third-party skins against a talking context",
+                      seen, taken, found, examples=examples) or code
+    return code
 
 
 if __name__ == "__main__":
