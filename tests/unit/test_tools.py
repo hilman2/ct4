@@ -94,6 +94,30 @@ def test_a_correct_template_stays_quiet():
     assert check_source("$day.outTemp.max\n", "sample.tmpl", [WEEWX]) == []
 
 
+def test_a_dropped_dot_is_reported():
+    # weewx' own test skin writes ".round(5)json()" one line under
+    # ".round(5).json()". Cheetah compiles the two the same, so no
+    # engine can tell them apart and nothing about the page says so.
+    found = check_source("$day.outTemp.max.format(2)json()\n",
+                         "sample.tmpl", [WEEWX])
+    assert [d.code for d in found] == ["CT4005"]
+    assert (found[0].line, found[0].column) == (1, 27)
+    assert "json" in found[0].message
+
+
+def test_text_swallowed_by_a_chain_is_reported():
+    # The same rule read the other way round: the F was meant to be
+    # printed and became an attribute lookup.
+    found = check_source("It is $day.outTemp.max.format(2)F today.\n",
+                         "sample.tmpl", [WEEWX])
+    assert [d.code for d in found] == ["CT4005"]
+
+
+def test_a_chain_written_with_its_dots_stays_quiet():
+    assert check_source("$day.outTemp.max.format(2).json()\n",
+                        "sample.tmpl", [WEEWX]) == []
+
+
 def test_a_syntax_error_names_the_place():
     found = check_source("#for $x in $ys\nfoo\n", "sample.tmpl", [WEEWX])
     assert [d.code for d in found] == ["CT4001"]

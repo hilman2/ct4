@@ -22,7 +22,7 @@ from Cheetah.Template import Template
 from ct4.corpus import namespaces
 from ct4.corpus.case import RENDER, decode
 from ct4.fixture.filters import WeewxAssureUnicode, resolve
-from ct4.lang import codegen
+from ct4.lang import codegen, lex
 
 from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 
@@ -212,6 +212,30 @@ def test_a_subscript_swallows_the_bracket_group_behind_it():
     chunks = codegen.chunks_of("$a[1](2)")
     assert [(c.name, c.autocall, c.remainder) for c in chunks] == \
         [("a", True, "[1](2)")]
+
+
+def test_a_bare_name_behind_a_bracket_carries_the_chain_on():
+    # The chunk loop breaks on "not in identchars + '.'", and the
+    # period is thrown away anyway, so the dot in this position is
+    # decoration: weewx' own test skin writes ".round(5)json()" where
+    # the line above it writes ".round(5).json()", and ct3 cannot tell
+    # the two apart.
+    assert codegen.placeholder_source("$f(1)upper") == \
+        codegen.placeholder_source("$f(1).upper")
+
+
+@pytest.mark.parametrize("source,reach", [
+    ("$a(1)[2]", "$a(1)"),       # getCallArgString takes the one group
+    ("$a(1)(2)", "$a(1)"),
+    ("$a[1](2)[3]", "$a[1](2)[3]"),   # getExpression takes them all
+    ("$a[1][2]", "$a[1][2]"),
+    ("$a.b(1)c(2)[3]", "$a.b(1)c(2)"),
+])
+def test_a_call_ends_the_brackets_and_a_subscript_does_not(source, reach):
+    # Where the placeholder stops decides what is text, so the token
+    # has to end where ct3 stops reading and not one group later.
+    found = lex.tokens(source)[0]
+    assert found.text == reach
 
 
 def test_the_targets_of_a_comprehension_are_not_looked_up():
@@ -1091,8 +1115,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "<%= $anInt %>",                         # a PSP resolves no names
     "<% write(str(time)) %>",                # a name only ct3's module has
     "<% write(str(__file__)) %>",            # ... and the same for the module
-    "$a(1)[2]\n",                            # ct3 reads only "$a(1)"
-    "$f(1)upper\n",                          # ct3's chain runs on
     "$a[\n1]\n",                             # the lexer stopped early
     "${aFunc(\n\n)}\n",                      # ... and left the "}" over
     "$(a, 'x')\n",                           # arguments for the filter

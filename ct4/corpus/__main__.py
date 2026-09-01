@@ -169,7 +169,8 @@ def _check_templates(paths: list[Path], expect: int) -> int:
         return 1
     found = []
     for case in checker.load(paths):
-        found.extend(check_source(case.template, case.id, declarations))
+        found.extend(check_source(case.template, case.id, declarations,
+                                  settings=case.settings))
     print("%d templates checked, %d findings (expected: %d), "
           "%d declarations"
           % (len(checker.load(paths)), len(found), expect,

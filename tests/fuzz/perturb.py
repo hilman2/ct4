@@ -132,10 +132,13 @@ def sources() -> Iterator[tuple[str, str]]:
 TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # 179 until #assert, #return and the one-line #if landed. Those took 91
 # more perturbed templates, and 9 of them are shapes ct3 stops parsing
-# once a directive has been moved. The number is raised deliberately
+# once a directive has been moved. 188 until the chain rule landed:
+# five more templates, all of them the join_ends shape, where gluing
+# the lines together leaves a placeholder that ct3 will not parse and
+# the generator now reads to its end. The number is raised deliberately
 # and only after checking that the byte-difference count is still zero,
 # which is the line this run actually promises.
-CEILING = 188
+CEILING = 193
 
 
 def main() -> int:

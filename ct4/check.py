@@ -20,12 +20,14 @@ before a page is built.
 
 from __future__ import annotations
 
+import bisect
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from ct4 import analyze
 from ct4.declare import Declaration, resolve
 from ct4.diagnostics import ERROR, WARNING, Diagnostic
+from ct4.lang import lex
 from ct4.markup import mode as markup_mode
 
 # JSON mode is announced, not guessed from the file extension. weewx
@@ -50,13 +52,32 @@ def is_json_template(source: str) -> bool:
 
 def check_source(source: str, file: str = "",
                  declarations: Sequence[Declaration] = (),
-                 base_dir: Path | None = None) -> list[Diagnostic]:
-    """Checks a template and returns the findings."""
+                 base_dir: Path | None = None,
+                 settings: dict[str, Any] | None = None) -> list[Diagnostic]:
+    """Checks a template and returns the findings.
+
+    Args:
+        source (str): the template.
+        file (str): the name the findings carry.
+        declarations (Sequence[ct4.declare.Declaration]): the
+            applications whose names the lookups are held against.
+        base_dir (pathlib.Path|None): where a JSON template's schema
+            and includes are resolved from.
+        settings (dict[str, Any]|None): the compiler settings it will
+            be compiled with. Only the text mode has any, and one of
+            them decides whether the file parses at all: a template
+            written for ``allowWhitespaceAfterDirectiveStartToken``
+            reads as text with a stray ``#end`` in it without.
+
+    Returns:
+        list[ct4.diagnostics.Diagnostic]: the findings, in the order
+            the author reads the file.
+    """
     if is_json_template(source):
         return _check_json(source, file, declarations, base_dir)
     if markup_mode.declared(source):
         return _check_markup(source, file, declarations)
-    return _check_text(source, file, declarations)
+    return _check_text(source, file, declarations, settings)
 
 
 def check_file(path: Path,
@@ -66,16 +87,57 @@ def check_file(path: Path,
 
 
 def _check_text(source: str, file: str,
-                declarations: Sequence[Declaration]) -> list[Diagnostic]:
+                declarations: Sequence[Declaration],
+                settings: dict[str, Any] | None = None) -> list[Diagnostic]:
     from Cheetah.Parser import ParseError
 
     try:
-        found = analyze.placeholders(source)
+        found = analyze.placeholders(source, settings)
     except ParseError as error:
         return [_parse_error(error, file)]
     except Exception as error:                          # noqa: BLE001
         return [Diagnostic("CT4002", ERROR, str(error), file=file)]
-    return _check_names(found, file, declarations)
+    return _check_dotless_links(source, file) + \
+        _check_names(found, file, declarations)
+
+
+def _check_dotless_links(source: str, file: str) -> list[Diagnostic]:
+    """Placeholders whose chain carries on over a missing dot.
+
+    Cheetah's chunk loop does not stop at a bracket: after ``(args)``
+    or ``[key]`` a bare letter opens the next link of the chain, as a
+    dot would, and the dot is discarded anyway. So the two spellings
+    compile to the same code and no engine can tell them apart.
+
+    That is worth a warning in both directions it goes wrong.
+    ``.round(5)json()`` is a dot the author dropped and gets away with;
+    ``$temp.formatted(2)F`` is a letter the author meant to print and
+    which turns into an attribute lookup instead. Neither leaves a
+    trace in the rendered page.
+    """
+    out: list[Diagnostic] = []
+    for token in lex.tokens(source):
+        if token.kind != lex.PLACEHOLDER:
+            continue
+        marked = lex.start_of(token.text)
+        if marked is None or marked.group("enclosure"):
+            continue
+        starts = lex.line_starts(source)
+        for offset in lex.dotless_links(token.text, marked.end()):
+            at = token.start + offset
+            line = bisect.bisect_right(starts, at)
+            end = offset
+            while end < len(token.text) and token.text[end] in lex.IDENT:
+                end += 1
+            name = token.text[offset:end]
+            out.append(Diagnostic(
+                "CT4005", WARNING,
+                "%r continues the chain as if a dot stood before it; "
+                "write the dot, or move the text out of the placeholder"
+                % name,
+                file=file, line=line, column=at - starts[line - 1] + 1,
+                path=token.text))
+    return out
 
 
 def _check_json(source: str, file: str, declarations: Sequence[Declaration],
@@ -181,6 +243,7 @@ def _check_markup(source: str, file: str,
     # directives as it walks the tree and the plain placeholders in a
     # pass after that, so its own order is the generator's and not the
     # template's.
+    found.extend(_check_dotless_links(source, file))
     found.sort(key=lambda one: (one.line, one.column))
     found.extend(_check_names(analyze.placeholders(source), file,
                               declarations))

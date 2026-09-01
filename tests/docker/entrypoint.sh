@@ -56,12 +56,19 @@ run_cheetah() {
     PATH="/work/bin:$PATH" PYTHONPATH=/work python Cheetah/Tests/Test.py
 }
 
-# Over all templates of the corpus. Exactly one finding is expected:
-# weewx' own test case for a wrong aggregate. Any further one would be a
-# false finding, and a false finding gets people to ignore the tool.
+# Every template of the corpus through ct4's own diagnostics. Two
+# templates are found, and both findings are real: weewx' own test case
+# for a wrong aggregate, and the line in series.html.tmpl that writes
+# ".round(5)json()" where the label above it writes ".round(5).json()".
+# Four rather than two, because the weewx corpus holds those two files
+# twice, once harvested as a skin and once as a render case.
+#
+# Any further one would be a false finding, and a false finding gets
+# people to ignore the tool. That is what the number is guarding: 2026
+# real templates, no noise.
 run_check() {
-    echo "== ct4 check over the corpus skins =="
-    python -m ct4.corpus --impl fork check-templates /repo/corpus/skins.jsonl --expect 1
+    echo "== ct4 check over the whole corpus =="
+    python -m ct4.corpus --impl fork check-templates $CORPUS --expect 4
 }
 
 # "AI ready" is checkable or it is marketing. What gets measured is not

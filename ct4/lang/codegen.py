@@ -1758,23 +1758,21 @@ def _piece(node: tree.Node, source: str,
 def _refuse_a_short_token(token: lex.Token, source: str) -> None:
     """Where ct3 reads further than the placeholder token reaches.
 
-    Two ways that happens, and neither leaves anything inside the token
-    to notice. lex._balanced gives up at a line ending inside a "[" or
-    a "{", so ``$a[\\n1]`` is the token ``$a`` while ct3 reads the
-    subscript and writes VFFSL(SL,"a",True)[1]. And ct3's chunk loop
-    carries on over a bare letter after a bracket, where the lexer
-    stops: ``$f(1)upper`` is one chain there, and a placeholder
-    followed by the text ``upper`` here.
+    lex._balanced gives up at a line ending inside a bracket, so
+    ``$a[\\n1]`` is the token ``$a`` while ct3 reads the subscript and
+    writes VFFSL(SL,"a",True)[1]. Nothing inside the token says so; the
+    character after it does. A token ending on a call is the one case
+    where a bracket may follow legitimately, because there ct3 stops
+    too: ``$a(1)[2]`` is a placeholder and then the text ``[2]``.
 
     The enclosure forms end where ct3 ends them, so they are left
-    alone: ``${f(1)}upper`` writes the same bytes either way.
+    alone: ``${a}[1]`` writes the same bytes either way.
     """
     marked = lex.start_of(token.text)
     if marked is not None and marked.group("enclosure"):
         return
     following = source[token.end:token.end + 1]
-    if following in ("(", "[") or (
-            following in lex.IDENT_START and token.text.endswith((")", "]"))):
+    if following in ("(", "[") and not token.text.endswith(")"):
         raise Unsupported("placeholder %r followed by %r"
                           % (token.text, following))
 

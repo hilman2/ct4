@@ -556,8 +556,42 @@ def _end_of_name(source: str, index: int) -> int:
     return index
 
 
-def _end_of_chain(source: str, index: int) -> int:
-    """A name and what hangs off it: ``.attr``, ``(args)``, ``[key]``."""
+def dotless_links(source: str, index: int = 0) -> list[int]:
+    """Where a chain carries on over a bare name, by offset.
+
+    One rule, one implementation: this runs the same walk the lexer
+    runs and collects what the walk stepped over. The check reports
+    these, because the position is a trap. ``$temp.formatted(2)F`` is
+    an attribute lookup for ``F`` and not the letter F in the output,
+    and nothing about the rendered page says so.
+    """
+    marks: list[int] = []
+    _end_of_chain(source, index, marks)
+    return marks
+
+
+def _end_of_chain(source: str, index: int,
+                  marks: list[int] | None = None) -> int:
+    """A name and what hangs off it: ``.attr``, ``(args)``, ``[key]``.
+
+    Two rules that are not obvious and are both ct3's, measured off it
+    rather than read out of its docstring.
+
+    A bare name after a bracket continues the chain as a dot would.
+    ct3's loop head is ``self.peek() not in identchars + '.'``, so
+    ``$f(1)upper`` is one chain and compiles exactly like
+    ``$f(1).upper``. weewx's own test skin has a line that relies on
+    it, and by the look of it not on purpose: it writes
+    ``.round(5)json()`` where the label above it says
+    ``.round(5).json()``.
+
+    And which bracket comes first decides how far the brackets reach.
+    ct3 reads a "(" with getCallArgString, which takes that one group
+    and no more, so ``$a(1)[2]`` is a placeholder and then the text
+    ``[2]``. It reads a "[" with getExpression, whose loop opens the
+    next group before it tests whether the expression has ended, so
+    ``$a[1](2)[3]`` is all one subscript.
+    """
     length = len(source)
     while index < length and source[index] in IDENT:
         index += 1
@@ -569,11 +603,27 @@ def _end_of_chain(source: str, index: int) -> int:
             while index < length and source[index] in IDENT:
                 index += 1
             continue
+        if char in IDENT_START:
+            # Only reachable behind a bracket: the runs above have
+            # already taken every name character there was.
+            if marks is not None:
+                marks.append(index)
+            while index < length and source[index] in IDENT:
+                index += 1
+            continue
         if char in "([":
             closed = _balanced(source, index, char)
             if closed is None:
                 return index
             index = closed
+            if char == "[":
+                while index < length and source[index] in "{([":
+                    closed = _balanced(source, index, source[index])
+                    if closed is None:
+                        return index
+                    index = closed
+            elif index < length and source[index] in "{([":
+                return index
             continue
         break
     return index
