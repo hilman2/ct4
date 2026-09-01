@@ -1367,6 +1367,50 @@ def test_a_hash_inside_a_string_ends_no_directive(source):
     assert codegen.render(source, [context]) == theirs
 
 
+# A directive argument read in one pass, the way ct3 reads it. Two
+# things need the reader to know what it is inside: a comprehension,
+# where only the target after the "for" is written plainly and the one
+# in the body stays a lookup, and a backslash before a line ending,
+# which the reader drops along with the ending.
+ONE_PASS_SHAPES = [
+    "#set $names = [$s + '!' for $s in $items]\ngot $names\n",
+    "#echo [$s for $s in $items]\n",
+    "$str([$s for $s in $items])\n",
+    "#set $j = ', '.join(['\"' + $s + '\"' for $s in $items])\ngot $j\n",
+    "#if [$s for $s in $items]\nyes\n#end if\n",
+    "#if (1 and \\\n     1)\nyes\n#end if\n",
+    "#set $a = (1) \\\n     + 1\ngot $a\n",
+    "#set $a = 1 \\\n     + 1\ngot $a\n",
+    # And the ordinary forms still read the same.
+    "#set $a = 1\ngot $a\n",
+    "#set $n = 1\n#set $n *= 3\ngot $n\n",
+    # Not a bare "$items": the name mapper finds the frame's own items
+    # first and both engines write a dict_items with addresses in it.
+    "#echo $items[0]\n",
+    "#if $items[0]\nyes\n#end if\n",
+]
+
+
+@pytest.mark.parametrize("source", ONE_PASS_SHAPES)
+def test_a_directive_argument_is_read_in_one_pass(source):
+    # Several of these raise in ct3 as well: a comprehension binds a
+    # plain target and the body still looks the name up in the search
+    # list, so the two disagree about what the name means. That is ct3's
+    # behaviour and what is compared is the exception with its message.
+    def rendered(work):
+        try:
+            return work()
+        except Exception as error:                      # noqa: BLE001
+            return "!!%s: %s" % (type(error).__name__, error)
+
+    context = {"items": ["a", "b"]}
+    theirs = rendered(lambda: str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[dict(context)]).respond()))
+    assert rendered(
+        lambda: codegen.render(source, [dict(context)])) == theirs
+
+
 def test_an_apostrophe_in_prose_opens_no_string():
     # Python has no one-line string that crosses a line ending, so the
     # apostrophe in "today's" opens nothing. A scan that took it for a

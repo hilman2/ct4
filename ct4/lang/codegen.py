@@ -4023,22 +4023,19 @@ def _set_statement(node: tree.Node, allow_global: bool = True) -> ast.stmt:
     right-hand side is looked up. ``#set global`` is a different thing
     altogether: ct3 writes it into the template instance, and there is
     no instance here.
+
+    Cut the way eatSet cuts it: the left-hand side is one expression
+    read with the name mapper off and stopped at an assignment
+    operator, the operator is one token, and the rest is another
+    expression. Deciding where the target ends by looking for an "="
+    in a token got "$d[$k]" right and "[$s for $s in $x]" wrong.
     """
-    parts = []
-    target = True
-    for token in node.tokens[1:]:
-        if target and token.kind == lex.PLACEHOLDER:
-            parts.append(_target_source(token, "assignment target"))
-            continue
-        if target and token.kind == lex.TEXT and \
-                re.match(r"\s*global\b", token.text):
-            if not allow_global:
-                raise Unsupported("#attr global")
-            return _global_set(node)
-        parts.append(_token_source(token))
-        if target and token.kind == lex.TEXT and "=" in token.text:
-            target = False
-    made = _framed_statement("".join(parts).strip())
+    text = _argument_text(node)
+    if re.match(r"\s*global\b", text):
+        if not allow_global:
+            raise Unsupported("#attr global")
+        return _global_set(node)
+    made = _framed_statement(_assignment(text))
     if not isinstance(made, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
         raise Unsupported("#set that is not an assignment")
     return made
@@ -4215,11 +4212,80 @@ def _framed(header: str) -> ast.stmt:
 
 
 def _argument(directive: tree.Node, owner: tree.Node) -> str:
-    """A directive's argument as Python, placeholders resolved."""
+    """A directive's argument as Python, placeholders resolved.
+
+    Read in one pass and not token by token, because ct3 reads it in
+    one pass: getExpression knows what it is inside. A comprehension is
+    where that shows. ``#set $n = [$s for $s in $items]`` is
+
+        n = [VFFSL(SL,"s",True) for s in VFFSL(SL,"items",True)]
+
+    in ct3, the target after the "for" plain and the one in the body
+    still a lookup, which is surprising and is what ct3 does. Converting
+    each placeholder on its own cannot know about the "for" and writes
+    a lookup in both places, which is Python that will not parse. A
+    backslash before a line ending is the same story: the reader knows
+    to drop both and a token walk does not.
+    """
+    return _without_trailing_colon(
+        _read_expression(_argument_text(directive)), owner.name)
+
+
+def _argument_text(directive: tree.Node) -> str:
+    """The raw source of a directive's arguments.
+
+    Comments and the directive end token are not part of the
+    expression: "#set $a = 1 ## why" is an assignment, and ct3 eats the
+    comment before it looks at the expression.
+    """
     parts = []
     for token in directive.tokens[1:]:
-        parts.append(_token_source(token))
-    return _without_trailing_colon("".join(parts), owner.name)
+        if token.kind in (lex.PLACEHOLDER, lex.TEXT):
+            parts.append(token.text)
+        elif token.kind not in (lex.DIRECTIVE_END, lex.COMMENT,
+                                lex.BLOCK_COMMENT):
+            raise Unsupported("%s in a directive argument" % token.kind)
+    return "".join(parts)
+
+
+def _assignment(text: str) -> str:
+    """``$a = 1`` as ``a = 1``, cut the way ct3's eatSet cuts it.
+
+    Three reads: the target with the name mapper off and stopping at
+    an assignment operator, the operator, and the value. ct3 joins them
+    with single blanks whatever the template wrote.
+    """
+    from Cheetah.Parser import assignmentOps
+
+    reader = _Reader(text)
+    reader.name_mapper = False
+    try:
+        left = reader.expression(break_at=tuple(assignmentOps)).strip()
+    finally:
+        reader.name_mapper = True
+    operator = reader.py_token()
+    if operator not in assignmentOps:
+        raise Unsupported("#set without an assignment operator: %r" % text)
+    right = reader.expression().strip()
+    if text[reader.at:].strip():
+        raise Unsupported("cannot read %r from %r"
+                          % (text[reader.at:reader.at + 20], text))
+    return "%s %s %s" % (left, operator, right)
+
+
+def _read_expression(text: str) -> str:
+    """One directive argument through the expression reader.
+
+    What is left over has to be whitespace. The reader stops at a line
+    ending it is not inside brackets for, and that ending is the one
+    that closed the directive.
+    """
+    reader = _Reader(text)
+    made = reader.expression()
+    if text[reader.at:].strip():
+        raise Unsupported("cannot read %r from %r"
+                          % (text[reader.at:reader.at + 20], text))
+    return made
 
 
 def _bare_word_at(text: str, word: str, start: int = 0) -> int:

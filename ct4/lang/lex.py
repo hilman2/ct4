@@ -713,6 +713,15 @@ def line_that_closes(source: str, start: int) -> int:
             if closed is not None:
                 index = closed
                 continue
+        if char == "\\":
+            # getExpressionParts drops a backslash that stands before a
+            # line ending, and the ending with it, so the expression
+            # carries on whether or not a bracket is open. jas ends five
+            # of its #if lines that way. A backslash anywhere else is
+            # one character like any other.
+            match = EOL.match(source, index + 1)
+            index = match.end() if match is not None else index + 1
+            continue
         if char in "([{":
             depth += 1
         elif char in ")]}":
