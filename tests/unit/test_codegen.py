@@ -1146,7 +1146,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "<% write(str(__file__)) %>",            # a name only ct3's module has
     "$a[\n1]\n",                             # the lexer stopped early
     "${aFunc(\n\n)}\n",                      # ... and left the "}" over
-    "$(a, 'x')\n",                           # arguments for the filter
     "#echo ${b}\n",                          # ParseError inside an expression
     "$a[1 +]\n",                             # ct3 does not compile it
 ])
@@ -1601,6 +1600,33 @@ END_TAG_SHAPES = [
     "#def f($x=$nowhere)\n[$x]\n#end def\n$f()\n",
     "#import os\n#def f($x=$os.sep)\n[$x]\n#end def\n$f()\n",
     '#def f($x="$")\n[$x]\n#end def\n$f()\n',
+    # A c'...' string among a #call's own arguments goes through the
+    # reader with the rest of them; CallDirective.test9 hands one over
+    # as a keyword value.
+    '#call $f y=c"<$v>"\n1#slurp\n#end call\n',
+    # #set module writes the assignment at module level, hoisted with
+    # the imports, and a later placeholder finds it there.
+    '#set module __foo__ = "bar"\n$__foo__\n',
+    "#set module $x = 1\n$x\n",
+    "#def m\n#set module $g = 9\n#end def\n$m()$g\n",
+    "#set module $a, $b = 1, 2\n$a$b\n",
+    # The function a #call calls is whatever expression stands first,
+    # read with autocalling off all the way through, and the region
+    # calls what that leaves. A bracket group behind a bare name
+    # belongs to the name, placeholders inside it read the same way.
+    "#call $calls.b(1)\nx\n#end call\n",
+    "#call $calls.c k=2\nx\n#end call\n",
+    '#call getattr($calls, "c") k=3\nx\n#end call\n',
+    "#call $takers[0]\nx\n#end call\n",
+    "#call $takers[0]: one line\nZ\n",
+    # Arguments for the filter: what stands after a comma inside the
+    # enclosure goes to the filter in front of rawExpr, positional and
+    # keyword alike.
+    '$(v, "x")\n',
+    "$(v, x=1)\n",
+    '$(v, "x", y=2)\n',
+    "$( v , 'x' )\n",
+    "${v, 'x'}\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
@@ -1620,6 +1646,13 @@ def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
     class Obj:
         x = 0
 
+    class Calls:
+        def b(self, n):
+            return lambda body: "<%s:%s>" % (n, body)
+
+        def c(self, body, k=0):
+            return "{%s,%s}" % (body, k)
+
     def rendered(work):
         try:
             return work()
@@ -1629,7 +1662,9 @@ def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
     def context():
         return {"v": "1.0", "i": 7, "unit": {"x": "F"}, "k": "x",
                 "o": Obj(), "z": 0,
-                "f": lambda *a, **k: "<%s|%s>" % (a, sorted(k.items()))}
+                "f": lambda *a, **k: "<%s|%s>" % (a, sorted(k.items())),
+                "calls": Calls(),
+                "takers": [lambda body: "[%s]" % body]}
 
     theirs = rendered(lambda: str(Template.compile(
         source=source, useCache=False,

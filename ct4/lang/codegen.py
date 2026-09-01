@@ -503,6 +503,10 @@ class Written:
     line: int
     column: int
     start: int = -1
+    # What stood after a comma inside the enclosure, "$(a, 'x')":
+    # arguments for the filter, as they stood. Empty for nearly every
+    # placeholder there is.
+    filter_args: str = ""
 
 
 @dataclass(frozen=True)
@@ -552,6 +556,15 @@ class _Reader:
         # with a setting rather than an argument, so it reaches every
         # reader that runs while it is off.
         self.name_mapper = True
+        # useAutocalling, which eatCall turns off while it reads the
+        # function a #call calls: "#call $a.b(1)" is
+        # VFN(VFFSL(SL,"a",False),"b",False)(1), every chunk False and
+        # the placeholders inside the brackets too.
+        self.autocalling = True
+        # What stood after a comma inside an enclosure, "$(a, 'x')":
+        # arguments for the filter, which the placeholder reader sets
+        # and the value's writer picks up.
+        self.filter_args = ""
 
     # -- position ----------------------------------------------------
 
@@ -670,7 +683,7 @@ class _Reader:
         found: list[Chunk] = []
         while not self.done():
             remainder = ""
-            autocall = True
+            autocall = self.autocalling
             char = self.text[self.at]
             if char not in lex.IDENT_START and char != ".":
                 break
@@ -904,10 +917,16 @@ class _Reader:
             made += self.whitespace()
             if self.peek() == ",":
                 # ct3 reads what follows as arguments for the filter
-                # and leaves the value the chain alone. There is no way
-                # to pass them here, and read as expression text the
-                # comma would quietly build a tuple.
-                raise Unsupported("filter arguments in a placeholder")
+                # and leaves the value the chain alone: "$(a, 'x')"
+                # writes _filter(_v, 'x', rawExpr=...). Kept on the
+                # reader for the value's writer to pick up, because
+                # what comes back from here is the value.
+                self.at += 1
+                rest = self.expression(enclosed=True, enclosures=[opener])
+                if rest.endswith(lex.CLOSING[opener]):
+                    rest = rest[:-1]
+                self.filter_args = rest.strip()
+                return made
             if self.peek() == lex.CLOSING[opener]:
                 self.at += 1
             else:
@@ -961,6 +980,19 @@ def placeholder_source(text: str, name_mapper: bool = True) -> str:
             is one token here and two things in ct3, a placeholder
             "$a(1)" and the plain output text "[2]".
     """
+    return placeholder_parts(text, name_mapper)[0]
+
+
+def placeholder_parts(text: str, name_mapper: bool = True) -> tuple[str, str]:
+    """The Python for a placeholder, and the arguments for its filter.
+
+    Called as ``placeholder_parts("$(a, 'x')")``.
+
+    Returns:
+        tuple[str, str]: the lookup, and what stood after a comma inside
+            the enclosure, as it stood. Empty for every placeholder
+            that has no comma, which is nearly all of them.
+    """
     if MODIFIERS.match(text):
         raise Unsupported("placeholder %r" % text)
     reader = _Reader(text)
@@ -968,7 +1000,7 @@ def placeholder_source(text: str, name_mapper: bool = True) -> str:
     made = reader.placeholder()
     if not reader.done():
         raise Unsupported("placeholder %r" % text)
-    return made
+    return made, reader.filter_args
 
 
 def argument_source(text: str) -> str:
@@ -1970,6 +2002,15 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 _eat_directive_line(node, source, out)
             elif node.name == "include":
                 _include(node, source, out)
+            elif node.name == "set" and re.match(r"\s*module\b",
+                                                 _argument_text(node)):
+                # SET_MODULE: addModuleGlobal writes the assignment at
+                # module level, so the name outlives every instance and
+                # a later placeholder finds it there the way it finds
+                # an #import. Hoisted with the imports for that reason.
+                _eat_directive_line(node, source, out)
+                hoisted.append(_framed_statement(_assignment(re.sub(
+                    r"^\s*module\b", "", _argument_text(node), count=1))))
             else:
                 # After the statements, not before them. #echo writes,
                 # and "L#echo 1" puts the 1 in front of the line ending
@@ -2063,8 +2104,9 @@ def _piece(node: tree.Node, source: str,
                                    or marked.group("cache")):
             _modified_placeholder(node, token, marked, out)
             return
-        written = Written(placeholder_source(token.text), token.text,
-                          node.line, node.column, token.start)
+        code, filter_args = placeholder_parts(token.text)
+        written = Written(code, token.text, node.line, node.column,
+                          token.start, filter_args)
         catcher = _catcher()
         if catcher is not None and catcher.name is not None:
             # Turned into statements here and not in _statements. The
@@ -4090,33 +4132,52 @@ def _call_target(node: tree.Node) -> tuple[str, str]:
     if not tokens:
         raise Unsupported("#call without a function")
     first, rest_tokens = tokens[0], tokens[1:]
+    # The function is whatever expression stands first, read with
+    # autocalling off all the way through: "#call $a.b(1)" is
+    # VFN(VFFSL(SL,"a",False),"b",False)(1) and "#call $lst[0]" is
+    # VFFSL(SL,"lst",False)[0], and the region calls what that leaves.
+    # A bracket group behind a bare name belongs to the name too,
+    # "#call getattr($a, 'c')", with the placeholders inside it read
+    # the same way.
     if first.kind == lex.PLACEHOLDER:
-        chunks = chunks_of(first.text)
-        if len(chunks) != 1 or chunks[0].remainder:
+        reader = _Reader(first.text)
+        reader.autocalling = False
+        function = reader.placeholder()
+        if not reader.done():
             raise Unsupported("#call %r" % first.text)
-        function = 'VFFSL(%s,"%s",False)' % (SEARCH_LIST, chunks[0].name)
         rest = ""
     elif first.kind == lex.TEXT:
         match = CALL_NAME.match(first.text)
         if match is None:
             raise Unsupported("#call %r" % first.text[:40])
         function = match.group(1)
-        rest = first.text[match.end():]
+        # Over the raw text of every token, because the lexer cuts
+        # "getattr($a, 'c')" at the placeholder and the bracket group
+        # closes two tokens later.
+        rest = first.text[match.end():] + "".join(
+            t.text for t in rest_tokens
+            if t.kind in (lex.TEXT, lex.PLACEHOLDER))
+        rest_tokens = []
+        if rest[:1] in ("(", "["):
+            reader = _Reader(rest)
+            reader.autocalling = False
+            function += reader.expression(enclosed=True)
+            rest = rest[reader.at:]
     else:
         raise Unsupported("#call %s" % first.kind)
     # The arguments are read with autocalling back on, so a placeholder
     # among them goes through the ordinary reader. That reader refuses
     # the enclosure forms, which is what ct3's getExpression does too:
     # "#call $rec ${sep}" is a ParseError there.
-    rest += "".join(_token_source(t) for t in rest_tokens)
-    rest = rest.strip()
+    # In one pass through the reader, like every other directive
+    # argument: a c'...' string among the arguments is transformed
+    # there and nowhere else, and CallDirective.test9 hands one over
+    # as a keyword value.
+    rest = _read_expression(rest + "".join(
+        t.text for t in rest_tokens
+        if t.kind in (lex.TEXT, lex.PLACEHOLDER))).strip()
     if rest.endswith(":"):
         rest = rest[:-1].strip()
-    if rest.startswith(("(", "[")):
-        # "#call getattr(self, 'x')": the argument list belongs to the
-        # name and ct3 reads it as part of the name, not as extra
-        # arguments. Not read here.
-        raise Unsupported("#call with a call in its function name")
     if rest:
         _parsed("f(%s)" % rest)
     return function, rest
@@ -5121,8 +5182,25 @@ def _filtered(written: Written | None,
     value = ast.Name(id=VALUE, ctx=ast.Load())
     filter_name = ast.Name(id=FILTER, ctx=ast.Load())
     state = _markup()
+    extra_args: list[ast.expr] = []
+    extra_keywords: list[ast.keyword] = []
+    if written is not None and written.filter_args:
+        # "$(a, 'x')" writes _filter(_v, 'x', rawExpr=...): what stood
+        # after the comma goes to the filter, positional and keyword
+        # alike, in front of rawExpr. Parsed as a call's argument list
+        # because that is what it is.
+        extra = _parsed("f(%s)" % written.filter_args)
+        assert isinstance(extra, ast.Call)
+        extra_args, extra_keywords = extra.args, extra.keywords
     if state is None:
-        return ast.Call(func=filter_name, args=[value], keywords=keywords)
+        return ast.Call(func=filter_name, args=[value] + extra_args,
+                        keywords=extra_keywords + keywords)
+    if extra_args or extra_keywords:
+        # The markup wrappers take the filter as an argument and hand
+        # it the value; a positional argument for the filter has no
+        # way through them, and this mode is new enough to refuse
+        # rather than grow one.
+        raise Unsupported("filter arguments in a placeholder in markup mode")
     site = state.sites.get(written.start) if written is not None else None
     if site is not None and site.context in MARKUP_ESCAPES:
         if site.context == markup_scan.URL_HEAD:
