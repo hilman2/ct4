@@ -1175,7 +1175,7 @@ def module_names():
     source = "hello $name\n"
     theirs = Template.compile(source, keepRefToGeneratedCode=True)
     ours: dict = {}
-    exec(compile(codegen.generate(source).module, "<ct4>", "exec"), ours)
+    exec(compile(codegen.generate(source).code, "<ct4>", "exec"), ours)
     return set(sys.modules[theirs.__module__].__dict__), set(ours)
 
 

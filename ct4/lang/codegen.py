@@ -1228,9 +1228,18 @@ class Generated:
     markup: MarkupState | None = None
 
     def compile(self) -> Any:
-        """The template class, ready to be given a search list."""
+        """The template class, ready to be given a search list.
+
+        Compiled from the text and not from the tree, because the text
+        is what ct3 execs when it stands in for its compiler, and a
+        traceback out of either path should then name the same line.
+        It also spares the tree its locations: a module is compiled
+        from an ast only with every node's line filled in, and filling
+        them in was a fifth of a compile over the skins, for a tree
+        that nothing else asks a line of.
+        """
         namespace: dict[str, Any] = {}
-        exec(compile(self.module, "<ct4>", "exec"), namespace)
+        exec(compile(self.code, GENERATED_FILE, "exec"), namespace)
         return namespace[self.class_name]
 
 
@@ -1383,15 +1392,55 @@ def generate(source: str, settings: Any = None,
     # front of what the template imported: ct3's preamble stands there
     # too, and a template that binds one of these names itself never
     # gets one from here.
-    module.body[:0] = _preamble_names(module, source, class_name)
+    module.body[:0] = _preamble_names(module, _code_of(root), class_name)
     _refuse_unbound_bases(module, shape.bases, base_class)
     # After the guards, not before: the plumbing call names the class,
     # and the preamble guard asks who reaches for a name. It is asking
     # about the template, and this line is not the template's.
     module.body.extend(_plumbing(class_name))
-    ast.fix_missing_locations(module)
+    _locate(module)
     return Generated(_with_origins(ast.unparse(module), module),
                      module, class_name, state)
+
+
+def _locate(module: ast.Module) -> None:
+    """Gives every statement a line, which is all ``ast.unparse`` asks.
+
+    The unparser reads a statement's ``lineno`` to look up a type
+    comment, for an assignment, a loop, a with and a function head,
+    and asks nothing of an expression. ``fix_missing_locations`` would
+    give every node one, and the expressions are nearly all of the
+    tree: over the skins that pass was a fifth of a compile. The
+    module is never compiled from the tree, only from its text, so no
+    other line is needed anywhere.
+    """
+    stack: list[ast.AST] = [module]
+    while stack:
+        node = stack.pop()
+        if not hasattr(node, "lineno"):
+            node.lineno = node.end_lineno = 1        # type: ignore[attr-defined]
+            node.col_offset = node.end_col_offset = 0  # type: ignore[attr-defined]
+        stack.extend(_sub_statements(node))
+
+
+def _code_of(root: tree.Node) -> str:
+    """What the template says in code, with its text left out.
+
+    The preamble guard asks whether the template can reach a name, and
+    only a placeholder, a directive or a PSP body can. Prose cannot, and
+    a skin's prose mentions "time" on every page.
+
+    Decided by the node and not by the token: a directive's arguments
+    are text tokens too, and they are the one kind of text that is
+    code. The node that owns them is the directive.
+    """
+    return "".join(token.text for node in root.walk()
+                   if node.kind not in PROSE_KINDS
+                   for token in node.tokens)
+
+
+PROSE_KINDS = frozenset({lex.TEXT, lex.COMMENT, lex.BLOCK_COMMENT,
+                         lex.ESCAPE, lex.RAW})
 
 
 # Where a generated statement came from, as (line, column) in the
@@ -1502,12 +1551,14 @@ def _origin_lines(made: ast.Module,
     return found
 
 
-# Every name the guard below asks about, as one search over the source.
-# A name can only be reached in the generated module if it stood in the
-# template: an #extends base, a placeholder, a PSP body. So a source
-# that mentions none of them cannot trip the guard, and the walk over
-# the whole module can be skipped. That walk was the single largest
-# item in generating the 390 skin templates.
+# Every name the guard below asks about, as one search over the
+# template's code. A name can only be reached in the generated module
+# if it stood in the template: an #extends base, a placeholder, a PSP
+# body. So a template whose code mentions none of them cannot trip the
+# guard, and the walk over the whole module can be skipped. That walk
+# was the single largest item in generating the 390 skin templates,
+# and searching the whole source rather than its code still ran it for
+# most of them: "time" is a word a weather page uses.
 PREAMBLE_RE = re.compile(r"\b(?:%s)\b"
                          % "|".join(sorted(PREAMBLE, key=len, reverse=True)))
 
@@ -1584,6 +1635,11 @@ def render(source: str, search_list: Sequence[Any],
     finally:
         template.shutdown()
     return text
+
+
+# What the module a Generated compiles is called, and what ct4.trace
+# recognizes a frame of it by.
+GENERATED_FILE = "<ct4>"
 
 
 def _scanned(root: tree.Node, shift: int) -> dict[int, markup_scan.Site]:
