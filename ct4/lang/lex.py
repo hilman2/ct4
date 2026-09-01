@@ -318,6 +318,20 @@ class _Lexer:
                 index = text_from = end
                 continue
 
+            if index < directive_until and char in "\"'":
+                # A string literal in a directive's arguments is one
+                # token to ct3: getPyToken takes the whole of it, so
+                # the branch that ends a directive at a bare hash is
+                # never reached inside one. Without this a CSS colour
+                # closes the directive it stands in, and 21 templates
+                # were refused because they set a list of them.
+                #
+                # It also settles the dollar: ct3 copies a string
+                # literal verbatim and does not look for placeholders
+                # in it, and neither does this.
+                index = _end_of_string(source, index)
+                continue
+
             if char == "#":
                 inside = index < directive_until
                 made = self.hash_at(index, inside)
@@ -370,15 +384,21 @@ class _Lexer:
     def argument_end(self, index: int) -> int:
         """Where the arguments of the directive just read stop.
 
-        At the end of the line, or at the directive end token, which is
-        a bare hash. Only used to keep a following "##" from reading as
-        a comment; nothing is cut here.
+        At the ending that closes the directive, or at the directive
+        end token, which is a bare hash outside a string. Only used to
+        keep a following "##" from reading as a comment and to know
+        where a string literal is one; nothing is cut here.
         """
-        match = EOL.search(self.source, index)
-        line_end = len(self.source) if match is None else match.start()
-        hash_at = self.source.find("#", index)
-        if 0 <= hash_at < line_end:
-            return hash_at + 1
+        source = self.source
+        line_end = line_that_closes(source, index)
+        while index < line_end:
+            char = source[index]
+            if char in "\"'":
+                index = _end_of_string(source, index)
+                continue
+            if char == "#":
+                return index + 1
+            index += 1
         return line_end
 
     def hash_at(self, index: int,
@@ -654,6 +674,54 @@ def _balanced(source: str, index: int, opening: str) -> int | None:
             return None
         index += 1
     return None
+
+
+def line_that_closes(source: str, start: int) -> int:
+    """Offset just past the line ending that closes a directive.
+
+    Not the first line ending. ct3's getExpressionParts opens a bracket
+    before it tests whether the expression has ended, and that test is
+    never reached while one is open, so a line ending inside brackets
+    is read and thrown away and the expression carries on. The skins
+    write their lists that way and so does jas:
+
+        #set $params = [
+            {'name': 'barometer', 'agg': None},
+            {'name': 'outTemp', 'agg': None},
+        ]
+
+    is one directive whose argument holds no line ending at all. ct3
+    writes it out as ``params = [    {...},    {...},]``: the endings
+    are gone and the indent that stood after each of them is still
+    there, harmlessly, inside the brackets.
+
+    Returns the end of the source where a bracket is still open at the
+    end of it. ct3 raises a ParseError there and the caller will refuse
+    what it cannot read, which is the same outcome by a shorter road.
+    """
+    depth = 0
+    index = start
+    length = len(source)
+    while index < length:
+        char = source[index]
+        if char in "\"'":
+            index = _end_of_string(source, index)
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            # Never below zero: a stray closer in a directive's
+            # arguments is the template's problem, and letting it open
+            # a negative depth would make the next line ending close
+            # nothing.
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            match = EOL.match(source, index)
+            if match is not None:
+                return match.end()
+        index += 1
+    return length
+
 
 
 def _end_of_string(source: str, index: int) -> int:

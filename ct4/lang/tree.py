@@ -306,7 +306,7 @@ class _Builder:
         arguments end at the colon and the rest of the line is body.
         """
         if stop is None:
-            stop = line_that_closes(self.source, node.tokens[0].end)
+            stop = lex.line_that_closes(self.source, node.tokens[0].end)
         while index < len(self.tokens):
             token = self.tokens[index]
             if token.kind == lex.RAW:
@@ -381,7 +381,7 @@ class _Builder:
         # To the ending that closes the directive, not the first one:
         # "#def f($a,\n$b): body" is a short form and its colon stands
         # on the second line.
-        end = line_that_closes(self.source, start)
+        end = lex.line_that_closes(self.source, start)
         match = lex.EOL.search(self.source, max(end - 2, start))
         if match is not None and match.end() >= end:
             end = match.start()
@@ -462,53 +462,6 @@ def _bare_words(text: str) -> Iterator[str]:
                 yield text[start:index]
             continue
         index += 1
-
-
-def line_that_closes(source: str, start: int) -> int:
-    """Offset just past the line ending that closes a directive.
-
-    Not the first line ending. ct3's getExpressionParts opens a bracket
-    before it tests whether the expression has ended, and that test is
-    never reached while one is open, so a line ending inside brackets
-    is read and thrown away and the expression carries on. The skins
-    write their lists that way and so does jas:
-
-        #set $params = [
-            {'name': 'barometer', 'agg': None},
-            {'name': 'outTemp', 'agg': None},
-        ]
-
-    is one directive whose argument holds no line ending at all. ct3
-    writes it out as ``params = [    {...},    {...},]``: the endings
-    are gone and the indent that stood after each of them is still
-    there, harmlessly, inside the brackets.
-
-    Returns the end of the source where a bracket is still open at the
-    end of it. ct3 raises a ParseError there and the caller will refuse
-    what it cannot read, which is the same outcome by a shorter road.
-    """
-    depth = 0
-    index = start
-    length = len(source)
-    while index < length:
-        char = source[index]
-        if char in "\"'":
-            index = lex._end_of_string(source, index)
-            continue
-        if char in "([{":
-            depth += 1
-        elif char in ")]}":
-            # Never below zero: a stray closer in a directive's
-            # arguments is the template's problem, and letting it open
-            # a negative depth would make the next line ending close
-            # nothing.
-            depth = max(depth - 1, 0)
-        elif depth == 0:
-            match = lex.EOL.match(source, index)
-            if match is not None:
-                return match.end()
-        index += 1
-    return length
 
 
 def _top_level_colon(text: str) -> int:

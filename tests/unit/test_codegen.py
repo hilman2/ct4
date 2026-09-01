@@ -1123,7 +1123,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "#call f\nx\n#arg a\ny\n#end call\n",    # the tree swallows an #arg body
     "#if 0: a\n#else: b\n",                  # the chained short form
     "#include\n",                            # ct3 writes a syntax error
-    "#include source='a$b'\n",               # a placeholder inside a string
     "#include source=$a ## why\n",           # the comment keeps the indent
     "#extends Foo Bar\n",                    # ct3 glues that into "FooBar"
     "#extends os.path.Thing\n",              # a name only ct3's module has
@@ -1333,6 +1332,39 @@ def test_an_assignment_target_is_written_as_plainly_as_ct3_writes_it(source):
         source=source, useCache=False,
         cacheCompilationResults=False)(searchList=[context()]).respond()))
     assert rendered(lambda: codegen.render(source, [context()])) == theirs
+
+
+# A hash inside a string literal in a directive's arguments. ct3's
+# getPyToken takes the whole literal, so the branch that ends a
+# directive at a bare hash is never reached inside one. Skins keep
+# lists of CSS colours and anchors, and 21 templates were refused
+# because the first colour closed the #set it stood in.
+HASH_IN_STRING_SHAPES = [
+    '#set $a = ["#fff", "#000"]\ngot $a\n',
+    "#set $href = '#top'\ngot $href\n",
+    '<!--#set $c = "#59cc33" #-->got $c\n',
+    '#if "#" == "#"\nyes\n#end if\n',
+    # A dollar inside one is not a placeholder either: ct3 copies a
+    # string literal verbatim and does not look in it.
+    '#set $a = "$b"\ngot $a\n',
+    "#set $a = 'it is #1'\ngot $a\n",
+    # And the hash still ends a directive where it stands outside one.
+    "#if 1#yes#end if\n",
+    "#set $a = 1#got $a\n",
+    # The dollar in the included source is resolved all the same, and
+    # not by the lexer: ct3 includes the string as a template and
+    # parses it there. This layer was refusing it out of caution.
+    "#include source='a$b'\n",
+]
+
+
+@pytest.mark.parametrize("source", HASH_IN_STRING_SHAPES)
+def test_a_hash_inside_a_string_ends_no_directive(source):
+    context = {"b": "resolved"}
+    theirs = str(Template.compile(
+        source=source, useCache=False,
+        cacheCompilationResults=False)(searchList=[context]).respond())
+    assert codegen.render(source, [context]) == theirs
 
 
 def test_a_raw_body_is_never_cut_by_the_argument_scan():
