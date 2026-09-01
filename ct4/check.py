@@ -92,7 +92,7 @@ def _check_text(source: str, file: str,
     from Cheetah.Parser import ParseError
 
     try:
-        found = analyze.placeholders(source, settings)
+        found = analyze.placeholders(source, settings, file)
     except ParseError as error:
         return [_parse_error(error, file)]
     except Exception as error:                          # noqa: BLE001

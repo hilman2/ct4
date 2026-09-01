@@ -24,7 +24,7 @@ above, and it can lean on Python's own parser once it gets there.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator, Sequence
+from typing import Iterable, Iterator, Sequence
 
 from ct4.lang import lex
 from ct4.lang.lex import Token
@@ -74,6 +74,24 @@ def closing_names() -> frozenset[str]:
     from Cheetah.Parser import endDirectiveNamesAndHandlers
 
     return frozenset(endDirectiveNamesAndHandlers) | SELF_CLOSING
+
+
+def syntax(line: Iterable[str] = (), block: Iterable[str] = ()) -> lex.Syntax:
+    """ct3's names, and a project's own on top of them.
+
+    Args:
+        line (Iterable[str]): Registered directives without a body.
+        block (Iterable[str]): Registered directives that run to their
+            ``#end name``. They close the way ct3 closes a macro
+            directive, the tag stopping right after the name, and ct3
+            insists on the ``#end``.
+    """
+    lines = frozenset(line)
+    blocks = frozenset(block)
+    return lex.Syntax(directives=lex.directive_names() | lines | blocks,
+                      self_closing=lex.SELF_CLOSING | blocks,
+                      closing=closing_names() | blocks,
+                      must_close=must_close() | blocks)
 
 
 # Directives that continue a block someone else opened. They neither
@@ -141,13 +159,18 @@ OPEN_BLOCK = "block"
 OPEN_SHORT = "short"
 
 
-def parse(source: str) -> Node:
+def parse(source: str, names: lex.Syntax | None = None) -> Node:
     """The tree of a template.
+
+    Args:
+        source (str): The template.
+        names (lex.Syntax|None): The names it is read with; None is
+            ct3's own, see ``syntax``.
 
     Raises:
         StructureError: where a block is left open or closed wrongly.
     """
-    return _Builder(source).run()
+    return _Builder(source, names).run()
 
 
 def unparse(node: Node) -> str:
@@ -158,12 +181,13 @@ def unparse(node: Node) -> str:
 class _Builder:
     """Walks the tokens once and stacks up the open blocks."""
 
-    def __init__(self, source: str):
+    def __init__(self, source: str, names: lex.Syntax | None = None):
         self.source = source
-        self.tokens = lex.tokens(source)
+        self.syntax = names or syntax()
+        self.tokens = lex.tokens(source, self.syntax)
         self.starts = lex.line_starts(source)
-        self.closing = closing_names()
-        self.required = must_close()
+        self.closing = self.syntax.closing
+        self.required = self.syntax.must_close
         # Short forms waiting for their line to end, innermost last,
         # each with the offset it closes at.
         self.short: list[tuple[Node, int]] = []
@@ -507,7 +531,8 @@ class _Builder:
         token = self.tokens[index]
         node = Node(lex.DIRECTIVE, [token], name="end")
         index = self._take_arguments(
-            node, index + 1, lex.self_closing_end(self.source, token.end))
+            node, index + 1, lex.self_closing_end(self.source, token.end,
+                                                  self.syntax.self_closing))
         closes = _end_target(node)
         if len(stack) == 1:
             raise StructureError(

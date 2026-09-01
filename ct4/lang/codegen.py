@@ -114,6 +114,7 @@ from dataclasses import dataclass, field
 from tokenize import PseudoToken
 from typing import Any, Sequence
 
+from ct4 import directives
 from ct4.lang import lex, tree
 from ct4.markup import mode as markup_mode
 from ct4.markup import scan as markup_scan
@@ -1347,7 +1348,45 @@ def generate(source: str, settings: Any = None,
     declared = source
     source = _before_breakpoint(_preprocess(source))
     shift = _lines_cut(declared, source) if markup else 0
-    root = tree.parse(source)
+    # The names the template is read with: ct3's, and whatever the
+    # project's ct4.toml registered on top of them.
+    registered = directives.find_for(file)
+    names = tree.syntax(registered.line, registered.block) \
+        if registered.names else None
+    root = tree.parse(source, names)
+    used = _registered_use(root, registered)
+    try:
+        return _generate(root, source, markup, shift, registered,
+                         class_name, base_class, main_method, file)
+    except Unsupported as error:
+        if used:
+            # ct3 does not know the directive, so it cannot stand in
+            # for the generator here: a fallback would read the tag as
+            # text and render a page nobody wrote.
+            raise directives.DirectiveError(
+                "%s uses #%s, registered in %s, and cannot be compiled:"
+                " %s" % (file or "the template", used, registered.path,
+                         error)) from error
+        raise
+
+
+def _registered_use(root: tree.Node,
+                    registered: directives.Registration) -> str:
+    """The first registered directive the template uses, or ""."""
+    if not registered.names:
+        return ""
+    for node in root.walk():
+        if node.kind in (lex.DIRECTIVE, tree.BLOCK) \
+                and node.name in registered.names:
+            return node.name
+    return ""
+
+
+def _generate(root: tree.Node, source: str, markup: bool, shift: int,
+              registered: directives.Registration, class_name: str,
+              base_class: str | None, main_method: str | None,
+              file: str) -> Generated:
+    """The module for a parsed template; ``generate`` is the caller."""
     _refuse_raw_in_short_form(source, root)
     shape = _class_shape(root, base_class, main_method)
     # The imports #extends synthesises stand with the template's own.
@@ -1364,8 +1403,10 @@ def generate(source: str, settings: Any = None,
     # leave a catcher standing for the next template on this thread.
     previous = _catcher()
     previous_markup = _markup()
+    previous_plugins = _plugins()
     _ACTIVE.catcher = Catcher(methods)
     _ACTIVE.markup = state
+    _ACTIVE.plugins = registered
     _ACTIVE.scopes = []
     # What "#super" names: the class being generated and the method
     # the directive stands in, which is the main one until a #def
@@ -1377,6 +1418,7 @@ def generate(source: str, settings: Any = None,
     finally:
         _ACTIVE.catcher = previous
         _ACTIVE.markup = previous_markup
+        _ACTIVE.plugins = previous_plugins
         _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
     # Before the class, the way ct3 puts them at module level. An
@@ -1898,6 +1940,9 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             pending = _block_comment(node, source, out)
             out.append((BARRIER_PIECE, ""))
         elif node.kind == tree.BLOCK:
+            if node.name in _plugins().block:
+                _plugin_region(node, source, hoisted, methods, out)
+                continue
             if node.name in ("def", "block"):
                 after: list[str] = []
                 call = _definition(node, source, hoisted, methods,
@@ -1946,6 +1991,9 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             for text in after:
                 out.append((TEXT_PIECE, text))
         elif node.kind == lex.DIRECTIVE:
+            if node.name in _plugins().line:
+                _plugin_line(node, source, out)
+                continue
             if node.name in BRANCHES:
                 # A branch that reached here belongs to no block this
                 # layer built. It is the chained colon short form,
@@ -3979,6 +4027,103 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
         out.append((STMT_PIECE, statement))
     if trailing:
         out.append((TEXT_PIECE, trailing))
+
+
+def _plugins() -> directives.Registration:
+    """The directives the template being generated may use."""
+    found = getattr(_ACTIVE, "plugins", None)
+    return found if found is not None else directives.NONE
+
+
+def expression_ast(text: str) -> ast.expr:
+    """A Cheetah expression as an ast, for a directive handler.
+
+    Through the reader a directive's argument goes through, so a
+    placeholder in the argument of a registered directive reads
+    exactly as it would in a ``#set``: the name mapper, autocalling
+    and the names the template bound itself all apply.
+    """
+    return _parsed(_read_expression(text))
+
+
+def _plugin_line(node: tree.Node, source: str,
+                 out: list[tuple[str, Any]]) -> None:
+    """A registered directive without a body.
+
+    The handler's statements go where the tag stood, and the tag
+    decides about its own line the way a ``#set`` does: the indent
+    before it goes where the line was clear, and the line ending it
+    took is written after the statements.
+    """
+    call = directives.Call(node.name, _region_argument(node).strip(),
+                           node.line, node.column)
+    ending = _directive_line_ending(node, source, out)
+    for statement in _plugin_statements(call, []):
+        out.append((STMT_PIECE, statement))
+    if ending:
+        out.append((TEXT_PIECE, ending))
+
+
+def _plugin_region(node: tree.Node, source: str, hoisted: list[ast.stmt],
+                   methods: list[ast.stmt],
+                   out: list[tuple[str, Any]]) -> None:
+    """A registered block directive: its body among the handler's statements.
+
+    Shaped after ``_region``, because ct3 closes a macro directive
+    through the same eater as a #call: the opening tag's line ending
+    belongs to the body and the #end tag's to what follows. The colon
+    short form keeps its line ending outside the body, the way
+    eatMacroCall reads that line with gobble=False and takes the
+    ending separately.
+    """
+    own = "".join(t.text for t in node.tokens)
+    short = not (_trailing_eol(own)
+                 or node.tokens[-1].kind == lex.DIRECTIVE_END
+                 or node.tokens[-1].end >= len(source))
+    children = list(node.children)
+    closed = any(child.kind == lex.DIRECTIVE and child.name == "end"
+                 for child in children)
+    if short and closed:
+        raise Unsupported("#end inside the short form of #%s" % node.name)
+    leading = ""
+    end = None
+    if not short:
+        leading = _eat_region_line(node, source, out)
+        if children and children[-1].kind == lex.DIRECTIVE \
+                and children[-1].name == "end":
+            end = children.pop()
+    pieces = _pieces_of(children, source, hoisted, methods)
+    if leading:
+        pieces.insert(0, (TEXT_PIECE, leading))
+    trailing = ""
+    if end is not None:
+        trailing = _eat_region_line(end, source, pieces)
+    if short:
+        trailing = _take_trailing_eol(pieces)
+    body = _statements(pieces)
+    call = directives.Call(node.name, _region_head(node), node.line,
+                           node.column, short=short, block=True)
+    for statement in _plugin_statements(call, body):
+        out.append((STMT_PIECE, statement))
+    if trailing:
+        out.append((TEXT_PIECE, trailing))
+
+
+def _plugin_statements(call: directives.Call,
+                       body: list[ast.stmt]) -> list[ast.stmt]:
+    """What the handler returned, the body put in for BODY.
+
+    The handler's own statements take the tag's position, so that an
+    error inside one names the directive's line; the body's carry the
+    positions they came with.
+    """
+    made: list[ast.stmt] = []
+    for item in _plugins().run(call):
+        if item is directives.BODY:
+            made.extend(body)
+        else:
+            made.append(_at(item, call.line, call.column))
+    return made
 
 
 def _eat_region_line(node: tree.Node, source: str,

@@ -119,10 +119,14 @@ def start_of(text: str) -> re.Match[str] | None:
 SELF_CLOSING = frozenset({"raw", "compiler-settings", "defmacro", "i18n"})
 
 
-def self_closing_end(source: str, after_end: int) -> int | None:
+def self_closing_end(source: str, after_end: int,
+                     names: frozenset[str] = SELF_CLOSING) -> int | None:
     """Where an ``#end raw`` stops, or None for every other end.
 
     Called with the offset just past the ``#end`` token itself.
+    ``names`` are the blocks that close this way; a registered block
+    directive joins them, because ct3 closes a macro directive through
+    the same eater.
 
     Two eaters, and they end differently. eatEndDirective reads an
     expression after the name and throws it away, so ``#end for $i``
@@ -144,7 +148,7 @@ def self_closing_end(source: str, after_end: int) -> int | None:
     start = at
     while at < len(source) and source[at] in NAME_CHARS:
         at += 1
-    if source[start:at] not in SELF_CLOSING:
+    if source[start:at] not in names:
         return None
     while at < len(source) and source[at] in " \t\f":
         at += 1
@@ -258,9 +262,32 @@ class Token:
             yield from child.leaves()
 
 
-def tokens(source: str) -> list[Token]:
+@dataclass(frozen=True)
+class Syntax:
+    """The names a source is read with.
+
+    ct3's own by default. A project's ``ct4.toml`` registers directives
+    of its own, and then the lexer has to know their names to see a
+    directive where it would otherwise see text, and how far an
+    ``#end name`` of theirs reaches. The two sets the tree needs on top
+    of that, which names open a block and which of those must be
+    closed, travel here too so that one object says it all.
+    """
+
+    directives: frozenset[str]
+    self_closing: frozenset[str] = SELF_CLOSING
+    closing: frozenset[str] = frozenset()
+    must_close: frozenset[str] = frozenset()
+
+
+def default_syntax() -> Syntax:
+    """ct3's names and nothing else, as far as the lexer is concerned."""
+    return Syntax(directive_names())
+
+
+def tokens(source: str, syntax: Syntax | None = None) -> list[Token]:
     """The whole source as tokens, in order."""
-    return _Lexer(source).run()
+    return _Lexer(source, syntax).run()
 
 
 def leaves(items: Sequence[Token]) -> Iterator[Token]:
@@ -362,9 +389,10 @@ def path_of(token: Token) -> str:
 class _Lexer:
     """Scans once, left to right, and never backs up over a decision."""
 
-    def __init__(self, source: str):
+    def __init__(self, source: str, syntax: Syntax | None = None):
         self.source = source
-        self.names = directive_names()
+        self.syntax = syntax or default_syntax()
+        self.names = self.syntax.directives
         self.line_starts = [0]
         for match in EOL.finditer(source):
             self.line_starts.append(match.end())
@@ -459,7 +487,8 @@ class _Lexer:
                         # stepped over as a directive's own literal and
                         # the placeholder in it never becomes a token.
                         if name == "end":
-                            reach = self_closing_end(source, end)
+                            reach = self_closing_end(
+                                source, end, self.syntax.self_closing)
                         elif name == "errorCatcher":
                             reach = identifier_end(source, end)
                         elif name == "arg":

@@ -36,6 +36,11 @@ ct4 fixture capture --weewx ~/src/weewx --out fixtures   # aufzeichnen
 `ct4 check` braucht die Anwendung nicht. Was weewx an Namen kennt, steht
 angemeldet in `declarations/weewx.json`.
 
+Eigene Direktiven meldet ein Projekt in einer `ct4.toml` neben seinen
+Vorlagen an, `[directives]` ohne Rumpf und `[blocks]` mit; der Handler
+bekommt einen `ct4.directives.Call` und gibt `ast`-Anweisungen zurück.
+Beispiele in `tests/unit/sample_directives.py`.
+
 ## Zwei Regeln, die über allem stehen
 
 **Verträglichkeit wird gemessen, nicht behauptet.** Der Korpus in

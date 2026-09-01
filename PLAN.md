@@ -641,6 +641,26 @@ bleiben Positionen, Fehlermeldungen und der Formatierer intakt.
 Das setzt den neuen Compiler-Kern voraus und kann deshalb erst nach P4 kommen.
 Die anderen drei Anschlüsse brauchen ihn nicht.
 
+Stand 02-Sep-2026: steht, in `ct4/directives.py`. Eine `ct4.toml` neben den
+Vorlagen oder darüber meldet unter `[directives]` Direktiven ohne Rumpf und
+unter `[blocks]` solche mit Rumpf bis `#end name` an, je Name ein
+`"paket.modul:funktion"`. Der Handler bekommt beim Übersetzen einen `Call`
+mit Name, Argumenttext und Position und gibt `ast`-Anweisungen zurück, bei
+einem Block mit `BODY` an der Stelle, wo der Rumpf hingehört. `expression()`
+liest einen Cheetah-Ausdruck durch denselben Leser wie ein `#set`, deshalb
+löst ein `#for`-Ziel im Argument genauso auf wie in einem Platzhalter.
+Lexer und Baum lesen die Namen aus einem `Syntax`-Objekt statt aus einer
+Konstante, und dieselbe Stelle wird `#compiler-settings` einmal die Token
+umschalten lassen.
+
+Eine Vorlage mit einer angemeldeten Direktive übersetzt nur der Generator.
+ct3 kennt den Namen nicht, ein Rückfall würde das Tag als Text lesen; was der
+Generator dort verweigert, ist ein Fehler mit Grund. `ct4 check` und
+`ct4 render` finden die Datei über den Pfad der Vorlage, weewx über
+`Template(file=...)`, sobald der Generator als Compiler eingehängt ist, was
+die `user/extensions.py` aus `tests/docker/weewx_json.py` mit einer Zeile
+tut. Niemand reicht eine Einstellung durch.
+
 ### Registrierung über Entry Points
 
 ```toml
@@ -1402,8 +1422,9 @@ breiter als die Testsuite und die weewx-Skins: dazu kommen 175 fremde
 weewx-Skins mit 974 Vorlagen und 1.567 Vorlagen aus 585 Repositories, die
 Cheetah für etwas ganz anderes benutzen. Der Kern hat seinen Aufrufer
 (`ct4/lang/backend.py`), und Tracebacks zeigen in die Vorlage, ohne dass ein
-Aufrufer etwas dafür tut. Was fehlt, sind die Direktiven-Plugins auf
-AST-Ebene: der Kern steht, das Interface dafür nicht.
+Aufrufer etwas dafür tut. Die Direktiven-Plugins auf AST-Ebene stehen seit
+demselben Tag (Abschnitt 6). Was von der Liste bleibt, ist „darauf
+aufbauend": `ct4 fmt`, `ct4 ast`, Sprachserver, tree-sitter.
 
 Was der Kern ablehnt, in Zahlen: 27 Vorlagen mit `#compiler` oder
 `#compiler-settings`, davon 21 Testfälle aus ct3s Suite, die mitten in der
@@ -1515,7 +1536,7 @@ Skin durch den Generator lief.
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
 | Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
 | Lexer, CST, AST, Codegen über `ast` | **3.498 von 3.533**, alle 390 Skins des Korpus |
-| Direktiven-Plugins auf AST-Ebene | offen: der Kern steht, das Interface nicht |
+| Direktiven-Plugins auf AST-Ebene | steht, `ct4/directives.py`, siehe Abschnitt 6 |
 
 **Die drei Schichten.** `ct4/lang/lex.py` zerlegt eine Vorlage verlustfrei in
 einen Tokenbaum: jedes Byte der Quelle steht in genau einem Token, und

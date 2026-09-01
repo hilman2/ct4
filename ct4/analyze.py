@@ -53,9 +53,17 @@ class Placeholder:
 
 
 def placeholders(source: str, settings: dict[str, Any] | None = None,
-                 ) -> list[Placeholder]:
-    """Every lookup of a template, in the order of the file."""
-    return sorted(_scan(_generated(source, settings)),
+                 file: str = "") -> list[Placeholder]:
+    """Every lookup of a template, in the order of the file.
+
+    Args:
+        source (str): the template.
+        settings (dict[str, Any]|None): the compiler settings it will
+            be compiled with.
+        file (str): where it lives, so that the directives its project
+            registered in a ``ct4.toml`` are known.
+    """
+    return sorted(_scan(_generated(source, settings, file)),
                   key=lambda item: (item.line, item.column))
 
 
@@ -96,14 +104,23 @@ def lookup_roots(source: str, settings: dict[str, Any] | None = None,
     return frozenset(found)
 
 
-def _generated(source: str, settings: dict[str, Any] | None = None) -> str:
+def _generated(source: str, settings: dict[str, Any] | None = None,
+               file: str = "") -> str:
     """The module Cheetah generates for this template.
 
     Without the timestamps, so that two runs over the same source give
-    the same text.
+    the same text. A template whose project registered directives of
+    its own goes through the generator, which is the one compiler that
+    knows them; its lookups and origins have the same shape.
     """
     from Cheetah.Compiler import ModuleCompiler
 
+    from ct4 import directives
+
+    if directives.find_for(file).names:
+        from ct4.lang import codegen
+
+        return codegen.generate(source, settings, file=file).code
     options = dict(settings or {})
     options["addTimestampsToCompilerOutput"] = False
     compiler = ModuleCompiler(source, moduleName="ct4_analyze",

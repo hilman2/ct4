@@ -97,30 +97,34 @@ def render_source(source: str, search_list: Sequence[Any], *,
         Whatever the template raises. An error at render time carries
         the template's line as a note, see ``ct4.trace``.
     """
+    from ct4 import directives
+
     mode = mode or mode_of(source)
     if mode == JSON:
         from ct4 import jsonmode
 
         base_dir = path.parent if path is not None else None
         return jsonmode.render(source, search_list, base_dir=base_dir)
-    if mode == MARKUP:
-        return _render_markup(source, search_list, settings or {},
-                              path, output_filter)
+    # Markup needs the generator, and so does a template whose project
+    # registered directives of its own: ct3 would read those as text.
+    if mode == MARKUP or directives.find_for(path).names:
+        return _render_generated(source, search_list, settings or {},
+                                 path, output_filter)
     return _render_text(source, search_list, settings or {}, output_filter)
 
 
-def _render_markup(source: str, search_list: Sequence[Any],
-                   settings: dict[str, Any], path: Path | None,
-                   output_filter: type | None) -> str:
-    """Compiles and renders a template that declared markup mode.
+def _render_generated(source: str, search_list: Sequence[Any],
+                      settings: dict[str, Any], path: Path | None,
+                      output_filter: type | None) -> str:
+    """Compiles and renders through the code generator.
 
-    Through the code generator rather than through ct3, and directly
-    rather than by installing the generating compiler: installing it
-    would change how every other template in the same process is
-    compiled, and text mode not moving is the promise this whole mode
-    is built around. A markup template the generator refuses fails
-    with the reason; a fallback to ct3 would print the declaration
-    line into the page and escape nothing.
+    Directly rather than by installing the generating compiler:
+    installing it would change how every other template in the same
+    process is compiled, and text mode not moving is the promise the
+    markup mode is built around. A template the generator refuses
+    fails with the reason; a fallback to ct3 would print a markup
+    declaration into the page and escape nothing, or read a registered
+    directive as text.
     """
     from ct4.lang import codegen
 
