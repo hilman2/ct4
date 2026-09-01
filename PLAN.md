@@ -1337,9 +1337,11 @@ erzeugt eine Cheetah-`#def`, die einen Bauplatz bedient, und **Cheetah
 dasselbe Autocalling und dieselbe Punktschreibweise wie im Textmodus. Ein
 zweiter Ausdrucksparser wäre eine zweite Semantik, und eine davon wäre falsch.
 
-Was noch fehlt: Streaming für grosse Serien, die Registry über Entry Points,
-und ein Compiler, der statt einer Cheetah-`#def` direkt Python erzeugt. Der
-Bauplatz hält die Struktur bisher ganz im Speicher.
+Stand 02-Sep-2026: Streaming für grosse Serien steht (`ct4/jsonmode/stream.py`,
+gemessen in `tests/bench/render.py`), die Registry über Entry Points auch
+(`ct4/registry.py`). Was bleibt, ist ein Compiler, der statt einer
+Cheetah-`#def` direkt Python erzeugt; der ist mit Absicht zurückgestellt, siehe
+das Ende von P4.
 
 ### P3 — Werkzeuge und KI-Schicht
 
@@ -1393,6 +1395,25 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 **Fertig, wenn:** Korpus byte-identisch mit dem neuen Backend, Tracebacks zeigen
 in die Vorlage.
 
+Stand 02-Sep-2026: **das Abnahmekriterium ist erfüllt, ein Punkt der Liste
+nicht.** Der Kern nimmt 3.498 von 3.533 Vorlagen, 99,0 Prozent, und was er
+nimmt, rendert byte-identisch mit ct3. Der Korpus dahinter ist inzwischen
+breiter als die Testsuite und die weewx-Skins: dazu kommen 175 fremde
+weewx-Skins mit 974 Vorlagen und 1.567 Vorlagen aus 585 Repositories, die
+Cheetah für etwas ganz anderes benutzen. Der Kern hat seinen Aufrufer
+(`ct4/lang/backend.py`), und Tracebacks zeigen in die Vorlage, ohne dass ein
+Aufrufer etwas dafür tut. Was fehlt, sind die Direktiven-Plugins auf
+AST-Ebene: der Kern steht, das Interface dafür nicht.
+
+Was der Kern ablehnt, in Zahlen: 27 Vorlagen mit `#compiler` oder
+`#compiler-settings`, davon 21 Testfälle aus ct3s Suite, die mitten in der
+Datei die Token umschalten, und 6 echte, die alle am Dateianfang stehen (4
+setzen nur eine Einstellung, 2 tauschen `$` und `#` für LaTeX und Bash). Dazu
+9, die mit Absicht abgelehnt werden oder in ct3 ebenso scheitern.
+
+Der Absatz darunter ist der Stand vom 01-Sep-2026 und bleibt stehen, weil die
+Lehre daraus weiter gilt.
+
 Stand 01-Sep-2026: **teilweise.** Die drei Schichten des Kerns stehen und
 tragen 1.335 der 1.636 Render-Fälle byte-identisch. Die Direktiven-Plugins
 hängen weiter daran, und der Kern hat noch keinen Aufrufer: gerendert wird
@@ -1442,10 +1463,12 @@ Vorzeile hängen, CRLF, altes Mac-CR, letztes Zeilenende weg. 4.704 Vorlagen aus
 vorhandenem Material, echter Inhalt in Formen, die niemand schreibt. Sie fand
 den Einzug vor der `#def`-Kurzform und die Ein-Chunk-Regel.
 
-Stand: `hostile` 0 von 1.032, `perturb` 0 Byte-Unterschiede von 3.581,
-`whitespace` 0 von 12.765. Was `perturb` stehen lässt, sind 179 Vorlagen, die
-ct3 nach dem Verschieben nicht mehr parst und ct4 rendert — gezählt, gedeckelt,
-und mit einer Begründung im Quelltext.
+Stand 02-Sep-2026: `hostile` 0 Abweichungen bei 1.225 Korpusvorlagen, 973
+fremden Skin-Vorlagen und 1.558 Anwendungsvorlagen, `perturb` 0
+Byte-Unterschiede von 4.310, `whitespace` 0 von 12.765. Was `perturb` stehen
+lässt, sind 255 Vorlagen, die nach dem Verschieben in ct3 nicht mehr parsen
+oder in beiden Engines verschieden scheitern — gezählt, gedeckelt, und mit
+einer Begründung im Quelltext, die für jede Erhöhung einen Satz hat.
 
 **Und wer prüft die Prüfer.** `tests/fuzz/sabotage.py` bricht je eine Regel des
 Generators absichtlich und schreibt auf, welches Instrument es merkt. Der Sinn
@@ -1491,8 +1514,8 @@ Skin durch den Generator lief.
 | Tracebacks zeigen in die Vorlage | steht, im Text- und im JSON-Modus |
 | Persistenter Compile-Cache | steht, 1,45x warm gemessen |
 | Geltungsbereiche im Compiler | steht, Render 1,9x schneller |
-| Lexer, CST, AST, Codegen über `ast` | **1.335 von 1.636**, 336 von 390 Skins |
-| Direktiven-Plugins auf AST-Ebene | hängt daran |
+| Lexer, CST, AST, Codegen über `ast` | **3.498 von 3.533**, alle 390 Skins des Korpus |
+| Direktiven-Plugins auf AST-Ebene | offen: der Kern steht, das Interface nicht |
 
 **Die drei Schichten.** `ct4/lang/lex.py` zerlegt eine Vorlage verlustfrei in
 einen Tokenbaum: jedes Byte der Quelle steht in genau einem Token, und
@@ -1515,7 +1538,8 @@ zusammen ergaben eine Lücke, die keine Zahl der Suite zeigte. Einstellungen
 werden jetzt abgelehnt statt ignoriert, der Test überspringt nichts mehr, und
 die 42 Fälle, die das kostet, sind der Preis für die Regel.
 
-**Was noch fehlt, nach Kosten geordnet und gezählt.** Der Kopf von `#def` und
+**Was noch fehlt, nach Kosten geordnet und gezählt** (Stand 01-Sep-2026, seither
+bis auf die Compiler-Einstellungen abgearbeitet). Der Kopf von `#def` und
 `#block`, 64 Fälle, wo hinter dem Namen ein Kommentar oder eine Parameterliste
 steht, die die Schicht nicht liest. Die
 Compiler-Einstellungen, 52. Danach `c'...'`-Zeichenketten, die Einzeiler-Form
@@ -1583,6 +1607,22 @@ Im JSON-Modus zeigen die Herkunftsangaben auf die erzeugte Definition, nicht
 auf die Vorlage des Autors. Die Brücke baut der Emitter: er merkt sich zu jeder
 Zeile, die er schreibt, aus welcher Zeile der Vorlage sie stammt.
 
+Seit 02-Sep-2026 braucht das im Textmodus keinen Aufrufer mehr, der etwas
+davon weiss. Die Klasse, die `Template.compile` zurückgibt, hängt die Zeile
+selbst an: ihre Hauptmethode ist in einen Wächter gepackt, der beim Fehler
+die Frames seines eigenen Moduls auf die Vorlage abbildet, und nur die. Ein
+`#include` ist ein Modul für sich und bildet sich selbst ab, deshalb steht
+die Zeile der eingebundenen Datei zuerst und die der einbindenden danach.
+weewx ruft `respond()` und bekommt das, ohne eine Zeile zu ändern; das ist
+der erste Punkt von Stufe 1 in Abschnitt 9. `ct4 build` liest die Zeile aus
+demselben Vermerk in seinen Befund.
+
+Ein Unterschied zwischen den beiden Pfaden bleibt: ct3s Compiler schreibt
+seine Herkunftsangabe nur hinter Platzhalter, der Generator hinter jede
+Anweisung. Auf ct3s Pfad hat die `#include`-Zeile darum keine, und der
+Traceback nennt nur die eingebundene Datei. Auf dem des Generators nennt er
+beide.
+
 **Compile-Cache, mit ehrlicher Zahl.** Eingehängt an
 `Template._CHEETAH_compilerClass`, also an der Stelle, die ct3 dafür vorsieht.
 Gemessen an den 136 Skin-Vorlagen:
@@ -1636,6 +1676,17 @@ Skins zehntausendmal für dieselbe Quelle neu berechnet, und der
 Präambel-Wächter lief über jeden erzeugten Knoten, auch wo die Quelle keinen
 der Namen enthält. Der Rest ist der doppelte Parse. Dafür gibt es den
 persistenten Compile-Cache, der genau diese Kosten einmal zahlt.
+
+Die Herkunftsangaben für die Tracebacks kosteten danach einen dritten Parse
+und drückten den Faktor im Image auf 0,51x, knapp über den Boden von 0,50.
+Zwei Messungen am 02-Sep-2026 haben ihn auf 0,59x gebracht, ohne ein Byte
+der Ausgabe zu ändern: `fix_missing_locations` lief über jeden Knoten des
+Baums, dabei fragt `ast.unparse` nur Anweisungen nach ihrer Zeile, und die
+Anweisungen sind ein Vierzigstel der Knoten; und der Präambel-Wächter suchte
+seine Namen im ganzen Quelltext statt nur in dessen Code, und „time" ist ein
+Wort, das jede Wetterseite benutzt. Was bleibt, ist `ast.unparse` selbst mit
+gut einem Viertel, der Lexer mit einem Achtel und die Einzelparses der
+Ausdrücke mit einem Zehntel.
 
 Der JSON-Modus bleibt davon zunächst unberührt. Er übersetzt heute über eine
 Cheetah-`#def`; ihn auf eigenen Codegen umzustellen hiesse, einen zweiten
@@ -1717,8 +1768,9 @@ Anschluss an das Upstream-Projekt gewünscht ist.
   aus den Locals ist und nicht über `VFFSL` läuft; ohne das meldete die Messung
   301 statt 327.
 - **`_namemapper.c` unter free-threading.** Die Anpassung an Python 3.14t ist
-  echte Arbeit. Der reine Python-Pfad (`C_VERSION = False`) wird heute selten
-  getestet und muss zuerst abgesichert werden.
+  echte Arbeit. Der reine Python-Pfad (`C_VERSION = False`) muss zuerst
+  abgesichert sein; seit 02-Sep-2026 läuft ct3s Testsuite in jedem Lauf ein
+  zweites Mal ohne die Erweiterung (`Test.py --namemapper-pure`).
 - **Drei Modi sind drei Semantiken.** Gegenmassnahme: ein Compiler, Modus als
   Flag, jeder Testfall läuft in allen zutreffenden Modi mit erwartetem
   Unterschied.

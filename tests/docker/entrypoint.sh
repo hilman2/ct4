@@ -61,6 +61,15 @@ run_cheetah() {
     # fork. Outside this call the installed ct3 stays reachable, or the
     # test bench would have no reference left.
     PATH="/work/bin:$PATH" PYTHONPATH=/work python Cheetah/Tests/Test.py
+
+    # And once more without the C NameMapper. The pure Python path is
+    # what runs where the extension did not build, and free-threading
+    # is going to need it first; a path nobody runs is a path nobody
+    # would notice breaking.
+    echo
+    echo "== ct3 test suite, pure Python NameMapper =="
+    PATH="/work/bin:$PATH" PYTHONPATH=/work \
+        python Cheetah/Tests/Test.py --namemapper-pure
 }
 
 # Every template of the corpus through ct4's own diagnostics. Two
@@ -190,7 +199,8 @@ run_reach() {
 # measured for locally, and they are what makes "all" take ten
 # minutes. Run "all" once before a commit, "quick" after every edit.
 run_quick() {
-    run_lint; echo; run_unit; echo; run_check; echo; run_reach
+    run_lint; echo; run_unit; echo; run_cheetah; echo
+    run_check; echo; run_reach
 }
 
 run_corpus() {
