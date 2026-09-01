@@ -601,16 +601,56 @@ class _Reader:
         return token
 
     def transform(self, token: str) -> str:
-        """transformToken, which has one case and it is refused.
+        """transformToken, which has one case: the c'...' string.
 
-        ct3 turns a c'...' string into a join of its parts, with every
-        placeholder inside it resolved and every constant put back
-        through repr. That is a rule of its own, 24 corpus cases wide,
-        and it is not measured yet.
+        ct3 turns ``c"a $b c"`` into ``''.join(['a ',str(VFFSL(SL,
+        "b",True)),' c'])``: the characters between the quotes are
+        walked one at a time, a placeholder start hands over to
+        getPlaceholder and comes back as str() of the lookup, and every
+        run of other characters goes out through repr. The raw
+        characters, not the evaluated string, which is why the repr is
+        needed at all.
+
+        An empty one is turned away. ct3 returns None for it and the
+        token vanishes from the expression, which is nothing to be
+        faithful to.
         """
-        if token == "c" and self.peek() and self.peek() in "'\"":
-            raise Unsupported("a c'...' placeholder string")
-        return token
+        if token != "c" or not self.peek() or self.peek() not in "'\"":
+            return token
+        literal = self.py_token()
+        try:
+            # transformToken evaluates the token upper-cased, which is
+            # a slip nobody fixed: a "\n" in the string is "\N" to
+            # eval, the start of a named escape with no name, and ct3
+            # dies of a SyntaxError right there. So does this, by the
+            # same road, rather than render what ct3 never does.
+            content = ast.literal_eval(literal.upper())
+        except (SyntaxError, ValueError):
+            raise Unsupported("a c'...' string ct3 cannot evaluate") \
+                from None
+        marker = 3 if literal[:3] in ('"""', "'''") else 1
+        raw = literal[marker:-marker]
+        if not raw or not content:
+            raise Unsupported("an empty c'...' placeholder string")
+        parts: list[str] = []
+        run = ""
+        inner = _Reader(raw)
+        inner.name_mapper = self.name_mapper
+        at = 0
+        while at < len(raw):
+            if raw[at] == "$" and lex.start_of(raw[at:]) is not None:
+                if run:
+                    parts.append(repr(run))
+                    run = ""
+                inner.at = at
+                parts.append("str(%s)" % inner.placeholder())
+                at = inner.at
+                continue
+            run += raw[at]
+            at += 1
+        if run:
+            parts.append(repr(run))
+        return "''.join([%s])" % ",".join(parts)
 
     # -- the readers -------------------------------------------------
 
@@ -1773,7 +1813,7 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             if node.name == "errorCatcher":
                 _error_catcher(node, source, hoisted, methods, out)
                 continue
-            if node.name in ("filter", "call", "cache", "capture"):
+            if node.name in ("filter", "call", "cache", "capture", "i18n"):
                 # Several statements around the body rather than one
                 # block, and the tags decide about their lines before
                 # any of them is written.
@@ -3294,9 +3334,10 @@ def _parameters(text: str | None) -> str:
 
     ct3 writes "def show(self, x, y=1, **KWS)" for "#def show($x,
     $y=1)": the dollar goes and the name stays. A default value with a
-    placeholder in it is turned away rather than stripped the same
-    way, because a bare name there would resolve against whatever
-    happened to be in scope.
+    placeholder in it loses the dollar the same way, "#def f($x=$y)"
+    is "def f(self, x=y, **KWS)", and the bare name resolves against
+    the module the way any default does. Usually that is a NameError
+    the moment the class is defined, and it is ct3's NameError.
     """
     if not text or not text.strip():
         return ""
@@ -3304,8 +3345,7 @@ def _parameters(text: str | None) -> str:
     for part in _split_arguments(text):
         name, _, default = part.partition("=")
         name = PARAM_DOLLAR.sub("", name.strip())
-        if "$" in default:
-            raise Unsupported("a placeholder in a default value")
+        default = PARAM_DOLLAR.sub("", default)
         out.append(name if not default else "%s=%s" % (name, default))
     return ", ".join(out) + ", "
 
@@ -3749,6 +3789,13 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
     children = list(node.children)
     closed = any(child.kind == lex.DIRECTIVE and child.name == "end"
                  for child in children)
+    if node.name == "i18n" and not _line_is_clear(source,
+                                                  node.tokens[0].start):
+        # The macro's output is parsed as a source of its own, and
+        # whatever text stood pending before the tag is lost in the
+        # switch: "A#i18n\n  hi\n#end i18n" renders without the A.
+        # Not a rule worth having.
+        raise Unsupported("#i18n with text before it on its line")
     if short and closed:
         # "#call int: 10#end call" is a ParseError in ct3: the short
         # form closed at the line ending and the #end closes nothing.
@@ -3783,7 +3830,7 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
     trailing = ""
     if end is not None:
         trailing = _eat_region_line(end, source, pieces)
-    if short and node.name in ("call", "filter", "capture"):
+    if short and node.name in ("call", "filter", "capture", "i18n"):
         # ct3 parses these three short forms with findEOL(gobble=False),
         # so the line ending stays outside the region. #cache uses
         # gobble=True and keeps it inside. CallDirective.test1#3,
@@ -3804,6 +3851,13 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
         made = _call_region(node, identifier, body, call["args"])
     elif node.name == "capture":
         made = _capture_region(node, identifier, body)
+    elif node.name == "i18n":
+        # The macro ct3 ships is a stub: it hands its body back
+        # unchanged, gettext'd with no catalogue, and the parser reads
+        # that as template source. So the region is its body and
+        # nothing around it. The arguments, "id" and the rest, are read
+        # and dropped there too.
+        made = body
     else:
         made = _cache_block(node, identifier, body)
     for statement in made:

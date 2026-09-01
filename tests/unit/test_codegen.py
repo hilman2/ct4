@@ -1148,7 +1148,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "${aFunc(\n\n)}\n",                      # ... and left the "}" over
     "$(a, 'x')\n",                           # arguments for the filter
     "#echo ${b}\n",                          # ParseError inside an expression
-    "$str(c'$aStr')\n",                      # a c'...' placeholder string
     "$a[1 +]\n",                             # ct3 does not compile it
 ])
 def test_it_refuses_what_it_cannot_do(source):
@@ -1575,6 +1574,33 @@ END_TAG_SHAPES = [
     # and belongs to the #call: a placeholder there is resolved and a
     # #slurp is a directive, which six of ct3's own cases turn on.
     "#call $f\n#arg a:$(1234+1) foo#slurp\n#arg b: $v#slurp\n#end call\n",
+    # A c'...' string: the characters between the quotes walked one at
+    # a time, a placeholder resolved and put through str(), every other
+    # run put through repr(), and the parts joined.
+    '$str(c"$v")\n',
+    '#set $x = c"a $v c"\n[$x]\n',
+    '#echo c"<$v>"\n',
+    '$str(c"""a\n$v""")\n',
+    '$str(c"${v}x")\n',
+    '$str(c"$v.upper()!")\n',
+    '$str(c"no placeholder")\n',
+    "$str(c'it\\'s $v')\n",
+    # #i18n: the macro ct3 ships hands its body back unchanged and the
+    # parser reads that as template source. The region is its body.
+    "#i18n \n$v#end i18n",
+    "A\n#i18n\nhi $v\n#end i18n\nB\n",
+    "#i18n: hi $v\nB\n",
+    '#i18n id="k"\nhi\n#end i18n\n',
+    "#i18n: hi",
+    "  #i18n\n  hi\n  #end i18n\nB\n",
+    '#i18n plural="x", n=2\n$v\n#end i18n\n',
+    # A placeholder in a #def default loses its dollar like the
+    # parameter names do and resolves against the module the way any
+    # default does: a NameError the moment the class is defined, or a
+    # name the template imported.
+    "#def f($x=$nowhere)\n[$x]\n#end def\n$f()\n",
+    "#import os\n#def f($x=$os.sep)\n[$x]\n#end def\n$f()\n",
+    '#def f($x="$")\n[$x]\n#end def\n$f()\n',
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
