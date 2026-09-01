@@ -38,7 +38,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 #
 # The corpus is the wrong ruler for #errorCatcher: it moves 3 cases
 # here and 83 of the 390 real skin templates.
-FLOOR = 1399
+FLOOR = 1431
 
 
 def render_cases():
@@ -1213,6 +1213,64 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     # ct3 renders nothing at all here. Reproducing that needs ct3's
     # chunk boundaries, so the template is refused instead.
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
+
+
+# -- Three directives that were only ever refused --------------------
+
+LATE_SHAPES = [
+    # #assert and #return are one statement each, the way #raise is.
+    "#assert $x == 1\nok\n",
+    '#assert $x == 2, "no"\nok\n',
+    "#assert $x == 1\n",
+    "#if 1\n#assert $x == 1\n#end if\nok\n",
+    "#def m\n#return 42\n#end def\n$m",
+    "#def m\n#return $x\n#end def\n$m",
+    "#def m($a)\n#return $a * 2\n#end def\n$m(3)",
+    # A #return drops what the method has written so far, because it
+    # returns instead of falling through to the collected output.
+    "#def m\nX\n#return 1\nY\n#end def\n$m",
+    # The one-line #if. Not a Python conditional expression: ct3 writes
+    # an if and an else with a filtered write in each, and the None
+    # guard on those writes is what makes the difference show.
+    "#if $x then $a else $b\n",
+    "#if 0 then $a else $b\n",
+    "#if $x then None else 2\n",
+    "#if $x then 1 else 2\n",
+    # A "then" inside a string or a subscript is not the cut.
+    '#if $x then "then" else "else"\n',
+    '#if $d["else"] then 1 else 2\n',
+    # And the line it stands on, clean and dirty. The ending goes after
+    # the if, because on a dirty line the parser reaches it once the
+    # statement is already written.
+    "A#if $x then $a else $b\nB\n",
+    "A#if 0 then $a else $b\nB\n",
+    "  #if $x then $a else $b\nB\n",
+    "#if $x then $a else $b",
+    "#for $i in [1,2]\n#if $i then $a else $b\n#end for\n",
+]
+
+
+@pytest.mark.parametrize("source", LATE_SHAPES)
+def test_the_directives_added_last_match_ct3(source):
+    context = {"x": 1, "a": "A", "b": "B", "d": {"else": 1}}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    try:
+        want = str(theirs(searchList=[dict(context)]).respond())
+    except Exception as error:                                 # noqa: BLE001
+        want = "!!%s" % type(error).__name__
+    assert codegen.supports(source), "refused: %r" % source
+    try:
+        got = codegen.render(source, [dict(context)])
+    except Exception as error:                                 # noqa: BLE001
+        got = "!!%s" % type(error).__name__
+    assert got == want
+
+
+def test_a_ternary_with_two_thens_is_refused():
+    # ct3 switches its target back and forth on a second one, and what
+    # comes out is nobody's intention. Refused rather than guessed at.
+    assert not codegen.supports("#if $x then $a then $b else $c\n")
 
 
 # -- The head of a #def or a #block ----------------------------------

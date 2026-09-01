@@ -32,8 +32,8 @@ Placeholders come in ct3's two forms: the name-led one and the one
 whose enclosure holds an expression, "$(6)" and "$('#id')", which is
 how a jQuery call in a page comes out as "#id".
 
-That is 1399 of the 1636 render cases. The corpus is not the only ruler
-worth reading: of the 390 real skin templates in it, 336. The two
+That is 1431 of the 1636 render cases. The corpus is not the only ruler
+worth reading: of the 390 real skin templates in it, 344. The two
 numbers move at different rates, and the difference is the point.
 #errorCatcher moved 3 corpus cases and 83 skins; the expression
 placeholder moved 15 and 25; the head of a #def moved 64 and none at
@@ -59,11 +59,11 @@ filter across.
 
 What it turns away, in the order the corpus says it costs most, and
 counted rather than estimated: any template that sets a compiler
-setting, 52, on which see below; the c'...' string, 20; the one-line
-form that puts an #if body behind a colon, 16; and then
-#compiler-settings, #breakpoint, #compiler, #@, #i18n, #return,
-#assert, an #elif whose #if closed on the line before, and a #stop
-inside a block, 12 or fewer each.
+setting, 40, on which see below; the c'...' string, 20; #arg, whose
+colon form puts its value where the tree keeps a directive's
+arguments, 20; and then #compiler-settings, #breakpoint, #compiler,
+#@, #i18n, an #elif whose #if closed on the line before, and a #stop
+inside a block, 16 or fewer each.
 
 A compiler setting is refused rather than ignored. This layer reads
 none of them, and two of them change what ct3 renders: with
@@ -1305,6 +1305,17 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
             # through this list.
             leading = _eat_region_line(node, source, out)
             after = []
+            if node.name == "if" and not node.children:
+                # The ternary form has no body, so a line ending left
+                # over cannot go inside it. It goes after: on a dirty
+                # line _eatRestOfDirectiveTag leaves the ending in the
+                # source, and the parser reaches it once addTernaryExpr
+                # has already written the if.
+                out.append((STMT_PIECE,
+                            _block(node, source, hoisted, methods)))
+                if leading:
+                    out.append((TEXT_PIECE, leading))
+                continue
             out.append((STMT_PIECE, _block(node, source, hoisted, methods,
                                            leading, after)))
             for text in after:
@@ -3451,6 +3462,11 @@ def _block(node: tree.Node, source: str,
             #end tag is put, for the caller to write after the block.
     """
     if not node.children:
+        # No children means the block never opened. Two shapes do that:
+        # the colon short form, whose body sits on the tag's own line,
+        # and the ternary #if, which has no body at all.
+        if node.name == "if":
+            return _ternary_block(node)
         raise Unsupported("the one-line form of #%s" % node.name)
     if node.name == "for":
         return _for_block(node, source, hoisted, methods, leading, escaped)
@@ -3505,6 +3521,18 @@ def _simple_directive(node: tree.Node) -> list[ast.stmt]:
         return [_set_statement(node)]
     if node.name == "raise":
         return [_framed_statement("raise %s" % _argument(node, node))]
+    if node.name == "assert":
+        # ct3 writes the statement and nothing else, so a failing
+        # assertion raises out of the render the way it would out of
+        # any Python. The message, where there is one, is the second
+        # half of the argument and stays where it is.
+        return [_framed_statement("assert %s" % _argument(node, node))]
+    if node.name == "return":
+        # This returns from the generated method, which means the text
+        # collected so far is dropped rather than written. That is what
+        # ct3 does, and a #def is where it makes sense: the method
+        # returns a value instead of its output.
+        return [_framed_statement("return %s" % _argument(node, node))]
     raise Unsupported("#%s" % node.name)
 
 
@@ -3748,6 +3776,80 @@ def _argument(directive: tree.Node, owner: tree.Node) -> str:
     for token in directive.tokens[1:]:
         parts.append(_token_source(token))
     return _without_trailing_colon("".join(parts), owner.name)
+
+
+def _bare_word_at(text: str, word: str, start: int = 0) -> int:
+    """Offset of a word standing outside brackets and outside strings.
+
+    Returns -1 where there is none. The same scan tree._bare_words
+    makes, reporting where rather than what, because the ternary form
+    has to be cut at the word and not merely told that it is there.
+    """
+    index = start
+    depth = 0
+    while index < len(text):
+        char = text[index]
+        if char in "\"'":
+            index = lex._end_of_string(text, index)
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char in lex.IDENT_START:
+            begin = index
+            while index < len(text) and text[index] in lex.IDENT:
+                index += 1
+            if depth == 0 and text[begin:index] == word:
+                return begin
+            continue
+        index += 1
+    return -1
+
+
+def _ternary(node: tree.Node) -> tuple[str, str, str]:
+    """``#if a then b else c`` cut into its three expressions.
+
+    ct3 cuts on whole expression parts, so a "then" inside a string or
+    a call does not count, and the words themselves are dropped. A
+    second one of either is not something to guess about: ct3 would
+    switch back and forth and the result would be nobody's intention.
+
+    Returns:
+        tuple[str, str, str]: The condition, what is written when it
+        holds, and what is written when it does not.
+
+    Raises:
+        Unsupported: where a word stands more than once, so that the
+            cut is not obvious.
+    """
+    text = _argument(node, node)
+    then = _bare_word_at(text, "then")
+    otherwise = _bare_word_at(text, "else", then + 4)
+    if then < 0 or otherwise < 0:
+        raise Unsupported("the one-line form of #if")
+    if _bare_word_at(text, "then", then + 4) >= 0 \
+            or _bare_word_at(text, "else", otherwise + 4) >= 0:
+        raise Unsupported("#if with more than one then or else")
+    return (text[:then], text[then + 4:otherwise], text[otherwise + 4:])
+
+
+def _ternary_block(node: tree.Node) -> ast.stmt:
+    """The if statement ct3 writes for the one-line form.
+
+    Compiler.addTernaryExpr: an if around the one expression and an
+    else around the other, each written the way a placeholder is. Not a
+    Python conditional expression, which would evaluate the same but
+    write a None the guard here drops.
+    """
+    condition, yes, no = _ternary(node)
+    statement = _framed("if %s:" % condition.strip())
+    assert isinstance(statement, ast.If)
+    # No raw text for the filter: addFilteredChunk is called here
+    # without one, so a filter that reads rawExpr sees nothing.
+    statement.body = _placeholder_value(_parsed(yes.strip()))
+    statement.orelse = _placeholder_value(_parsed(no.strip()))
+    return statement
 
 
 def _for_argument(node: tree.Node) -> str:
