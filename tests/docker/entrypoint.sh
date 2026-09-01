@@ -84,6 +84,10 @@ run_bench() {
     PYTHONPATH=/work python tests/bench/render.py --json > /tmp/fork.json
     PYTHONPATH=/work python tests/bench/compare.py \
         /tmp/reference.json /tmp/fork.json --check
+
+    echo
+    echo "== The code generator against the compiler it stands in for =="
+    PYTHONPATH=/work python tests/bench/backend.py --check
 }
 
 # A year of archive records at five-minute intervals, ten values each.

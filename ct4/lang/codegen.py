@@ -258,6 +258,62 @@ def _catcher() -> Catcher | None:
     return getattr(_ACTIVE, "catcher", None)
 
 
+# -- Names the generator bound itself --------------------------------
+#
+# A lookup that starts at a name the generator put there does not have
+# to walk the search list for it. ``#for $r in $rows`` binds r, so
+# "$r.name" resolves on r directly and NameMapper only has to find name
+# on it. The fork's own compiler has done this since the scope work in
+# P4 and it is worth 1.9x on a loop; without it here the module this
+# layer writes renders slower than the one ct3 writes, which would make
+# the whole exercise a step backwards.
+#
+# The rules are the compiler's, not new ones. Only a #for binds
+# (Compiler.addFor), only a name with a dot is worth rewriting
+# (_knownLocalBase), and a method starts with an empty stack because
+# ct3 gives every method compiler its own.
+
+
+def _scopes() -> list[tuple[str, ...]]:
+    """The stack of names bound around the point being generated."""
+    stack = getattr(_ACTIVE, "scopes", None)
+    if stack is None:
+        stack = []
+        _ACTIVE.scopes = stack
+    return stack
+
+
+def _knows_local(name: str) -> bool:
+    """Whether a lookup may start at a local rather than at the list.
+
+    Needs a dot: the part before it is the local and the rest is what
+    NameMapper resolves on it. A name without one *is* the local, and
+    then there is nothing to save.
+    """
+    if "." not in name:
+        return False
+    base = name.split(".")[0]
+    return any(base in scope for scope in _scopes())
+
+
+def loop_targets(header: str) -> tuple[str, ...]:
+    """The names a generated for statement binds.
+
+    Read with Python's own parser rather than by splitting on " in ": a
+    target can be a tuple, and the iterable can hold the word. Anything
+    that does not parse binds nothing, and then nothing is rewritten.
+    """
+    try:
+        made = ast.parse("%s:\n    pass\n" % header.rstrip(":"))
+    except SyntaxError:
+        return ()
+    statement = made.body[0]
+    if not isinstance(statement, ast.For):
+        return ()
+    return tuple(node.id for node in ast.walk(statement.target)
+                 if isinstance(node, ast.Name))
+
+
 @dataclass(frozen=True)
 class Written:
     """A placeholder, as much of it as the error catcher needs.
@@ -949,10 +1005,12 @@ def generate(source: str, settings: Any = None,
     # leave a catcher standing for the next template on this thread.
     previous = _catcher()
     _ACTIVE.catcher = Catcher(methods)
+    _ACTIVE.scopes = []
     try:
         body = _statements(_pieces(root, source, hoisted, methods))
     finally:
         _ACTIVE.catcher = previous
+        _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
     # Before the class, the way ct3 puts them at module level. An
     # import inside a method would run on every render.
@@ -2747,6 +2805,11 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     was = catcher.name if catcher is not None else None
     if catcher is not None:
         catcher.name = None
+    # And a method starts with no locals bound, because ct3 gives every
+    # method compiler its own stack. A #for outside this #def does not
+    # reach into it.
+    outer = _scopes()
+    _ACTIVE.scopes = []
     try:
         pieces = _pieces_of(node.children, source, hoisted, methods,
                             escaped=escaped)
@@ -2764,6 +2827,7 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     finally:
         if catcher is not None:
             catcher.name = was
+        _ACTIVE.scopes = outer
     methods.append(_method(name, params, body or [ast.Pass()]))
     if trailing and escaped is not None \
             and not _line_is_clear(source, node.tokens[0].start):
@@ -3507,9 +3571,17 @@ def _for_block(node: tree.Node, source: str,
     ct3 writes: ``for r in VFFSL(SL,"rows",True):``. Only the iterable
     is looked up.
     """
-    statement = _framed("for %s:" % _for_argument(node))
+    header = _for_argument(node)
+    statement = _framed("for %s:" % header)
     assert isinstance(statement, ast.For)
-    statement.body = _body(node, source, hoisted, methods, leading, escaped)
+    # The targets are bound for the length of the body and no longer,
+    # which is where ct3's indent and dedent put them.
+    _scopes().append(loop_targets("for %s" % header))
+    try:
+        statement.body = _body(node, source, hoisted, methods, leading,
+                               escaped)
+    finally:
+        _scopes().pop()
     return statement
 
 
@@ -3875,8 +3947,16 @@ def _expression(chunks: list[Chunk]) -> str:
     is no reason to assemble it node by node.
     """
     first = chunks[0]
-    text = 'VFFSL(%s,"%s",%r)%s' % (SEARCH_LIST, first.name,
-                                    first.autocall, first.remainder)
+    if _knows_local(first.name):
+        # The compiler's own rewrite: hand NameMapper a namespace of
+        # one instead of the whole search list.
+        base = first.name.split(".")[0]
+        text = 'VFN({"%s":%s},"%s",%r)%s' % (base, base, first.name,
+                                             first.autocall,
+                                             first.remainder)
+    else:
+        text = 'VFFSL(%s,"%s",%r)%s' % (SEARCH_LIST, first.name,
+                                        first.autocall, first.remainder)
     for chunk in chunks[1:]:
         text = 'VFN(%s,"%s",%r)%s' % (text, chunk.name, chunk.autocall,
                                       chunk.remainder)

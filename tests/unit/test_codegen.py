@@ -1215,6 +1215,59 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
 
 
+# -- Names the generator bound itself --------------------------------
+
+SCOPE_SHAPES = [
+    "#for $r in $rows\n$r.name\n#end for\n",
+    # A bare name is the local itself, so there is nothing to rewrite.
+    "#for $r in $rows\n$r\n#end for\n",
+    # And the binding ends with the body.
+    "#for $r in $rows\n$r.name\n#end for\n$r.name\n",
+    "#for $a, $b in $pairs\n$a.x $b.x\n#end for\n",
+    "#for $r in $rows\n#for $c in $r.cells\n$c.x $r.name\n#end for\n"
+    "#end for\n",
+    "#for $r in $rows\n#if $r.flag\n$r.name\n#end if\n#end for\n",
+]
+
+
+@pytest.mark.parametrize("source", SCOPE_SHAPES)
+def test_a_lookup_starts_at_a_local_the_way_ct3_writes_it(source):
+    # The fork's own compiler rewrites a lookup whose base it bound
+    # itself, and it is worth 1.9x on a loop. Without the same rewrite
+    # here the module this layer writes renders half as fast as the one
+    # it stands in for. Compared line for line against ct3 rather than
+    # against a written-down string.
+    context = {"rows": [{"name": "a", "flag": 1, "cells": [{"x": 1}]}],
+               "pairs": [({"x": 1}, {"x": 2})]}
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False,
+                              keepRefToGeneratedCode=True)
+    want = [line.strip().split("#")[0].strip()
+            for line in theirs._CHEETAH_generatedModuleCode.splitlines()
+            if "_v =" in line]
+    got = [line.strip() for line in codegen.generate(source).code.splitlines()
+           if "_v =" in line]
+    # ct3 writes no blanks after a comma and quotes with ", where
+    # ast.unparse writes a blank and '. Neither is the point here.
+    def plain(lines):
+        return [line.replace(" ", "").replace('"', "'") for line in lines]
+
+    assert plain(got) == plain(want)
+    assert codegen.render(source, [context]) == \
+        str(theirs(searchList=[context]).respond())
+
+
+def test_a_method_starts_with_nothing_bound():
+    # ct3 gives every method compiler its own scope stack, so a #for
+    # around a #def does not reach into it. Not reachable through #for
+    # here, which ct3 itself cannot compile that way round, so the
+    # binding is checked where it is: a #def after the loop.
+    source = "#for $r in $rows\n$r.name\n#end for\n#def m\n$r.name\n#end def\n"
+    code = codegen.generate(source).code
+    assert 'VFN({\'r\': r}, \'r.name\', True)' in code
+    assert "VFFSL(SL, 'r.name', True)" in code
+
+
 # -- What the perturbation run found ---------------------------------
 #
 # tests/fuzz/perturb.py takes the corpus and indents every directive,
