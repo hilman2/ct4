@@ -208,6 +208,11 @@ class _Builder:
                 # It takes one identifier and no more; see
                 # lex.identifier_end.
                 stop = lex.identifier_end(self.source, token.end)
+            elif name == "arg":
+                # A name and at most a colon; what follows the colon is
+                # template text and belongs to the #call around it. See
+                # lex.arg_end.
+                stop = lex.arg_end(self.source, token.end)
             # Otherwise everything up to the end of the line belongs to
             # the directive: its arguments.
             index = self._take_arguments(node, index, stop)

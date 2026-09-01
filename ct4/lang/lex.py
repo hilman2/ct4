@@ -173,6 +173,30 @@ def identifier_end(source: str, after_name: int) -> int:
     return _rest_of_tag(source, at, after_name - len("#errorCatcher"))
 
 
+def arg_end(source: str, after_name: int) -> int:
+    """Where an ``#arg`` stops.
+
+    eatCallArg reads one identifier and then either takes a colon and
+    nothing after it, not even a blank, or eats the rest of the tag. So
+    ``#arg arg1:$(1234+1) foo#slurp`` is the directive up to the colon
+    and then ordinary template text: the placeholder is resolved and
+    the #slurp is a directive of its own. Read as the tag's own
+    argument both were written out as the characters they stand in.
+
+    Called with the offset just past the directive name.
+    """
+    at = after_name
+    while at < len(source) and source[at] in " \t\f":
+        at += 1
+    while at < len(source) and source[at] in IDENT:
+        at += 1
+    while at < len(source) and source[at] in " \t\f":
+        at += 1
+    if source[at:at + 1] == ":":
+        return at + 1
+    return _rest_of_tag(source, at, after_name - len("#arg"))
+
+
 def _rest_of_tag(source: str, at: int, tag_start: int) -> int:
     """What a directive tag takes after its argument has been read.
 
@@ -438,6 +462,8 @@ class _Lexer:
                             reach = self_closing_end(source, end)
                         elif name == "errorCatcher":
                             reach = identifier_end(source, end)
+                        elif name == "arg":
+                            reach = arg_end(source, end)
                         else:
                             reach = None
                         directive_until = (reach if reach is not None

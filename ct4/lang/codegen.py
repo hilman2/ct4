@@ -1876,6 +1876,41 @@ def _pieces_of(nodes: Sequence[tree.Node], source: str,
                 for statement in _placeholder_value(
                         _parsed(_super_call(_argument_text(node)))):
                     out.append((STMT_PIECE, statement))
+            elif node.name == "arg":
+                # setCallArg: the first #arg opens the dictionary and
+                # names the argument the collector has been filling
+                # all along, so text before it joins that argument;
+                # every later one closes the argument before it and
+                # opens a fresh collector. The statements go out before
+                # the line is decided about, because setCallArg commits
+                # through addChunk and the indent before an #arg on a
+                # clear line is already in the collector by the time
+                # _eatRestOfDirectiveTag looks for it: "  #arg a\n  x"
+                # hands a four blanks and an x.
+                stack = getattr(_ACTIVE, "calls", None) or []
+                if not stack:
+                    raise Unsupported("#arg outside a #call")
+                call = stack[-1]
+                match = ARG_NAME.match(_argument_text(node))
+                if match is None:
+                    raise Unsupported("#arg %r" % _argument_text(node)[:40])
+                name = match.group("name")
+                if call["args"]:
+                    switch = CALL_ARG_CLOSE % {"id": call["id"],
+                                               "name": call["args"][-1]}
+                else:
+                    switch = CALL_ARG_FIRST % {"id": call["id"],
+                                               "name": name}
+                call["args"].append(name)
+                for statement in ast.parse(switch).body:
+                    out.append((STMT_PIECE, statement))
+                if match.group("after") is None:
+                    _eat_directive_line(node, source, out)
+                # The colon form ends at its colon and the tree keeps
+                # what follows as siblings: template text, placeholders
+                # resolved and directives read, from the first
+                # character after the colon on. Nothing of it is the
+                # tag's, so nothing is written here.
             elif node.name == "encoding":
                 # Not through _eat_directive_line: it is the one
                 # directive that leaves the whitespace in front of it
@@ -3560,6 +3595,37 @@ CALL_DELETE = """\
 del _ct4_call_arg%(id)s
 """
 
+# What setCallArg and _endCallArg write. The first #arg opens the
+# dictionary and records the name; every close puts the collector's
+# text under the previous name and opens a fresh collector, the last
+# one included, which nothing then deletes.
+CALL_ARG_FIRST = """\
+_ct4_call_kws%(id)s = {}
+_ct4_call_current%(id)s = %(name)r
+"""
+
+CALL_ARG_CLOSE = """\
+_ct4_call_kws%(id)s[%(name)r] = _ct4_call_collector%(id)s.response().getvalue()
+del _ct4_call_collector%(id)s
+trans = _ct4_call_collector%(id)s = DummyTransaction()
+write = _ct4_call_collector%(id)s.response().write
+"""
+
+CALL_KW_RESET = """\
+trans = _ct4_orig_trans%(id)s
+write = trans.response().write
+self._CHEETAH__isBuffering = _ct4_was_buffering%(id)s
+del _ct4_was_buffering%(id)s
+del _ct4_orig_trans%(id)s
+"""
+
+# "#arg name" or "#arg name: the value". eatCallArg reads one
+# identifier, then either takes the colon and nothing after it or eats
+# the rest of the tag, so what stands behind the colon is the value
+# from its first character on.
+ARG_NAME = re.compile(
+    r"\s*(?P<name>[A-Za-z_][A-Za-z_0-9]*)\s*(?::(?P<after>.*))?$", re.S)
+
 # ct3's startCacheRegion for the directive form. Two branches at the
 # level of the surrounding code: the first writes the stored output
 # where there is one, the second holds the whole body. What the body
@@ -3689,20 +3755,29 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
         raise Unsupported("#end inside the short form of #%s" % node.name)
     if not children:
         raise Unsupported("#%s with no body" % node.name)
-    if any(child.kind == lex.DIRECTIVE and child.name == "arg"
-           for child in children):
-        # The colon form of #arg puts its value where the tree keeps a
-        # directive's arguments, and text between the #call tag and the
-        # first #arg silently joins the first argument. No corpus case
-        # needs either.
-        raise Unsupported("#arg")
+    identifier = "_%d_%d" % (node.line, node.column)
+    # What the #arg directives inside a #call need to know: the region
+    # they belong to, and which arguments have been named so far. A
+    # stack on the walk state, because a #call can stand inside one.
+    call: dict[str, Any] = {"id": identifier, "args": []}
+    if node.name != "call" and any(child.kind == lex.DIRECTIVE
+                                   and child.name == "arg"
+                                   for child in children):
+        raise Unsupported("#arg outside a #call")
     leading = ""
     end = None
     if not short:
         leading = _eat_region_line(node, source, out)
         if children[-1].kind == lex.DIRECTIVE and children[-1].name == "end":
             end = children.pop()
-    pieces = _pieces_of(children, source, hoisted, methods)
+    stack = getattr(_ACTIVE, "calls", None)
+    if stack is None:
+        stack = _ACTIVE.calls = []
+    stack.append(call)
+    try:
+        pieces = _pieces_of(children, source, hoisted, methods)
+    finally:
+        stack.pop()
     if leading:
         pieces.insert(0, (TEXT_PIECE, leading))
     trailing = ""
@@ -3723,11 +3798,10 @@ def _region(node: tree.Node, source: str, hoisted: list[ast.stmt],
             raise Unsupported("the short form of #%s whose line ending is"
                               " not the last thing in its body" % node.name)
     body = _statements(pieces)
-    identifier = "_%d_%d" % (node.line, node.column)
     if node.name == "filter":
         made = _filter_region(node, identifier, body)
     elif node.name == "call":
-        made = _call_region(node, identifier, body)
+        made = _call_region(node, identifier, body, call["args"])
     elif node.name == "capture":
         made = _capture_region(node, identifier, body)
     else:
@@ -3909,7 +3983,8 @@ def _filter_region(node: tree.Node, identifier: str,
 
 
 def _call_region(node: tree.Node, identifier: str,
-                 body: list[ast.stmt]) -> list[ast.stmt]:
+                 body: list[ast.stmt],
+                 named: Sequence[str] = ()) -> list[ast.stmt]:
     """``#call f``: the body collected and handed to f as its first argument.
 
     What comes back is written through the placeholder shape, filtered
@@ -3919,6 +3994,21 @@ def _call_region(node: tree.Node, identifier: str,
     a corpus-shaped probe says so.
     """
     function, arguments = _call_target(node)
+    if named:
+        # endCallRegion with usesKeywordArgs on: the last argument is
+        # closed the way every earlier one was, the transaction put
+        # back, and the function called with the tag's own arguments
+        # first and then the dictionary. The collector the last close
+        # opens is never deleted; ct3 leaves it too.
+        made = (ast.parse(CALL_OPEN % {"id": identifier}).body + body
+                + ast.parse(CALL_ARG_CLOSE % {"id": identifier,
+                                              "name": named[-1]}).body
+                + ast.parse(CALL_KW_RESET % {"id": identifier}).body)
+        call = "%s(%s**_ct4_call_kws%s)" % (
+            function, arguments + ", " if arguments else "", identifier)
+        made += _placeholder_value(_parsed(call),
+                                   Written(call, "", node.line, node.column))
+        return made + ast.parse("del _ct4_call_kws%s" % identifier).body
     made = ast.parse(CALL_OPEN % {"id": identifier}).body + body \
         + ast.parse(CALL_CLOSE % {"id": identifier}).body
     call = "%s(_ct4_call_arg%s%s)" % (

@@ -1117,7 +1117,6 @@ def test_a_backslash_in_front_of_the_end_token_does_not_close_the_psp():
     "#cache id='a-b'\nx\n#end cache\n",      # ct3 generates a SyntaxError
     "#cache foo\nx\n#end cache\n",           # ct3 dies at compile time
     "#call int: 10#end call\n",              # a ParseError in ct3
-    "#call f\nx\n#arg a\ny\n#end call\n",    # the tree swallows an #arg body
     "#if 0: a\n#else: b\n",                  # the chained short form
     "#include\n",                            # ct3 writes a syntax error
     "#include source=$a ## why\n",           # the comment keeps the indent
@@ -1561,6 +1560,21 @@ END_TAG_SHAPES = [
     "#capture outer\n#capture inner\ni\n#end capture\no[$inner]\n"
     "#end capture\n[$outer]\n",
     "#capture self._foo\nq\n#end capture\n$self._foo\n",
+    # #arg inside a #call. The first one names the argument the
+    # collector has been filling all along, so text before it joins
+    # that argument; the colon form keeps the blank after the colon;
+    # and the indent before an #arg on a clear line is already in the
+    # collector when the line is decided about.
+    "#call $f\n#arg a\nx\n#arg b\ny\n#end call\n",
+    "#call $f\nq\n#arg a\nx\n#end call\n",
+    "#call $f\n#arg a: x\n#arg b: y\n#end call\n",
+    "#call $f\n  #arg a\n  x\n#end call\n",
+    "#call $f k=1\n#arg a\nx\n#end call\n",
+    "#call $f\n#arg a\n#call $f\n#arg b\ni\n#end call\n#end call\n",
+    # The colon form ends at its colon. What follows is template text
+    # and belongs to the #call: a placeholder there is resolved and a
+    # #slurp is a directive, which six of ct3's own cases turn on.
+    "#call $f\n#arg a:$(1234+1) foo#slurp\n#arg b: $v#slurp\n#end call\n",
 ]
 
 # A global set whose target is not a plain name. ct3 cuts the target at
@@ -1588,7 +1602,8 @@ def test_an_end_tag_and_a_global_set_reach_as_far_as_ct3(source):
 
     def context():
         return {"v": "1.0", "i": 7, "unit": {"x": "F"}, "k": "x",
-                "o": Obj(), "z": 0}
+                "o": Obj(), "z": 0,
+                "f": lambda *a, **k: "<%s|%s>" % (a, sorted(k.items()))}
 
     theirs = rendered(lambda: str(Template.compile(
         source=source, useCache=False,

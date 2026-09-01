@@ -147,11 +147,12 @@ TOLERATED = (CT3_REFUSES, BOTH_FAIL)
 # having come into reach. 227 until #set global and the reach of an
 # #end raw: one more. 228 until #breakpoint and #@: six more, and both
 # of those take templates the run had never got as far as rendering.
-# 234 until #capture and #super: six more of the same kind. The number
-# is raised deliberately and only after checking that the
+# 234 until #capture and #super: six more of the same kind. 240 until
+# #arg: nine more, the CallDirective cases moved off their lines. The
+# number is raised deliberately and only after checking that the
 # byte-difference count is still zero, which is the line this run
 # actually promises.
-CEILING = 240
+CEILING = 249
 
 
 def main() -> int:
