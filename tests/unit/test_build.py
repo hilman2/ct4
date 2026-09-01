@@ -165,6 +165,26 @@ def test_a_changed_include_renders_the_parent(tmp_path):
     assert "head.inc" in result["reason"]
 
 
+def test_a_rewrite_inside_one_clock_tick_is_still_a_change(tmp_path):
+    # ct3 keys its class cache for a file on the path and the mtime,
+    # and the kernel stamps a file at tick resolution, so a rewrite
+    # that lands in the tick of the write before it carries the same
+    # mtime and ct3 hands back the class it compiled from the old
+    # content. Staleness here is content, and the rewritten include
+    # has to reach the page whatever the clock says. Measured in the
+    # image: a run takes 2.5 ms, and 56 of 200 rewrites fell into the
+    # tick of the write before them.
+    manifest = skin(tmp_path)
+    head = tmp_path / "skin" / "inc" / "head.inc"
+    stamp = head.stat()
+    run(manifest)
+    head.write_text("<head lang=de>\n", encoding="utf-8")
+    os.utime(head, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    assert only(run(manifest))["status"] == "written"
+    text = (tmp_path / "public" / "index.html").read_text(encoding="utf-8")
+    assert "<head lang=de>" in text
+
+
 def test_an_include_that_appears_later_renders_the_parent(tmp_path):
     # belchertown's optional hooks: 69 of 348 constant include names in
     # the corpus have no file. The absent name is recorded, and the

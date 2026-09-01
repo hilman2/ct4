@@ -408,6 +408,7 @@ def build(manifest: Manifest, *, jobs: int = 1, force: bool = False,
         # base. Both halves have to stand in the same place or the
         # graph describes a different program than the one that runs.
         os.chdir(manifest.base)
+        _forget_compiled_files()
         results, counts = _execute(manifest, targets, findings,
                                    jobs=jobs, force=force, dry_run=dry_run)
     finally:
@@ -415,6 +416,23 @@ def build(manifest: Manifest, *, jobs: int = 1, force: bool = False,
         if held is not None:
             _release(lock_path, held)
     return done()
+
+
+def _forget_compiled_files() -> None:
+    """Empties ct3's in-process class cache before a run.
+
+    An #include is compiled at render time by ct3, which keeps the
+    class under the file's path and mtime. The kernel stamps a file at
+    tick resolution, so an include rewritten within a few milliseconds
+    of its previous version carries the mtime ct3 remembers, and the
+    class compiled from the old content would render. Staleness here
+    is decided on content, and a cache that decides on mtime must not
+    get to overrule that. Nothing is lost by it: within one run the
+    files do not change, so each include is still compiled once.
+    """
+    from Cheetah.Template import Template
+
+    Template._CHEETAH_compileCache.clear()
 
 
 def _chosen(targets: Sequence[Target],
