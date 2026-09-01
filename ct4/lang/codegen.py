@@ -32,13 +32,15 @@ Placeholders come in ct3's two forms: the name-led one and the one
 whose enclosure holds an expression, "$(6)" and "$('#id')", which is
 how a jQuery call in a page comes out as "#id".
 
-That is 1335 of the 1636 render cases. The corpus is not the only ruler
+That is 1399 of the 1636 render cases. The corpus is not the only ruler
 worth reading: of the 390 real skin templates in it, 336. The two
 numbers move at different rates, and the difference is the point.
 #errorCatcher moved 3 corpus cases and 83 skins; the expression
-placeholder moved 15 and 25. ct3's own test suite has no use for a
-directive every weewx skin opens with, so a plan read off the corpus
-alone builds the wrong things first.
+placeholder moved 15 and 25; the head of a #def moved 64 and none at
+all. ct3's own test suite has no use for a directive every weewx skin
+opens with, and a real skin has no use for four ways of writing a
+method head, so a plan read off either ruler alone builds the wrong
+things first.
 
 ct4/lang/backend.py hooks this in where ct3 provides for it, so a
 caller reaches it through Template.compile and never has to know. What
@@ -56,13 +58,12 @@ what shares the search list and the globalSetVars and copies the
 filter across.
 
 What it turns away, in the order the corpus says it costs most, and
-counted rather than estimated: the head of a #def or #block, 64 cases,
-where the name is followed by a comment or by a parameter list this
-layer cannot read; any template that sets a compiler setting, 52, on
-which see below; the c'...' string, 20; the one-line form that puts an
-#if body behind a colon, 16; and then #compiler-settings, #breakpoint,
-#compiler, #@, #i18n, #return, #assert, an #elif whose #if closed on
-the line before, and a #stop inside a block, 12 or fewer each.
+counted rather than estimated: any template that sets a compiler
+setting, 52, on which see below; the c'...' string, 20; the one-line
+form that puts an #if body behind a colon, 16; and then
+#compiler-settings, #breakpoint, #compiler, #@, #i18n, #return,
+#assert, an #elif whose #if closed on the line before, and a #stop
+inside a block, 12 or fewer each.
 
 A compiler setting is refused rather than ignored. This layer reads
 none of them, and two of them change what ct3 renders: with
@@ -788,9 +789,17 @@ class %s(Template):
 # What every generated method opens with, ct3's prologue word for word.
 # The transaction is its own because a method can be called on its own,
 # and then it collects into a throwaway response and returns the text.
+#
+# Three slots: the name, the parameter list, and the name of the keyword
+# dictionary the transaction arrives in. ct3 adds a **KWS of its own
+# only where the method does not already have one
+# (AutoMethodCompiler.cleanupState, line 1172), and reads the
+# transaction out of whichever it ends up with. So "#def m($**kw)" is
+# "def m(self, **kw)" and reads kw, not a second dictionary that would
+# not even be valid Python.
 PROLOGUE = """\
-def %%s(self, %%s**KWS):
-    trans = KWS.get("trans")
+def %%s(self, %%s):
+    trans = %%s.get("trans")
     if (not trans and not self._CHEETAH__isBuffering
             and not callable(self.transaction)):
         trans = self.transaction
@@ -891,19 +900,32 @@ def _plumbing(class_name: str) -> list[ast.stmt]:
     return ast.parse(PLUMBING % (class_name, class_name, class_name)).body
 
 
+# The keyword dictionary a parameter list already declares, if it does.
+# ct3 looks for exactly this and stops at the first one
+# (AutoMethodCompiler.cleanupState, line 1174).
+OWN_KWARGS = re.compile(r"(?:^|,)\s*\*\*([A-Za-z_][A-Za-z_0-9]*)")
+
+
 def _method(name: str, arguments: str,
             body: list[ast.stmt]) -> ast.stmt:
     """One generated method, with the body in ct3's frame."""
-    shape = PROLOGUE
     if name == MAIN:
         if "*" in arguments or re.search(r"\btrans\b", arguments):
             # ct3 turns streaming off for these and writes a different
             # body: the transaction is always a throwaway one. Rare
             # enough to refuse rather than reproduce.
             raise Unsupported("#implements %s with %r" % (name, arguments))
-        shape = MAIN_PROLOGUE
+        text = MAIN_PROLOGUE % (name, arguments)
+    else:
+        own = OWN_KWARGS.search(arguments)
+        if own is None:
+            text = PROLOGUE % (name, arguments + "**KWS", "KWS")
+        else:
+            # The list already ends in one, so no second dictionary and
+            # no trailing comma: "def m(self, **kw,)" does not parse.
+            text = PROLOGUE % (name, arguments.rstrip(" ,"), own.group(1))
     try:
-        made = ast.parse(shape % (name, arguments)).body[0]
+        made = ast.parse(text).body[0]
     except SyntaxError as error:
         # A parameter list this layer cannot read must be refused, not
         # let out as a SyntaxError: a caller falls back on Unsupported
@@ -2661,14 +2683,18 @@ def _quote_is_open(text: str, at: int) -> bool:
     return False
 
 
-# A definition's header: a name, and optionally a parameter list.
+# A definition's header: a name, and optionally a parameter list. The
+# dollar in front of the name is optional because ct3 eats one
+# (_eatDefOrBlock calls getCheetahVarStartToken before getIdentifier),
+# and "#def $show" is how a good half of ct3's own test cases write it.
 DEFINITION = re.compile(
-    r"^(?P<name>[A-Za-z_][A-Za-z_0-9]*)\s*(?:\((?P<params>.*)\))?\s*$",
+    r"^\$?(?P<name>[A-Za-z_][A-Za-z_0-9]*)\s*(?:\((?P<params>.*)\))?\s*$",
     re.S)
 
-# A dollar in front of a parameter name. ct3 writes "def show(self, x,
-# y=1, **KWS)" for "#def show($x, $y=1)".
-PARAM_DOLLAR = re.compile(r"\$(?=[A-Za-z_])")
+# A dollar in front of a parameter name or its stars. ct3 writes
+# "def show(self, x, y=1, **KWS)" for "#def show($x, $y=1)" and
+# "def show(self, *args, **KWS)" for "#def show($*args)".
+PARAM_DOLLAR = re.compile(r"\$(?=[*A-Za-z_])")
 
 
 def _parameters(text: str | None) -> str:
@@ -2787,7 +2813,10 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     # The raw text, not the resolved one: a dollar in a definition's
     # header names a parameter and is not a lookup. Running it through
     # _token_source would turn "#def show($x)" into a call to VFFSL.
-    header = "".join(t.text for t in node.tokens[1:]).strip()
+    # A comment does come off: ct3 eats "#def m ## why" with
+    # _eatRestOfDirectiveTag, which reads the comment and drops it.
+    header = "".join(t.text for t in node.tokens[1:]
+                     if t.kind not in SILENT_KINDS).strip()
     # The colon short form leaves its colon on the header: the tree
     # cuts the arguments right after it. "#block mid: hi" defines mid
     # and calls it, same as the long form.

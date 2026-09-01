@@ -38,7 +38,7 @@ from tests.unit.test_lex import ALL, corpus_dir, needs_corpus
 #
 # The corpus is the wrong ruler for #errorCatcher: it moves 3 cases
 # here and 83 of the 390 real skin templates.
-FLOOR = 1335
+FLOOR = 1399
 
 
 def render_cases():
@@ -1213,6 +1213,40 @@ def test_text_before_a_def_is_refused_rather_than_kept():
     # ct3 renders nothing at all here. Reproducing that needs ct3's
     # chunk boundaries, so the template is refused instead.
     assert not codegen.supports("L#def g\nD\n#end def\n#slurp\n")
+
+
+# -- The head of a #def or a #block ----------------------------------
+#
+# 64 corpus cases out of 16 distinct sources, the rest being line
+# ending variants. Four shapes, and ct3 reads all four in
+# _eatDefOrBlock: a dollar in front of the name, a comment behind it,
+# star parameters, and the colon form carrying both.
+
+DEFINITION_SHAPES = [
+    "#def $m\n1234\n#end def\n$m",
+    "#def m ## why\n1234\n#end def\n$m",
+    "#def $m($arg=1234)\n$arg\n#end def\n$m",
+    "#def $m:1234\n$m",
+    "#def m    : hi\n$m",
+    "#def $m($a, $b=2)\n$a$b\n#end def\n$m(1)",
+    # A star list, and a keyword dictionary the method brings itself.
+    # ct3 adds its own **KWS only where there is none, and reads the
+    # transaction out of whichever it ends up with.
+    "#def m($*args)\n$args\n#end def\n$m(1,2)",
+    "#def m($**kw)\n$kw\n#end def\n$m(a=1)",
+    "#def m($*a, $**k)\n$a$k\n#end def\n$m(1,x=2)",
+    "#block $b\nX\n#end block\n",
+    "#block b ##why\nX\n#end block\n",
+]
+
+
+@pytest.mark.parametrize("source", DEFINITION_SHAPES)
+def test_a_definition_head_matches_ct3(source):
+    theirs = Template.compile(source=source, useCache=False,
+                              cacheCompilationResults=False)
+    want = str(theirs(searchList=[{}]).respond())
+    assert codegen.supports(source), "refused: %r" % source
+    assert codegen.render(source, [{}]) == want
 
 
 # -- Names the generator bound itself --------------------------------
