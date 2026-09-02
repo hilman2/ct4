@@ -1771,9 +1771,42 @@ die Deklarationszeile drucken, darum ist eine Verweigerung dort ein Fehler
 (`StrictRefused`) und kein Rückfall. Der Legacy-Korpus bleibt unberührt: die
 Baseline des Textmodus ändert kein Byte.
 
-Was von P5 offen ist: `ct4 migrate`, `async`-Rendering, die Sandbox und die
-t-strings. `migrate` kommt als Nächstes und braucht eine Aufzeichnung, weil
-nur ein Lauf zeigt, wo Cheetah stillschweigend aufgerufen hat.
+`ct4 migrate` schreibt eine Textmodus-Vorlage für `strict` um. Nur ein Lauf
+zeigt, wo Cheetah stillschweigend aufgerufen hat, darum arbeitet es aus einer
+Aufzeichnung, wie `ct4 fixture capture` sie schreibt: wo die Aufzeichnung an
+einem Namen einen Aufruf ohne Argumente hält und die Quelle keine Klammern
+schreibt, setzt es sie. Dann rendert es die umgeschriebene Vorlage im
+`strict`-Modus gegen dieselbe Aufzeichnung und vergleicht Byte für Byte mit
+der Textmodus-Seite; ein Unterschied ist ein Diff und Exit 1. Was es nicht
+entscheiden kann, nennt es: Einschlüsse wie `${x}`, Modifikatoren, und Ketten,
+denen die Aufzeichnung nicht folgen kann, etwa hinter einem Aufruf mit
+berechneten Argumenten.
+
+Die drei übrigen Punkte, jeder so gross, wie er sein muss:
+
+- **Sandbox.** `ct4 render --sandbox` rendert in einem Kindprozess mit
+  Zeitlimit; ein Hänger ist ein gemeldeter Fehler und kein hängender Editor.
+  Davor steht ein statischer Wächter im Parse-Schritt, den jede Vorlage
+  durchläuft, ein `#include` genauso wie die Seite: `#import`, `#from`,
+  `#extends`, `#set module` und PSP werden verweigert, ein `#include` mit
+  berechnetem Namen auch, und in jedem Ausdruck eine kurze Liste von Namen
+  (`open`, `eval`, `os`, …) sowie jeder Dunder. Gegen Versehen und
+  unbedachte Änderungen, nicht gegen einen Angreifer; Python hat keine
+  dichte Sandbox, und das hier behauptet keine.
+- **`async`-Rendering.** `ct4.render.render_async` rendert in einem
+  Arbeitsthread und hält die Ereignisschleife frei. Mehr ist nicht ehrlich:
+  eine Vorlage ist durch und durch synchron, ct3s erzeugter Code schreibt in
+  eine Transaktion und kehrt zurück, und nichts darin kann `await`.
+- **t-strings (PEP 750).** Im `markup`-Modus wird ein `string.templatelib.
+  Template` als Wert so geschrieben, wie der Vorschlag es meint: die
+  Literale bleiben Markup, jede Interpolation wird escaped, Konversion und
+  Formatangabe zuerst angewandt. Auf einem Python vor 3.14 gibt es den Typ
+  nicht, und dann gibt es diesen Weg nicht.
+
+Damit ist die Liste von P5 abgearbeitet. Das Abnahmekriterium hält an drei
+Stellen: der Legacy-Korpus rendert weiter zu 100 Prozent, `migrate` ist über
+eine Aufzeichnung verlustfrei oder sagt, wo nicht, und der Benchmark-Boden aus
+`tests/bench/compare.py` steht in jedem Lauf.
 
 ### P6 — Freigabe 4.0
 

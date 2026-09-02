@@ -88,6 +88,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     render.add_argument("--out", type=Path,
                         help="write the output there instead of stdout")
     render.add_argument("--encoding", default="utf-8")
+    render.add_argument("--sandbox", action="store_true",
+                        help="render in a child process with a time limit,"
+                             " refusing what reaches outside the template")
+    render.add_argument("--timeout", type=float, default=10.0,
+                        metavar="SECONDS", help="the sandbox's limit")
 
     outline = sub.add_parser(
         "ast", help="the block tree of a template, for tools")
@@ -102,6 +107,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                      help="change nothing, exit 1 where something would")
     fmt.add_argument("--indent", type=int, default=4, metavar="N",
                      help="spaces per step; 0 for a tab")
+
+    migrate = sub.add_parser(
+        "migrate", help="rewrite a text-mode template for #mode strict"
+                        " and verify it against a recording")
+    migrate.add_argument("path", type=Path)
+    migrate.add_argument("--context", type=Path, metavar="FILE",
+                         help="a recording from ct4 fixture capture;"
+                              " without one only the mode line is added")
+    migrate.add_argument("--write", action="store_true",
+                         help="rewrite the file; otherwise only report")
 
     fixture = sub.add_parser(
         "fixture", help="record what templates read from a running"
@@ -141,6 +156,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _ast(args)
     if args.command == "fmt":
         return _fmt(args)
+    if args.command == "migrate":
+        return _migrate(args)
     if args.command == "fixture":
         return _fixture(args)
     if args.command == "mcp":
@@ -252,8 +269,17 @@ def _build(args: argparse.Namespace) -> int:
 
 
 def _render(args: argparse.Namespace) -> int:
-    from ct4 import render, trace
+    from ct4 import render, sandbox, trace
 
+    if args.sandbox and not sandbox.active():
+        return sandbox.run(args.path, args.context, args.out, args.encoding,
+                           args.timeout)
+    if sandbox.active():
+        # The child: every template, the page and its includes, goes
+        # through the generator, where the guard stands.
+        from ct4.lang import backend
+
+        backend.install()
     source = args.path.read_text(encoding="utf-8")
     search_list: list[Any] = []
     output_filter = None
@@ -359,6 +385,41 @@ def _outline(node: Any, depth: int) -> Any:
     yield depth, node
     for child in node.children:
         yield from _outline(child, depth + 1)
+
+
+def _migrate(args: argparse.Namespace) -> int:
+    from ct4 import migrate
+
+    source = args.path.read_text(encoding="utf-8")
+    recording = None
+    if args.context is not None:
+        recording = json.loads(args.context.read_text(encoding="utf-8"))
+    try:
+        result = migrate.migrate(source, recording)
+    except migrate.MigrationError as error:
+        print("ct4 migrate: %s: %s" % (args.path, error), file=sys.stderr)
+        return 2
+    for change in result.changes:
+        print("%s:%d:%d: %s -> %s" % (args.path, change.line, change.column,
+                                      change.before, change.after))
+    for left in result.skipped:
+        print("%s:%d:%d: %s left alone, %s"
+              % (args.path, left.line, left.column, left.text, left.reason))
+    if result.diff is None:
+        print("%d change(s); no recording, so nothing was verified"
+              % len(result.changes))
+    elif result.same:
+        print("%d change(s); the page renders the same in strict mode"
+              % len(result.changes))
+    else:
+        print("%d change(s); the page differs in strict mode:"
+              % len(result.changes))
+        for line in result.diff:
+            print("  " + line)
+    if args.write and result.source != source:
+        args.path.write_text(result.source, encoding="utf-8")
+        print("rewrote %s" % args.path)
+    return 1 if result.same is False else 0
 
 
 def _fixture(args: argparse.Namespace) -> int:

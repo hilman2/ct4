@@ -40,7 +40,9 @@ the answer subtly wrong.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
+from typing import Any
 
 __all__ = [
     "Markup",
@@ -120,6 +122,49 @@ def _as_markup(value: object) -> Markup | None:
     return Markup(method(value))
 
 
+def _as_template_string(value: object) -> Markup | None:
+    """A PEP 750 template string, its interpolations escaped.
+
+    Python 3.14 brings ``t"<b>{name}</b>"``: a value that keeps the
+    literal parts and the interpolated values apart instead of joining
+    them into one string. That is exactly the distinction escaping
+    needs. A context that hands the page such a value says which
+    characters are its own markup and which came from data, so the
+    markup stays and the data is escaped, one interpolation at a time,
+    conversion and format spec applied first the way an f-string would.
+
+    Returns:
+        Markup|None: None where the value is no template string, and
+        on a Python without them.
+    """
+    if Template is None or not isinstance(value, Template):
+        return None
+    parts: list[str] = []
+    for item in value:
+        if isinstance(item, str):
+            parts.append(item)
+            continue
+        inner = item.value
+        if item.conversion == "r":
+            inner = repr(inner)
+        elif item.conversion == "s":
+            inner = str(inner)
+        elif item.conversion == "a":
+            inner = ascii(inner)
+        if item.format_spec:
+            inner = format(inner, item.format_spec)
+        parts.append(str(escape(inner)))
+    return Markup("".join(parts))
+
+
+# Through importlib, so that a type checker on a Python before 3.14
+# does not go looking for a module it cannot find.
+try:
+    Template: Any = importlib.import_module("string.templatelib").Template
+except ImportError:                     # Python before 3.14
+    Template = None
+
+
 def escape(value: object) -> Markup:
     """The value as markup: its own if it has one, else escaped.
 
@@ -138,6 +183,9 @@ def escape(value: object) -> Markup:
         else.
     """
     own = _as_markup(value)
+    if own is not None:
+        return own
+    own = _as_template_string(value)
     if own is not None:
         return own
     text = str(value)
@@ -191,7 +239,11 @@ def write_escaped(
     Returns:
         str: The text to write, escaped unless it proved itself markup.
     """
+    # A template string is resolved here for the same reason as the
+    # protocol: the filter would str() it into its repr.
     own = _as_markup(value)
+    if own is None:
+        own = _as_template_string(value)
     if own is not None:
         value = own
     result = filter(value, **kw)

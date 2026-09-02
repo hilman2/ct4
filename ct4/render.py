@@ -115,6 +115,27 @@ def render_source(source: str, search_list: Sequence[Any], *,
     return _render_text(source, search_list, settings or {}, output_filter)
 
 
+async def render_async(source: str, search_list: Sequence[Any], *,
+                       path: Path | None = None,
+                       settings: dict[str, Any] | None = None,
+                       mode: str | None = None,
+                       output_filter: type | None = None) -> str:
+    """``render_source`` for an event loop.
+
+    A template is synchronous through and through: ct3's generated
+    code writes to a transaction and returns, and nothing in it can
+    await. So this does not make the template asynchronous, it keeps
+    the loop free while one renders, in a worker thread. A server that
+    answers many requests with pages, or an agent loop that renders
+    while it waits for something else, is what it is for.
+    """
+    import asyncio
+
+    return await asyncio.to_thread(render_source, source, search_list,
+                                   path=path, settings=settings, mode=mode,
+                                   output_filter=output_filter)
+
+
 def _render_generated(source: str, search_list: Sequence[Any],
                       settings: dict[str, Any], path: Path | None,
                       output_filter: type | None) -> str:

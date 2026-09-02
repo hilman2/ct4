@@ -32,7 +32,9 @@ ct4 mcp                                  # dasselbe als MCP-Server
 ct4 lsp                                  # Diagnostik und fmt im Editor
 ct4 ast seite.tmpl --json                # der Blockbaum, für Werkzeuge
 ct4 fmt seite.tmpl --check               # Direktivenzeilen einrücken
+ct4 migrate seite.tmpl --context aufzeichnung.json   # nach #mode strict
 ct4 render seite.tmpl --context aufzeichnung.json   # rendern ohne weewx
+ct4 render seite.tmpl --sandbox              # im Kindprozess, mit Zeitlimit
 ct4 fixture capture --weewx ~/src/weewx --out fixtures   # aufzeichnen
 ```
 

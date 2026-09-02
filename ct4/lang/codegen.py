@@ -114,7 +114,7 @@ from dataclasses import dataclass, field
 from tokenize import PseudoToken
 from typing import Any, Sequence
 
-from ct4 import directives, modes
+from ct4 import directives, modes, sandbox
 from ct4.lang import lex, tree
 from ct4.markup import mode as markup_mode
 from ct4.markup import scan as markup_scan
@@ -1373,6 +1373,10 @@ def generate(source: str, settings: Any = None,
     names = tree.syntax(registered.line, registered.block) \
         if registered.names else None
     root = tree.parse(source, names)
+    if sandbox.active():
+        # Before anything is generated, and for every template that
+        # comes through here, an #include's as much as the page's.
+        sandbox.check(root)
     used = _registered_use(root, registered)
     try:
         return _generate(root, source, markup, shift, registered,
