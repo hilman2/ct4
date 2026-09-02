@@ -673,14 +673,18 @@ def test_an_edited_module_renders_the_page_again(tmp_path, monkeypatch):
     manifest = skin(tmp_path, template=IMPORTING)
     assert only(run(manifest))["status"] == "written"
     assert only(run(manifest))["status"] == "skipped"
-    helper(tmp_path, monkeypatch, "GREETING = 'Tach'\n")
+    # A different length on purpose. Python trusts a cached .pyc whose
+    # source has the same size and the same mtime second, so 'Tach'
+    # for 'Moin' inside one second rendered the old greeting and the
+    # status flipped with the clock. helper() drops the module from
+    # sys.modules, so with the cache seen through the render reads
+    # the new file.
+    helper(tmp_path, monkeypatch, "GREETING = 'Servus'\n")
     result = only(run(manifest))
     assert result["reason"] == "module ct4_test_helper changed"
-    # The status is "unchanged" and not "written", and that is honest:
-    # the module is already in this process's sys.modules, so the
-    # render still sees Moin. What is under test is that the edit is
-    # noticed at all, which is what a fresh cron process needs.
-    assert result["status"] == "unchanged"
+    assert result["status"] == "written"
+    text = (tmp_path / "public" / "index.html").read_text(encoding="utf-8")
+    assert "Servus" in text
 
 
 def test_a_built_in_module_is_not_a_reason_to_render_every_run(tmp_path):
