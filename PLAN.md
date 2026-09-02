@@ -1423,8 +1423,28 @@ weewx-Skins mit 974 Vorlagen und 1.567 Vorlagen aus 585 Repositories, die
 Cheetah für etwas ganz anderes benutzen. Der Kern hat seinen Aufrufer
 (`ct4/lang/backend.py`), und Tracebacks zeigen in die Vorlage, ohne dass ein
 Aufrufer etwas dafür tut. Die Direktiven-Plugins auf AST-Ebene stehen seit
-demselben Tag (Abschnitt 6). Was von der Liste bleibt, ist „darauf
-aufbauend": `ct4 fmt`, `ct4 ast`, Sprachserver, tree-sitter.
+demselben Tag (Abschnitt 6), und von „darauf aufbauend" stehen `ct4 ast`
+und `ct4 fmt`.
+
+`ct4 ast` gibt den Blockbaum als Text oder JSON, mit Position und Text je
+Knoten, so dass sich die Quelle aus dem Dokument wieder zusammensetzen lässt.
+
+`ct4 fmt` ist so schmal, wie die Sprache es erzwingt: in einer Vorlage ist
+Whitespace Ausgabe. Das einzige, was ct3 wegwirft, ist der Einzug vor einer
+Direktive, einem Kommentar oder einem `#end`, das allein auf seiner Zeile
+steht (handleWSBeforeDirective). Genau den ordnet der Formatierer: `#end`
+unter den Öffner, Zweig unter den Öffner, Zeile im Block eine Stufe weiter,
+und eine Zeile auf oberster Ebene behält den Einzug, den der Autor ihr im
+Markup drumherum gegeben hat. Alles andere bleibt Byte für Byte, darunter
+die Kurzformen, Tags mit Text davor oder danach, `#raw`, `#call` (dort ist
+der Einzug vor `#arg` Ausgabe, CallDirective.test4 sagt es) und JSON-Vorlagen.
+Der Beweis, dass die Seite dieselbe bleibt, ist ein Test, der jeden
+Render-Fall des Korpus vor und nach dem Formatieren rendert.
+
+Offen bleiben Sprachserver und tree-sitter. Der Sprachserver ist ein
+JSON-RPC-Dienst über stdio, der `ct4 check` als Diagnostik liefert; nach
+dem Muster von `ct4 mcp` ohne Abhängigkeit machbar. Eine tree-sitter-Grammatik
+ist ein eigenes Repo in einer anderen Sprache und gehört nicht in dieses.
 
 Was der Kern ablehnt, in Zahlen: 27 Vorlagen mit `#compiler` oder
 `#compiler-settings`, davon 21 Testfälle aus ct3s Suite, die mitten in der

@@ -29,6 +29,8 @@ ct4 check pfad/zur/vorlage.tmpl --format=json
 ct4 context pfad/zur/vorlage.tmpl        # was sie aus dem Kontext liest
 ct4 reference --json                     # alle Direktiven und Einstellungen
 ct4 mcp                                  # dasselbe als MCP-Server
+ct4 ast seite.tmpl --json                # der Blockbaum, für Werkzeuge
+ct4 fmt seite.tmpl --check               # Direktivenzeilen einrücken
 ct4 render seite.tmpl --context aufzeichnung.json   # rendern ohne weewx
 ct4 fixture capture --weewx ~/src/weewx --out fixtures   # aufzeichnen
 ```

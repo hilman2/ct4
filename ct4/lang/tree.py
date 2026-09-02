@@ -178,6 +178,27 @@ def unparse(node: Node) -> str:
     return node.text()
 
 
+def as_dict(node: Node) -> dict[str, object]:
+    """The tree as plain data, for ``ct4 ast`` and whatever reads it.
+
+    A leaf carries its text; a block carries the text of its opening
+    tag under ``head`` and its body under ``children``, so that the
+    whole source can be put back together from the document, in
+    order, the way ``unparse`` does from the tree.
+    """
+    made: dict[str, object] = {"kind": node.kind}
+    if node.name:
+        made["name"] = node.name
+    if node.tokens:
+        made["line"] = node.line
+        made["column"] = node.column
+        joined = "".join(token.text for token in node.tokens)
+        made["head" if node.kind == BLOCK else "text"] = joined
+    if node.kind in (TEMPLATE, BLOCK):
+        made["children"] = [as_dict(child) for child in node.children]
+    return made
+
+
 class _Builder:
     """Walks the tokens once and stacks up the open blocks."""
 

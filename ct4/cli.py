@@ -89,6 +89,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="write the output there instead of stdout")
     render.add_argument("--encoding", default="utf-8")
 
+    outline = sub.add_parser(
+        "ast", help="the block tree of a template, for tools")
+    outline.add_argument("path", type=Path)
+    outline.add_argument("--json", action="store_true")
+
+    fmt = sub.add_parser(
+        "fmt", help="re-indent the directive lines whose indent is not"
+                    " output; everything else stays byte for byte")
+    fmt.add_argument("paths", type=Path, nargs="+")
+    fmt.add_argument("--check", action="store_true",
+                     help="change nothing, exit 1 where something would")
+    fmt.add_argument("--indent", type=int, default=4, metavar="N",
+                     help="spaces per step; 0 for a tab")
+
     fixture = sub.add_parser(
         "fixture", help="record what templates read from a running"
                         " application")
@@ -121,6 +135,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _build(args)
     if args.command == "render":
         return _render(args)
+    if args.command == "ast":
+        return _ast(args)
+    if args.command == "fmt":
+        return _fmt(args)
     if args.command == "fixture":
         return _fixture(args)
     if args.command == "mcp":
@@ -258,6 +276,83 @@ def _render(args: argparse.Namespace) -> int:
     sys.stdout.buffer.write(data)
     sys.stdout.flush()
     return 0
+
+
+def _ast(args: argparse.Namespace) -> int:
+    from ct4 import directives
+    from ct4.lang import tree
+
+    source = args.path.read_text(encoding="utf-8")
+    registered = directives.find_for(args.path)
+    names = tree.syntax(registered.line, registered.block) \
+        if registered.names else None
+    try:
+        root = tree.parse(source, names)
+    except tree.StructureError as error:
+        print("ct4 ast: %s: %s" % (args.path, error), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(tree.as_dict(root), ensure_ascii=False, indent=1))
+        return 0
+    for depth, node in _outline(root, 0):
+        where = "%d:%d" % (node.line, node.column) if node.tokens else ""
+        shown = "".join(token.text for token in node.tokens)
+        print("%s%-10s %-12s %-7s %s"
+              % ("  " * depth, node.kind, node.name, where,
+                 json.dumps(shown[:60]) if shown else ""))
+    return 0
+
+
+def _fmt(args: argparse.Namespace) -> int:
+    from ct4 import directives, fmt
+    from ct4.lang import tree
+
+    unit = " " * args.indent if args.indent > 0 else "\t"
+    changed = 0
+    broken = 0
+    for path in args.paths:
+        # Bytes in and bytes out, so that a CRLF file stays one and an
+        # encoding this tool does not understand is left alone.
+        raw = path.read_bytes()
+        try:
+            source = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            print("ct4 fmt: %s is not UTF-8, left alone" % path,
+                  file=sys.stderr)
+            broken += 1
+            continue
+        registered = directives.find_for(path)
+        names = tree.syntax(registered.line, registered.block) \
+            if registered.names else None
+        try:
+            made = fmt.format_source(source, unit, names)
+        except tree.StructureError as error:
+            print("ct4 fmt: %s: %s" % (path, error), file=sys.stderr)
+            broken += 1
+            continue
+        if made == source:
+            continue
+        changed += 1
+        if args.check:
+            print("%s: %d line(s) would change"
+                  % (path, _lines_differing(source, made)))
+            continue
+        path.write_bytes(made.encode("utf-8"))
+        print("reformatted %s" % path)
+    if broken:
+        return 2
+    return 1 if args.check and changed else 0
+
+
+def _lines_differing(before: str, after: str) -> int:
+    return sum(1 for a, b in zip(before.splitlines(), after.splitlines())
+               if a != b)
+
+
+def _outline(node: Any, depth: int) -> Any:
+    yield depth, node
+    for child in node.children:
+        yield from _outline(child, depth + 1)
 
 
 def _fixture(args: argparse.Namespace) -> int:
