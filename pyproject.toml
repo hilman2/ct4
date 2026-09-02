@@ -140,7 +140,10 @@ ignore_missing_imports = true
 # Nur CPython. PyPy bringt keinen Vorteil, weil dort die C-Erweiterung
 # ueber cpyext laeuft und langsamer ist als der reine Python-Pfad.
 build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
-skip = "*_i686 *-win32 *-musllinux_*"
+# musllinux bleibt drin: weewx laeuft in Alpine-Containern, und ohne
+# Wheel baut der Container die C-Erweiterung selbst oder laeuft ohne
+# sie. Entschieden am 02-Sep-2026 (PLAN.md, Abschnitt 15).
+skip = "*_i686 *-win32"
 # Python 3.14 ohne GIL. Der NameMapper ist die Stelle, an der sich das
 # zeigen wird, deshalb wird von Anfang an dafuer gebaut.
 enable = ["cpython-freethreading"]

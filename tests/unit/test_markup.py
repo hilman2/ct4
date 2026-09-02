@@ -316,7 +316,8 @@ def test_a_text_template_the_generator_refuses_still_falls_back():
     counts = backend.install()
     try:
         klass = Template.compile(
-            source="#compiler-settings\nuseNameMapper=False\n"
+            source="#compiler-settings\n"
+                   "gobbleWhitespaceAroundMultiLineComments=False\n"
                    "#end compiler-settings\nplain\n",
             useCache=False, cacheCompilationResults=False)
         template = klass(searchList=[{}])

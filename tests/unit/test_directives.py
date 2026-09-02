@@ -125,7 +125,8 @@ def test_no_falling_back_to_ct3(project):
     # generator refuses is an error with the reason, because ct3 would
     # read the directive as text and render a page nobody wrote.
     path = project / "page.tmpl"
-    path.write_text("#compiler-settings\nuseNameMapper = False\n"
+    path.write_text("#compiler-settings\n"
+                    "gobbleWhitespaceAroundMultiLineComments = False\n"
                     "#end compiler-settings\n#box\nx\n#end box\n",
                     encoding="utf-8")
     backend.install()

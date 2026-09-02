@@ -119,8 +119,8 @@ def test_the_generator_and_nothing_else_compiles_it():
             .startswith("<function")
         with pytest.raises(backend.StrictRefused):
             Template.compile(source="#mode strict\n#compiler-settings\n"
-                                    "useNameMapper = False\n"
-                                    "#end compiler-settings\n",
+                                    "gobbleWhitespaceAroundMultiLineComments"
+                                    " = False\n#end compiler-settings\n",
                              useCache=False, cacheCompilationResults=False)
     finally:
         backend.uninstall()

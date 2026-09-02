@@ -1900,24 +1900,38 @@ der Eigentümer treffen kann, und ein Wheel-Lauf auf einem Tag.
 
 ## 15. Offene Entscheidungen
 
-1. **Fork oder Upstream?** Empfehlung: eigener Fork, Änderungen aber so
-   schneiden, dass sie als CHEP einreichbar bleiben.
+1. **Fork oder Upstream?** Entschieden am 02-Sep-2026: eigener Fork, als
+   Distribution `Cheetah4`. Die CHEPs 4 und 5 bleiben ein Angebot, von dem
+   nichts abhängt. Wer sie einreicht, muss den eingereichten Code unter MIT
+   stellen, denn der Fork ist auf LGPL-3.0 umlizenziert und Cheetah3 ist MIT.
 2. ~~**Konkreter Bestand.**~~ Beantwortet: die mitgelieferten weewx-Skins,
    dazu Belchertown, Belchertown New und weewx-wdc. Alle im Korpus, Herkunft
    mit Commit in `corpus/skin-sources.json`.
-3. **Importname.** `Cheetah` überschreiben (maximale Kompatibilität, keine
-   Koexistenz) oder `cheetah4` mit Shim (Koexistenz, aber jeder Anwender muss
-   etwas tun). Empfehlung: `Cheetah` überschreiben.
-4. **Python-Untergrenze.** 3.10 (Empfehlung) oder 3.9, falls Distributionen das
-   erzwingen.
+3. **Importname.** Entschieden am 02-Sep-2026: `Cheetah` überschreiben. Die
+   Distribution heißt `Cheetah4`, das Paket `Cheetah`, `ct4.engine` prüft
+   beim Start, dass der Fork auf dem Pfad liegt.
+4. **Python-Untergrenze.** Entschieden am 02-Sep-2026: 3.10. Der Preis war
+   `tomllib`, und dafür liest `ct4.directives` seine `ct4.toml` auf 3.10
+   selbst.
 5. **Wo lebt `ct4-weewx`?** Die Frage „Protokoll oder Paket" ist beantwortet:
    beides. Das Protokoll gehört in ct4, die Anbindung wird das erste Plugin.
    Entschieden am 02-Sep-2026: es lebt im ct4-Repo und wird hier gepflegt.
    Es folgt damit Änderungen am Interface sofort und Änderungen an
    `ValueHelper` über den Capture-Lauf gegen weewx' eigene Testsuite, der
    in `tests/docker/weewx_json.py` steht.
-6. **Dürfen Plugins Syntax beitragen?** Die Regel aus Abschnitt 6 sagt: nur mit
-   explizitem Eintrag in `ct4.toml`. Die Alternative wäre, Direktiven-Plugins
-   ganz zu verbieten und Plugins auf Namespaces, Typen und Sinks zu begrenzen.
-   Das hielte die Sprache überall gleich, kostet aber Ausdruckskraft.
-   Empfehlung: die `ct4.toml`-Regel.
+6. **Dürfen Plugins Syntax beitragen?** Entschieden am 02-Sep-2026: nur mit
+   explizitem Eintrag in `ct4.toml`, die Regel aus Abschnitt 6, so gebaut in
+   `ct4/directives.py`. Namen, Typen und Filter kommen weiter über den Entry
+   Point.
+7. **`#compiler-settings`.** Entschieden am 02-Sep-2026: Einstellungen am
+   Dateianfang werden gelesen, ein Tokenwechsel am Dateianfang auch;
+   Umschalten mitten in der Datei und `reset` bleiben verweigert und fallen
+   auf ct3 zurück. Das nimmt alle sechs echten Vorlagen mit solchen Zeilen;
+   die fünfzehn Testfälle, die mitten in der Datei umschalten, hat nur ct3s
+   Suite geschrieben.
+8. **musllinux-Wheels.** Entschieden am 02-Sep-2026: bauen. weewx läuft in
+   Alpine-Containern, und ohne Wheel baut der Container die C-Erweiterung
+   selbst oder läuft ohne sie.
+9. **tree-sitter-Grammatik.** Entschieden am 02-Sep-2026: als eigenes Repo,
+   `tree-sitter-cheetah`, ausserhalb dieses Repos, weil es eine andere
+   Sprache und einen anderen Werkzeugkasten hat.

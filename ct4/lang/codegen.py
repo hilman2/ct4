@@ -116,6 +116,7 @@ from typing import Any, Sequence
 
 from ct4 import directives, modes, sandbox
 from ct4.lang import lex, tree
+from ct4.lang import settings as compiler_settings
 from ct4.markup import mode as markup_mode
 from ct4.markup import scan as markup_scan
 
@@ -570,13 +571,16 @@ class _Reader:
         # ct3 turns useNameMapper off while it reads the target of a
         # "for" inside an expression, and back on after. It does that
         # with a setting rather than an argument, so it reaches every
-        # reader that runs while it is off.
-        self.name_mapper = True
+        # reader that runs while it is off. The starting value is the
+        # template's own setting, off for the whole file where it says
+        # useNameMapper = False.
+        self.name_mapper = _honoured().name_mapper
         # useAutocalling, which eatCall turns off while it reads the
         # function a #call calls: "#call $a.b(1)" is
         # VFN(VFFSL(SL,"a",False),"b",False)(1), every chunk False and
-        # the placeholders inside the brackets too.
-        self.autocalling = True
+        # the placeholders inside the brackets too. Off for the whole
+        # file where the template says so.
+        self.autocalling = _honoured().autocalling
         # What stood after a comma inside an enclosure, "$(a, 'x')":
         # arguments for the filter, which the placeholder reader sets
         # and the value's writer picks up.
@@ -987,7 +991,7 @@ def chunks_of(text: str) -> list[Chunk]:
     return found
 
 
-def placeholder_source(text: str, name_mapper: bool = True) -> str:
+def placeholder_source(text: str, name_mapper: bool | None = None) -> str:
     """The Python ct3 writes for a placeholder where it stands.
 
     Called as ``placeholder_source("$a.b($c)")`` with the raw text of a
@@ -995,10 +999,11 @@ def placeholder_source(text: str, name_mapper: bool = True) -> str:
 
     Args:
         text (str): the placeholder's own source.
-        name_mapper (bool): whether the names are looked up. False is
-            what ct3 reads an assignment target with, and it reaches
+        name_mapper (bool|None): whether the names are looked up. False
+            is what ct3 reads an assignment target with, and it reaches
             all the way in: "$d[$k]" on the left of a "#set" is "d[k]",
-            not "d[VFFSL(SL,'k',True)]".
+            not "d[VFFSL(SL,'k',True)]". None is the template's own
+            setting, on unless it says useNameMapper = False.
 
     Raises:
         Unsupported: where ct3 reads the text differently, or not at
@@ -1009,7 +1014,8 @@ def placeholder_source(text: str, name_mapper: bool = True) -> str:
     return placeholder_parts(text, name_mapper)[0]
 
 
-def placeholder_parts(text: str, name_mapper: bool = True) -> tuple[str, str]:
+def placeholder_parts(text: str,
+                      name_mapper: bool | None = None) -> tuple[str, str]:
     """The Python for a placeholder, and the arguments for its filter.
 
     Called as ``placeholder_parts("$(a, 'x')")``.
@@ -1022,7 +1028,8 @@ def placeholder_parts(text: str, name_mapper: bool = True) -> tuple[str, str]:
     if MODIFIERS.match(text):
         raise Unsupported("placeholder %r" % text)
     reader = _Reader(text)
-    reader.name_mapper = name_mapper
+    if name_mapper is not None:
+        reader.name_mapper = name_mapper
     made = reader.placeholder()
     if not reader.done():
         raise Unsupported("placeholder %r" % text)
@@ -1284,24 +1291,6 @@ def _before_breakpoint(source: str) -> str:
     return source
 
 
-def _refuse_settings(settings: Any) -> None:
-    """Turns away a template whose compiler settings change ct3.
-
-    Every setting, not a chosen few. gobbleWhitespaceAroundMultiLine-
-    Comments and allowWhitespaceAfterDirectiveStartToken are the two
-    the corpus exercises, and enumerating from a corpus is how a
-    blind spot becomes a rule. When a setting is honoured, take it off
-    this list and say which.
-
-    Raises:
-        Unsupported: where any setting is given.
-    """
-    if settings:
-        raise Unsupported(
-            "compiler settings change how ct3 parses and this layer "
-            "reads none of them: %s" % ", ".join(sorted(settings)))
-
-
 def supports(source: str, settings: Any = None) -> bool:
     """Whether this layer can generate code for the template.
 
@@ -1353,7 +1342,6 @@ def generate(source: str, settings: Any = None,
             be trusted over the file. Nothing is escaped then and the
             compile fails with the reason.
     """
-    _refuse_settings(settings)
     markup = markup_mode.declared(source)
     strict = modes.strict(source)
     unknown = modes.declared(source) - modes.KNOWN
@@ -1373,14 +1361,36 @@ def generate(source: str, settings: Any = None,
     names = tree.syntax(registered.line, registered.block) \
         if registered.names else None
     root = tree.parse(source, names)
-    if sandbox.active():
-        # Before anything is generated, and for every template that
-        # comes through here, an #include's as much as the page's.
-        sandbox.check(root)
+    # Known before anything can be refused, because it decides what a
+    # refusal is: a fallback, or an error.
     used = _registered_use(root, registered)
     try:
+        # The template's own settings come off the head of the file
+        # and win over the caller's, the way ct3 applies a directive
+        # on top of what Template.compile was given. The lines stay
+        # as comments, so nothing below them moves.
+        try:
+            cut, own = compiler_settings.head(source)
+            honoured = compiler_settings.honour(dict(settings or {}, **own))
+            if honoured.tokens:
+                # The lexer does not take its tokens from the settings
+                # yet.
+                raise compiler_settings.NotHonoured(
+                    "token settings: %s"
+                    % ", ".join(sorted(honoured.tokens)))
+        except compiler_settings.NotHonoured as refused:
+            raise Unsupported(str(refused)) from None
+        if cut != source:
+            source = cut
+            root = tree.parse(source, names)
+        if sandbox.active():
+            # Before anything is generated, and for every template
+            # that comes through here, an #include's as much as the
+            # page's.
+            sandbox.check(root)
         return _generate(root, source, markup, shift, registered,
-                         class_name, base_class, main_method, file, strict)
+                         class_name, base_class, main_method, file, strict,
+                         honoured)
     except Unsupported as error:
         if used:
             # ct3 does not know the directive, so it cannot stand in
@@ -1408,7 +1418,9 @@ def _registered_use(root: tree.Node,
 def _generate(root: tree.Node, source: str, markup: bool, shift: int,
               registered: directives.Registration, class_name: str,
               base_class: str | None, main_method: str | None,
-              file: str, strict: bool = False) -> Generated:
+              file: str, strict: bool = False,
+              honoured: compiler_settings.Honoured = compiler_settings.DEFAULT
+              ) -> Generated:
     """The module for a parsed template; ``generate`` is the caller."""
     _refuse_raw_in_short_form(source, root)
     shape = _class_shape(root, base_class, main_method)
@@ -1434,10 +1446,12 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
     previous_plugins = _plugins()
     previous_strict = _strict()
     previous_bound = _bound()
+    previous_honoured = _honoured()
     _ACTIVE.catcher = Catcher(methods)
     _ACTIVE.markup = state
     _ACTIVE.plugins = registered
     _ACTIVE.strict = strict
+    _ACTIVE.honoured = honoured
     _ACTIVE.bound = set()
     _ACTIVE.scopes = []
     # What "#super" names: the class being generated and the method
@@ -1452,6 +1466,7 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
         _ACTIVE.markup = previous_markup
         _ACTIVE.plugins = previous_plugins
         _ACTIVE.strict = previous_strict
+        _ACTIVE.honoured = previous_honoured
         _ACTIVE.bound = previous_bound
         _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
@@ -5012,7 +5027,9 @@ def _assignment_parts(text: str) -> tuple[str, str, str]:
     try:
         left = reader.expression(break_at=tuple(assignmentOps)).strip()
     finally:
-        reader.name_mapper = True
+        # Back to the template's own setting, not to True: a file that
+        # says useNameMapper = False reads the value plainly too.
+        reader.name_mapper = _honoured().name_mapper
     operator = reader.py_token()
     if operator not in assignmentOps:
         raise Unsupported("#set without an assignment operator: %r" % text)
@@ -5397,6 +5414,11 @@ def _strict_expression(chunks: list[Chunk]) -> str:
 
 def _strict() -> bool:
     return bool(getattr(_ACTIVE, "strict", False))
+
+
+def _honoured() -> compiler_settings.Honoured:
+    found = getattr(_ACTIVE, "honoured", None)
+    return found if found is not None else compiler_settings.DEFAULT
 
 
 def _plain_expression(chunks: list[Chunk]) -> str:
