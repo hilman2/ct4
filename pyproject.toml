@@ -32,7 +32,7 @@ requires-python = ">=3.10"
 dynamic = ["version"]
 keywords = ["template", "json", "weewx"]
 authors = [{ name = "Tavis Rudd", email = "tavis@damnsimple.com" }]
-maintainers = [{ name = "Oleg Broytman", email = "phd@phdru.name" }]
+maintainers = [{ name = "Manuel" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -52,8 +52,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://cheetahtemplate.org/"
-Source = "https://github.com/CheetahTemplate3/cheetah3"
+Homepage = "https://github.com/hilman2/ct4"
+Source = "https://github.com/hilman2/ct4"
+Upstream = "https://github.com/CheetahTemplate3/cheetah3"
 
 [project.optional-dependencies]
 filters = ["markdown"]
