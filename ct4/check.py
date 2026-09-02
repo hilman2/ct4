@@ -40,14 +40,12 @@ MODE_LINE = "#mode json"
 def is_json_template(source: str) -> bool:
     """Whether the template announces JSON mode.
 
-    The announcement stands on the first line that is not a comment.
+    The announcement stands on the first line that is not a comment;
+    ``ct4.modes`` reads it.
     """
-    for line in source.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("##"):
-            continue
-        return stripped == MODE_LINE
-    return False
+    from ct4 import modes
+
+    return modes.JSON in modes.declared(source)
 
 
 def check_source(source: str, file: str = "",

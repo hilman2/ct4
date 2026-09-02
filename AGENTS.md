@@ -39,6 +39,11 @@ ct4 fixture capture --weewx ~/src/weewx --out fixtures   # aufzeichnen
 `ct4 check` braucht die Anwendung nicht. Was weewx an Namen kennt, steht
 angemeldet in `declarations/weewx.json`.
 
+`#mode strict` auf der ersten Zeile schaltet das Autocalling ab und macht
+jeden Namen, den die Vorlage selbst bindet, zu einem Python-Namen. Nur der
+Generator übersetzt so eine Vorlage; ct3 fällt nicht ein. Kombinierbar:
+`#mode markup strict`.
+
 Eigene Direktiven meldet ein Projekt in einer `ct4.toml` neben seinen
 Vorlagen an, `[directives]` ohne Rumpf und `[blocks]` mit; der Handler
 bekommt einen `ct4.directives.Call` und gibt `ast`-Anweisungen zurück.

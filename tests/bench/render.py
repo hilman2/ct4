@@ -157,6 +157,26 @@ def json_case(source, stream=False):
     return run
 
 
+def strict_case(source):
+    """Returns a renderer for the same template under #mode strict, or None.
+
+    The generator alone compiles it; ct3 would autocall. Only the
+    plain-object table is worth measuring this way, because its rows
+    are the loop variable, and that is the lookup strict mode turns
+    into Python attribute access.
+    """
+    try:
+        from ct4.lang import codegen
+    except ImportError:
+        return None
+    klass = codegen.generate("#mode strict\n" + source).compile()
+
+    def render():
+        return str(klass(searchList=CONTEXT).respond())
+
+    return render
+
+
 def by_hand():
     return json.dumps(
         {"station": "Zuhause",
@@ -170,6 +190,7 @@ def cases():
         ("text: plain objects", text_case(TABLE)),
         ("text: helper objects", text_case(HELPERS)),
         ("text: JSON by hand", text_case(JSON_BY_HAND)),
+        ("strict: plain objects", strict_case(TABLE)),
         ("compile: plain objects", compile_case(TABLE), 20),
         ("json mode: #series", json_case(JSON_MODE_SERIES)),
         ("json mode: #for", json_case(JSON_MODE_LOOP)),

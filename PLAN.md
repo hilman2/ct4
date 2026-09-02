@@ -1752,6 +1752,29 @@ Der Umbau lohnt erst, wenn er beiden Modi dient.
 **Fertig, wenn:** Legacy-Korpus weiter 100 Prozent, Migrationswerkzeug
 verlustfrei über den Korpus, Benchmark-Ziele erreicht.
 
+Stand 02-Sep-2026: der `strict`-Modus steht, als `#mode strict` auf der
+ersten Zeile, kombinierbar mit `markup`. Zwei Regeln, beide in Abschnitt 12
+gemessen: kein Autocalling, und ein Name, den die Vorlage selbst bindet, ein
+`#for`-Ziel, ein `#set`, ein `#def`-Parameter, ist ein Python-Name samt
+Attributzugriff dahinter. Ein Name aus der SearchList wird dort einmal
+gefunden, ohne Autocalling, und was daran hängt, liest der NameMapper mit
+abgeschaltetem Autocalling, Schlüssel oder Attribut, damit `$Extras.key` aus
+einer weewx-Skin weiter geht. Gemessen an der Tabelle aus `tests/bench/render.py`:
+
+| | je Render |
+|---|---|
+| text, plain objects | 0,452 ms |
+| strict, plain objects | 0,198 ms |
+
+Nur der Generator übersetzt eine `strict`-Vorlage; ct3 würde autocallen und
+die Deklarationszeile drucken, darum ist eine Verweigerung dort ein Fehler
+(`StrictRefused`) und kein Rückfall. Der Legacy-Korpus bleibt unberührt: die
+Baseline des Textmodus ändert kein Byte.
+
+Was von P5 offen ist: `ct4 migrate`, `async`-Rendering, die Sandbox und die
+t-strings. `migrate` kommt als Nächstes und braucht eine Aufzeichnung, weil
+nur ein Lauf zeigt, wo Cheetah stillschweigend aufgerufen hat.
+
 ### P6 — Freigabe 4.0
 
 Dokumentation, Migrationsleitfaden, CHEPs für die Sprachänderungen, falls

@@ -114,7 +114,7 @@ from dataclasses import dataclass, field
 from tokenize import PseudoToken
 from typing import Any, Sequence
 
-from ct4 import directives
+from ct4 import directives, modes
 from ct4.lang import lex, tree
 from ct4.markup import mode as markup_mode
 from ct4.markup import scan as markup_scan
@@ -449,6 +449,21 @@ def _scopes() -> list[tuple[str, ...]]:
         stack = []
         _ACTIVE.scopes = stack
     return stack
+
+
+def _bound() -> set[str]:
+    """The names the method being generated has bound with a #set.
+
+    Read by strict mode alone. Text mode leaves a #set target to
+    VFFSL, which finds the local in the frame when it is bound and
+    falls through to the search list when it is not yet; a plain name
+    there would raise where ct3 renders.
+    """
+    found = getattr(_ACTIVE, "bound", None)
+    if found is None:
+        found = set()
+        _ACTIVE.bound = found
+    return found
 
 
 def _knows_local(name: str) -> bool:
@@ -1340,6 +1355,10 @@ def generate(source: str, settings: Any = None,
     """
     _refuse_settings(settings)
     markup = markup_mode.declared(source)
+    strict = modes.strict(source)
+    unknown = modes.declared(source) - modes.KNOWN
+    if unknown:
+        raise Unsupported("no such mode: %s" % ", ".join(sorted(unknown)))
     if mode not in (TEXT_MODE, MARKUP_MODE):
         raise Unsupported("no such mode: %r" % mode[:40])
     if mode == MARKUP_MODE and not markup:
@@ -1357,7 +1376,7 @@ def generate(source: str, settings: Any = None,
     used = _registered_use(root, registered)
     try:
         return _generate(root, source, markup, shift, registered,
-                         class_name, base_class, main_method, file)
+                         class_name, base_class, main_method, file, strict)
     except Unsupported as error:
         if used:
             # ct3 does not know the directive, so it cannot stand in
@@ -1385,7 +1404,7 @@ def _registered_use(root: tree.Node,
 def _generate(root: tree.Node, source: str, markup: bool, shift: int,
               registered: directives.Registration, class_name: str,
               base_class: str | None, main_method: str | None,
-              file: str) -> Generated:
+              file: str, strict: bool = False) -> Generated:
     """The module for a parsed template; ``generate`` is the caller."""
     _refuse_raw_in_short_form(source, root)
     shape = _class_shape(root, base_class, main_method)
@@ -1395,6 +1414,11 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
         # Before the placeholders are generated, because what each one
         # becomes is decided from the scan.
         hoisted[:0] = ast.parse(MARKUP_IMPORT).body
+    if strict:
+        # Every lookup out of the search list goes through it, and the
+        # preamble guard only looks for names the template's own code
+        # mentions.
+        hoisted[:0] = ast.parse(PREAMBLE_IMPORTS["VFSL"]).body
     # Scanned before anything is put on the thread, so that a refused
     # file leaves no state of this call standing behind it.
     state = MarkupState(_scanned(root, shift), file, shift) if markup else None
@@ -1404,9 +1428,13 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
     previous = _catcher()
     previous_markup = _markup()
     previous_plugins = _plugins()
+    previous_strict = _strict()
+    previous_bound = _bound()
     _ACTIVE.catcher = Catcher(methods)
     _ACTIVE.markup = state
     _ACTIVE.plugins = registered
+    _ACTIVE.strict = strict
+    _ACTIVE.bound = set()
     _ACTIVE.scopes = []
     # What "#super" names: the class being generated and the method
     # the directive stands in, which is the main one until a #def
@@ -1419,6 +1447,8 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
         _ACTIVE.catcher = previous
         _ACTIVE.markup = previous_markup
         _ACTIVE.plugins = previous_plugins
+        _ACTIVE.strict = previous_strict
+        _ACTIVE.bound = previous_bound
         _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
     # Before the class, the way ct3 puts them at module level. An
@@ -1774,7 +1804,7 @@ def _preprocess(source: str) -> str:
     """
     from Cheetah.Parser import encodingDirectiveRE, unicodeDirectiveRE
 
-    source = markup_mode.strip(source)
+    source = modes.strip(source)
     if unicodeDirectiveRE.search(source):
         if encodingDirectiveRE.search(source):
             raise Unsupported("#encoding and #unicode together")
@@ -3492,6 +3522,28 @@ DEFINITION = re.compile(
 PARAM_DOLLAR = re.compile(r"\$(?=[*A-Za-z_])")
 
 
+def _parameter_names(arguments: str) -> set[str]:
+    """The names a definition's parameter list binds in its method.
+
+    Read with Python's parser, the way loop targets are. What does not
+    parse binds nothing here and fails later where it fails in ct3.
+    """
+    try:
+        made = ast.parse("def _(self, %s):\n    pass\n" % arguments)
+    except SyntaxError:
+        return set()
+    head = made.body[0]
+    assert isinstance(head, ast.FunctionDef)
+    signature = head.args
+    found = {item.arg for item in signature.args + signature.kwonlyargs
+             + signature.posonlyargs}
+    for extra in (signature.vararg, signature.kwarg):
+        if extra is not None:
+            found.add(extra.arg)
+    found.discard("self")
+    return found
+
+
 def _parameters(text: str | None) -> str:
     """A definition's parameter list as Python, ready for the frame.
 
@@ -3672,6 +3724,8 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
     # reach into it.
     outer = _scopes()
     _ACTIVE.scopes = []
+    outer_bound = _bound()
+    _ACTIVE.bound = _parameter_names(params)
     inside = getattr(_ACTIVE, "definition", False)
     _ACTIVE.definition = True
     enclosing = getattr(_ACTIVE, "method", MAIN)
@@ -3694,6 +3748,7 @@ def _definition(node: tree.Node, source: str, hoisted: list[ast.stmt],
         if catcher is not None:
             catcher.name = was
         _ACTIVE.scopes = outer
+        _ACTIVE.bound = outer_bound
         _ACTIVE.definition = inside
         _ACTIVE.method = enclosing
     made = _method(name, params, body or [ast.Pass()])
@@ -4709,6 +4764,12 @@ def _set_statement(node: tree.Node, allow_global: bool = True) -> ast.stmt:
     made = _framed_statement(_assignment(text))
     if not isinstance(made, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
         raise Unsupported("#set that is not an assignment")
+    targets = made.targets if isinstance(made, ast.Assign) else [made.target]
+    for target in targets:
+        for piece in ast.walk(target):
+            if isinstance(piece, ast.Name) \
+                    and isinstance(piece.ctx, ast.Store):
+                _bound().add(piece.id)
     return made
 
 
@@ -5285,6 +5346,8 @@ def _expression(chunks: list[Chunk]) -> str:
     is no reason to assemble it node by node.
     """
     first = chunks[0]
+    if _strict():
+        return _strict_expression(chunks)
     if _knows_local(first.name):
         # The compiler's own rewrite: hand NameMapper a namespace of
         # one instead of the whole search list.
@@ -5299,6 +5362,37 @@ def _expression(chunks: list[Chunk]) -> str:
         text = 'VFN(%s,"%s",%r)%s' % (text, chunk.name, chunk.autocall,
                                       chunk.remainder)
     return text
+
+
+def _strict_expression(chunks: list[Chunk]) -> str:
+    """The Python a chain becomes under ``#mode strict``.
+
+    Two rules, both measured in the plan's section 12. A name the
+    template bound itself, a #for target or a #set, is a Python name
+    and its chain is Python attribute access: ``r.name`` where text
+    mode writes VFN({"r":r},"r.name",True), twenty times faster. A
+    name out of the search list is found there once, without
+    autocalling, and what hangs off it is looked up the way ct3 looks
+    up a chain with autocalling switched off: dict key or attribute,
+    which is what a weewx skin's ``$Extras.key`` needs. Nothing is
+    called that the author did not call.
+    """
+    first = chunks[0]
+    base = first.name.split(".")[0]
+    if base in _bound() or any(base in scope for scope in _scopes()):
+        text = first.name + first.remainder
+        for chunk in chunks[1:]:
+            text = "%s.%s%s" % (text, chunk.name, chunk.remainder)
+        return text
+    text = 'VFSL(%s,"%s",False)%s' % (SEARCH_LIST, first.name,
+                                      first.remainder)
+    for chunk in chunks[1:]:
+        text = 'VFN(%s,"%s",False)%s' % (text, chunk.name, chunk.remainder)
+    return text
+
+
+def _strict() -> bool:
+    return bool(getattr(_ACTIVE, "strict", False))
 
 
 def _plain_expression(chunks: list[Chunk]) -> str:

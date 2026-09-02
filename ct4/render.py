@@ -97,7 +97,7 @@ def render_source(source: str, search_list: Sequence[Any], *,
         Whatever the template raises. An error at render time carries
         the template's line as a note, see ``ct4.trace``.
     """
-    from ct4 import directives
+    from ct4 import directives, modes
 
     mode = mode or mode_of(source)
     if mode == JSON:
@@ -105,9 +105,11 @@ def render_source(source: str, search_list: Sequence[Any], *,
 
         base_dir = path.parent if path is not None else None
         return jsonmode.render(source, search_list, base_dir=base_dir)
-    # Markup needs the generator, and so does a template whose project
-    # registered directives of its own: ct3 would read those as text.
-    if mode == MARKUP or directives.find_for(path).names:
+    # Markup and strict need the generator, and so does a template
+    # whose project registered directives of its own: ct3 would read
+    # those as text, and render a strict template with autocalling.
+    if mode == MARKUP or modes.strict(source) \
+            or directives.find_for(path).names:
         return _render_generated(source, search_list, settings or {},
                                  path, output_filter)
     return _render_text(source, search_list, settings or {}, output_filter)

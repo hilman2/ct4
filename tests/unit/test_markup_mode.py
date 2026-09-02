@@ -32,8 +32,12 @@ def test_the_declaration_is_the_whole_line_and_nothing_near_it():
     # One spelling. Two blanks is a template that renders the line.
     assert not declared("#mode  markup\n<p>$x</p>\n")
     assert not declared("#modemarkup\n")
-    assert not declared("#mode markup extra\n")
     assert not declared("#mode json\n{}\n")
+    # More than one word is a declaration too: strict combines with
+    # markup, and a word nobody knows is refused by the generator with
+    # its name rather than read as text.
+    assert declared("#mode markup strict\n")
+    assert declared("#mode markup extra\n")
 
 
 def test_the_declaration_stands_on_the_first_line_only():

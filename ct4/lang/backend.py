@@ -17,10 +17,11 @@ notices nothing. That is the whole design: the generator says what it
 can do, and what it cannot costs a fallback and not a failure. Which is
 why ``Unsupported`` has been kept an honest signal all along.
 
-With one exception, and it is the only one: a template that declares
-markup mode is never handed to ct3. ct3 has no such mode, so the
-fallback would print the declaration line into the page and escape
-nothing. There the refusal comes out as :class:`MarkupRefused`.
+With one exception: a template that declares markup or strict mode is
+never handed to ct3. ct3 has no such modes, so the fallback would
+print the declaration line into the page, and escape nothing or
+autocall. There the refusal comes out as :class:`MarkupRefused` or
+:class:`StrictRefused`.
 
     from ct4.lang import backend
 
@@ -38,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ct4 import check
+from ct4 import check, modes
 from ct4.jsonmode import bridge
 from ct4.lang import codegen, tree
 from ct4.markup import mode as markup_mode
@@ -54,6 +55,15 @@ class MarkupRefused(Exception):
     line of the page and escape nothing: the wrong page and the missing
     escape at once, which is worse than either. So the refusal travels
     out to the caller with its reason instead.
+    """
+
+
+class StrictRefused(MarkupRefused):
+    """A strict-mode template the generator will not compile.
+
+    The same reasoning as for markup, with a quieter failure behind
+    it: ct3 would render the template with autocalling and print the
+    declaration line, and the page would look plausible.
     """
 
 
@@ -133,6 +143,8 @@ def generating_compiler(counts: Counts) -> type:
                 except (codegen.Unsupported, tree.StructureError) as refused:
                     if markup_mode.declared(text):
                         raise MarkupRefused(str(refused)) from refused
+                    if modes.strict(text):
+                        raise StrictRefused(str(refused)) from refused
                     counts.fell_back += 1
                 else:
                     self._ct4_code = made.code

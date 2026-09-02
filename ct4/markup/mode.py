@@ -33,6 +33,8 @@ at a point where there is no parser object to tell.
 
 from __future__ import annotations
 
+from ct4 import modes
+
 MODE_LINE = "#mode markup"
 
 
@@ -43,8 +45,7 @@ def _is_skippable(line: str) -> bool:
     comment, which is what a licence header at the top of a skin is
     made of.
     """
-    stripped = line.strip()
-    return not stripped or stripped.startswith("##")
+    return modes.is_skippable(line)
 
 
 def declared(source: str) -> bool:
@@ -64,11 +65,7 @@ def declared(source: str) -> bool:
     Returns:
         bool: True where the template declares markup mode.
     """
-    for line in source.splitlines():
-        if _is_skippable(line):
-            continue
-        return line.strip() == MODE_LINE
-    return False
+    return modes.MARKUP in modes.declared(source)
 
 
 def strip(source: str) -> str:
@@ -93,12 +90,4 @@ def strip(source: str) -> str:
             it was. A source that does not declare markup mode comes
             back unchanged.
     """
-    lines = source.splitlines(keepends=True)
-    for index, line in enumerate(lines):
-        if _is_skippable(line):
-            continue
-        if line.strip() != MODE_LINE:
-            return source
-        del lines[index]
-        return "".join(lines)
-    return source
+    return modes.strip(source)
