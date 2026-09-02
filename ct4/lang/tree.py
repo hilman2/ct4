@@ -76,7 +76,8 @@ def closing_names() -> frozenset[str]:
     return frozenset(endDirectiveNamesAndHandlers) | SELF_CLOSING
 
 
-def syntax(line: Iterable[str] = (), block: Iterable[str] = ()) -> lex.Syntax:
+def syntax(line: Iterable[str] = (), block: Iterable[str] = (),
+           tokens: lex.Tokens = lex.DEFAULT_TOKENS) -> lex.Syntax:
     """ct3's names, and a project's own on top of them.
 
     Args:
@@ -85,13 +86,16 @@ def syntax(line: Iterable[str] = (), block: Iterable[str] = ()) -> lex.Syntax:
             ``#end name``. They close the way ct3 closes a macro
             directive, the tag stopping right after the name, and ct3
             insists on the ``#end``.
+        tokens (lex.Tokens): The characters the syntax is spelt with;
+            ct3's unless the template's settings say otherwise.
     """
     lines = frozenset(line)
     blocks = frozenset(block)
     return lex.Syntax(directives=lex.directive_names() | lines | blocks,
                       self_closing=lex.SELF_CLOSING | blocks,
                       closing=closing_names() | blocks,
-                      must_close=must_close() | blocks)
+                      must_close=must_close() | blocks,
+                      tokens=tokens)
 
 
 # Directives that continue a block someone else opened. They neither
@@ -313,7 +317,8 @@ class _Builder:
             return True
         for later in range(index, len(self.tokens)):
             token = self.tokens[later]
-            if token.kind == lex.DIRECTIVE and token.text == "#end":
+            if token.kind == lex.DIRECTIVE \
+                    and token.text == self.syntax.tokens.directive + "end":
                 following = self.tokens[later + 1:later + 2]
                 if following and following[0].text.split()[:1] == [node.name]:
                     return True
@@ -545,7 +550,7 @@ class _Builder:
         if at < 0:
             return False
         rest = line[at + 1:].strip()
-        return bool(rest) and not rest.startswith("##")
+        return bool(rest) and not rest.startswith(self.syntax.tokens.comment)
 
     def _close(self, stack: list[Node], index: int) -> int:
         """Handles an ``#end`` and pops the block it closes."""
@@ -553,7 +558,8 @@ class _Builder:
         node = Node(lex.DIRECTIVE, [token], name="end")
         index = self._take_arguments(
             node, index + 1, lex.self_closing_end(self.source, token.end,
-                                                  self.syntax.self_closing))
+                                                  self.syntax.self_closing,
+                                                  self.syntax.tokens))
         closes = _end_target(node)
         if len(stack) == 1:
             raise StructureError(

@@ -53,6 +53,29 @@ class Honoured:
     name_mapper: bool = True
     tokens: dict[str, str] = field(default_factory=dict)
 
+    def lexer_tokens(self) -> Any:
+        """The token settings as the lexer takes them."""
+        from ct4.lang import lex
+
+        if not self.tokens:
+            return lex.DEFAULT_TOKENS
+        fields = {FIELDS[name]: value for name, value in self.tokens.items()}
+        return lex.Tokens(**fields)
+
+
+# Setting name to the field of lex.Tokens it fills.
+FIELDS = {
+    "cheetahVarStartToken": "var",
+    "directiveStartToken": "directive",
+    "directiveEndToken": "directive_end",
+    "commentStartToken": "comment",
+    "multiLineCommentStartToken": "block_comment",
+    "multiLineCommentEndToken": "block_comment_end",
+    "PSPStartToken": "psp",
+    "PSPEndToken": "psp_end",
+    "EOLSlurpToken": "slurp",
+}
+
 
 DEFAULT = Honoured()
 
@@ -99,14 +122,26 @@ def honour(settings: Any) -> Honoured:
     return Honoured(autocalling, name_mapper, tokens)
 
 
-def head(source: str) -> tuple[str, dict[str, Any]]:
-    """A template's own settings, taken off the head of the file.
+@dataclass(frozen=True)
+class Head:
+    """A template's own settings and where they stood."""
 
-    Returns:
-        tuple[str, dict[str, Any]]: The source with the settings lines
-            turned into comments, and the settings. The source comes
-            back unchanged, with an empty dict, where the head holds
-            none.
+    first: int
+    past: int
+    settings: dict[str, Any]
+
+
+NO_HEAD = Head(0, 0, {})
+
+
+def head(source: str) -> Head:
+    """A template's own settings, read off the head of the file.
+
+    The head is what stands before the first line of output: blank
+    lines, comments, and lines of plain text that hold no token at
+    all, which is how a bash completion opens with a shell comment and
+    sets its var token below it. Where the head holds no settings, the
+    result names no lines.
 
     Raises:
         NotHonoured: for ``reset`` and for a value that is not a
@@ -114,21 +149,64 @@ def head(source: str) -> tuple[str, dict[str, Any]]:
     """
     lines = source.splitlines(keepends=True)
     first = 0
-    while first < len(lines) and modes.is_skippable(lines[first]):
+    while first < len(lines) and (modes.is_skippable(lines[first])
+                                  or _plain(lines[first])):
         first += 1
     if first >= len(lines):
-        return source, {}
+        return NO_HEAD
     text = lines[first].rstrip("\r\n")
     block = BLOCK_START.match(text)
     if block is not None:
         return _block(lines, first, block.group(1))
     if LINE.match(text):
         return _lines(lines, first)
-    return source, {}
+    return NO_HEAD
 
 
-def _block(lines: list[str], first: int,
-           keyword: str | None) -> tuple[str, dict[str, Any]]:
+def commented(source: str, found: Head, comment: str = "##") -> str:
+    """The source with the settings lines turned into comments.
+
+    With the comment token the settings chose, because the lines are
+    read again under those tokens; endings kept, so that every line
+    keeps its number.
+    """
+    if found.past <= found.first:
+        return source
+    lines = source.splitlines(keepends=True)
+    for index in range(found.first, found.past):
+        line = lines[index]
+        ending = line[len(line.rstrip("\r\n")):]
+        lines[index] = comment + ending
+    return "".join(lines)
+
+
+def prefix_holds_no_token(source: str, found: Head, tokens: Any) -> bool:
+    """Whether the lines before the settings are text under the new tokens.
+
+    They were text under ct3's tokens, or the head would have ended
+    there. Under the tokens the settings chose they have to be text
+    as well, or a line the lexer read as output would be read again
+    as something else.
+    """
+    from ct4.lang import lex
+
+    lines = source.splitlines(keepends=True)
+    prefix = "".join(lines[:found.first])
+    if not prefix.strip():
+        return True
+    syntax = lex.Syntax(lex.directive_names(), tokens=tokens)
+    return all(token.kind in (lex.TEXT, lex.COMMENT)
+               for token in lex.tokens(prefix, syntax))
+
+
+def _plain(line: str) -> bool:
+    """A line of text with none of ct3's tokens in it."""
+    from ct4.lang import lex
+
+    return all(token.kind == lex.TEXT for token in lex.tokens(line))
+
+
+def _block(lines: list[str], first: int, keyword: str | None) -> Head:
     if keyword is not None:
         raise NotHonoured("#compiler-settings %s" % keyword)
     last = first + 1
@@ -138,10 +216,10 @@ def _block(lines: list[str], first: int,
     if last >= len(lines):
         raise NotHonoured("#compiler-settings without its #end")
     body = "".join(lines[first + 1:last])
-    return _commented(lines, first, last + 1), _read_block(body)
+    return Head(first, last + 1, _read_block(body))
 
 
-def _lines(lines: list[str], first: int) -> tuple[str, dict[str, Any]]:
+def _lines(lines: list[str], first: int) -> Head:
     found: dict[str, Any] = {}
     last = first
     while last < len(lines):
@@ -157,17 +235,7 @@ def _lines(lines: list[str], first: int) -> tuple[str, dict[str, Any]]:
             raise NotHonoured("#compiler %s = %s is not a literal"
                               % (name, value)) from None
         last += 1
-    return _commented(lines, first, last), found
-
-
-def _commented(lines: list[str], first: int, past: int) -> str:
-    """The lines from ``first`` to ``past`` as comments, endings kept."""
-    made = list(lines)
-    for index in range(first, past):
-        line = made[index]
-        ending = line[len(line.rstrip("\r\n")):]
-        made[index] = "##" + ending
-    return "".join(made)
+    return Head(first, last, found)
 
 
 def _read_block(body: str) -> dict[str, Any]:

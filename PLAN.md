@@ -1416,7 +1416,7 @@ Wenn eine Aufgabe fällt, wird die Meldung besser, nicht die Aufgabe leichter.
 in die Vorlage.
 
 Stand 02-Sep-2026: **das Abnahmekriterium ist erfüllt, ein Punkt der Liste
-nicht.** Der Kern nimmt 3.498 von 3.533 Vorlagen, 99,0 Prozent, und was er
+nicht.** Der Kern nimmt 3.509 von 3.533 Vorlagen, 99,3 Prozent, und was er
 nimmt, rendert byte-identisch mit ct3. Der Korpus dahinter ist inzwischen
 breiter als die Testsuite und die weewx-Skins: dazu kommen 175 fremde
 weewx-Skins mit 974 Vorlagen und 1.567 Vorlagen aus 585 Repositories, die
@@ -1451,11 +1451,15 @@ die ist heute genau für weewx da.
 Offen bleibt tree-sitter. Eine Grammatik dafür ist ein eigenes Repo in einer
 anderen Sprache und gehört nicht in dieses.
 
-Was der Kern ablehnt, in Zahlen: 27 Vorlagen mit `#compiler` oder
-`#compiler-settings`, davon 21 Testfälle aus ct3s Suite, die mitten in der
-Datei die Token umschalten, und 6 echte, die alle am Dateianfang stehen (4
-setzen nur eine Einstellung, 2 tauschen `$` und `#` für LaTeX und Bash). Dazu
-9, die mit Absicht abgelehnt werden oder in ct3 ebenso scheitern.
+Was der Kern ablehnt, in Zahlen: 15 Testfälle aus ct3s Suite, die mitten in
+der Datei die Token umschalten oder mit `reset` zurückstellen, und 9, die mit
+Absicht abgelehnt werden oder in ct3 ebenso scheitern. Einstellungen am
+Dateianfang werden seit dem Abend des 02-Sep-2026 gelesen, ein Tokenwechsel
+dort auch: Lexer, Baum und Generator lesen die neun Token aus einem
+`Tokens`-Objekt im `Syntax`, mit ct3s Werten als Vorgabe, und die LaTeX- und
+die Bash-Vorlage mit `;`, `!` und `~` rendern byte-identisch. Nur `#raw`
+bleibt bei geänderten Token verweigert, weil sein Scanner ct3s Zeichenlauf mit
+dem Hash nachbaut, und keine der zwei Vorlagen braucht es.
 
 Der Absatz darunter ist der Stand vom 01-Sep-2026 und bleibt stehen, weil die
 Lehre daraus weiter gilt.

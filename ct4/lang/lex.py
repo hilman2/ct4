@@ -64,43 +64,91 @@ EOL_SLURP = "eol_slurp"
 # from the first directive on.
 EOL = re.compile(r"\r\n|\r|\n")
 
-# ct3's EOLSlurpRE: the token, optional blanks, then a line ending.
-SLURP = re.compile(r"#[ \t\f]*(?:\r\n|\r|\n)")
+@dataclass(frozen=True)
+class Tokens:
+    """The characters a template's syntax is spelt with.
 
-# A placeholder start, as Parser._makeCheetahVarREs builds it: the
-# dollar, an optional silence token, an optional cache token, an
-# optional enclosure, and then a name must follow.
-START = re.compile(
-    r"(?<!\\)\$"
-    r"(?P<silent>!?)"
-    r"(?P<cache>\*(?:[0-9.]+[smhdw]?\*)?|)"
-    r"(?P<enclosure>[{(\[][ \t\f]*|)"
-    r"(?=[A-Za-z_])")
+    ct3's compiler settings let a template change every one of them,
+    and two real templates do: a LaTeX resume writes ``;name`` and
+    ``!if`` because ``$`` and ``#`` belong to LaTeX, and a bash
+    completion writes ``~name`` because ``$`` belongs to bash. The
+    defaults are ct3's, field for field the settings of the same name.
+    """
 
-# ct3's second placeholder start, expressionPlaceholderStartRE: no
-# silence token, an optional cache token, one of the three enclosures,
-# blanks, and then anything that is not a closer. What the enclosure
-# holds is an expression instead of a name, which is the only
-# difference from START. "$(6)" and "$('#id')" are placeholders; the
-# second is why a jQuery call in a page comes out as "#id".
-#
-# ct3 tries this one only where it is scanning text. Inside an
-# expression it looks for a bare name and nothing else, so "#if $(6)"
-# leaves the dollar as a character. This lexer has no way to know which
-# it is in, because a directive's arguments stay in the stream as
-# ordinary tokens. So it lexes both alike and the layer that does know
-# turns the second away.
-EXPRESSION_START = re.compile(
-    r"(?<!\\)\$"
-    r"(?P<silent>)"
-    r"(?P<cache>\*(?:[0-9.]+[smhdw]?\*)?|)"
-    r"(?P<enclosure>[{(\[][ \t\f]*)"
-    r"(?=[^)}\]])")
+    var: str = "$"                  # cheetahVarStartToken
+    directive: str = "#"            # directiveStartToken
+    directive_end: str = "#"        # directiveEndToken
+    comment: str = "##"             # commentStartToken
+    block_comment: str = "#*"       # multiLineCommentStartToken
+    block_comment_end: str = "*#"   # multiLineCommentEndToken
+    psp: str = "<%"                 # PSPStartToken
+    psp_end: str = "%>"             # PSPEndToken
+    slurp: str = "#"                # EOLSlurpToken
+
+    def starts_here(self, source: str, index: int) -> bool:
+        """Whether any hash-like token starts at this position."""
+        return source.startswith((self.directive, self.directive_end,
+                                  self.comment, self.block_comment,
+                                  self.slurp), index)
+
+
+DEFAULT_TOKENS = Tokens()
+
+
+@functools.lru_cache(maxsize=None)
+def slurp_pattern(slurp: str) -> re.Pattern[str]:
+    """ct3's EOLSlurpRE: the token, optional blanks, then a line ending."""
+    return re.compile(re.escape(slurp) + r"[ \t\f]*(?:\r\n|\r|\n)")
+
+
+SLURP = slurp_pattern(DEFAULT_TOKENS.slurp)
+
+
+@functools.lru_cache(maxsize=None)
+def start_patterns(var: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    """The two placeholder starts, for a var token.
+
+    The first is Parser._makeCheetahVarREs' cheetahVarStartRE: the
+    token, an optional silence token, an optional cache token, an
+    optional enclosure, and then a name must follow.
+
+    The second is expressionPlaceholderStartRE: no silence token, an
+    optional cache token, one of the three enclosures, blanks, and
+    then anything that is not a closer. What the enclosure holds is an
+    expression instead of a name, which is the only difference. "$(6)"
+    and "$('#id')" are placeholders; the second is why a jQuery call
+    in a page comes out as "#id".
+
+    ct3 tries the second only where it is scanning text. Inside an
+    expression it looks for a bare name and nothing else, so "#if $(6)"
+    leaves the dollar as a character. This lexer has no way to know
+    which it is in, because a directive's arguments stay in the stream
+    as ordinary tokens. So it lexes both alike and the layer that does
+    know turns the second away.
+    """
+    token = re.escape(var)
+    start = re.compile(
+        r"(?<!\\)" + token +
+        r"(?P<silent>!?)"
+        r"(?P<cache>\*(?:[0-9.]+[smhdw]?\*)?|)"
+        r"(?P<enclosure>[{(\[][ \t\f]*|)"
+        r"(?=[A-Za-z_])")
+    expression = re.compile(
+        r"(?<!\\)" + token +
+        r"(?P<silent>)"
+        r"(?P<cache>\*(?:[0-9.]+[smhdw]?\*)?|)"
+        r"(?P<enclosure>[{(\[][ \t\f]*)"
+        r"(?=[^)}\]])")
+    return start, expression
+
+
+START, EXPRESSION_START = start_patterns(DEFAULT_TOKENS.var)
 
 CLOSING = {"{": "}", "(": ")", "[": "]"}
 
 
-def start_of(text: str) -> re.Match[str] | None:
+def start_of(text: str,
+             tokens: Tokens = DEFAULT_TOKENS) -> re.Match[str] | None:
     """The placeholder start at the beginning of text, either form.
 
     Called as ``start_of(token.text)``. The groups are the same in both
@@ -109,7 +157,8 @@ def start_of(text: str) -> re.Match[str] | None:
     and the only one that does is the layer that turns the expression
     form away inside a directive argument.
     """
-    return START.match(text) or EXPRESSION_START.match(text)
+    start, expression = start_patterns(tokens.var)
+    return start.match(text) or expression.match(text)
 
 
 # Blocks closed by _eatToThisEndDirective rather than by
@@ -120,7 +169,8 @@ SELF_CLOSING = frozenset({"raw", "compiler-settings", "defmacro", "i18n"})
 
 
 def self_closing_end(source: str, after_end: int,
-                     names: frozenset[str] = SELF_CLOSING) -> int | None:
+                     names: frozenset[str] = SELF_CLOSING,
+                     tokens: Tokens = DEFAULT_TOKENS) -> int | None:
     """Where an ``#end raw`` stops, or None for every other end.
 
     Called with the offset just past the ``#end`` token itself.
@@ -152,10 +202,12 @@ def self_closing_end(source: str, after_end: int,
         return None
     while at < len(source) and source[at] in " \t\f":
         at += 1
-    return _rest_of_tag(source, at, after_end - len("#end"))
+    return _rest_of_tag(source, at, after_end - len(tokens.directive + "end"),
+                        tokens)
 
 
-def identifier_end(source: str, after_name: int) -> int:
+def identifier_end(source: str, after_name: int,
+                   tokens: Tokens = DEFAULT_TOKENS) -> int:
     """Where a directive that takes one identifier stops.
 
     ``#errorCatcher`` is the one: eatErrorCatcher calls getIdentifier
@@ -174,10 +226,13 @@ def identifier_end(source: str, after_name: int) -> int:
         at += 1
     while at < len(source) and source[at] in IDENT:
         at += 1
-    return _rest_of_tag(source, at, after_name - len("#errorCatcher"))
+    return _rest_of_tag(source, at,
+                        after_name - len(tokens.directive + "errorCatcher"),
+                        tokens)
 
 
-def arg_end(source: str, after_name: int) -> int:
+def arg_end(source: str, after_name: int,
+            tokens: Tokens = DEFAULT_TOKENS) -> int:
     """Where an ``#arg`` stops.
 
     eatCallArg reads one identifier and then either takes a colon and
@@ -198,10 +253,12 @@ def arg_end(source: str, after_name: int) -> int:
         at += 1
     if source[at:at + 1] == ":":
         return at + 1
-    return _rest_of_tag(source, at, after_name - len("#arg"))
+    return _rest_of_tag(source, at, after_name - len(tokens.directive + "arg"),
+                        tokens)
 
 
-def _rest_of_tag(source: str, at: int, tag_start: int) -> int:
+def _rest_of_tag(source: str, at: int, tag_start: int,
+                 tokens: Tokens = DEFAULT_TOKENS) -> int:
     """What a directive tag takes after its argument has been read.
 
     ct3's _eatRestOfDirectiveTag: a directive end token where one
@@ -209,8 +266,8 @@ def _rest_of_tag(source: str, at: int, tag_start: int) -> int:
     line. Where neither, the tag stops and the rest of the line is
     output.
     """
-    if source[at:at + 1] == "#":
-        return at + 1
+    if source.startswith(tokens.directive_end, at):
+        return at + len(tokens.directive_end)
     starts = line_starts(source)
     line = bisect.bisect_right(starts, tag_start)
     if not source[starts[line - 1]:tag_start].strip():
@@ -278,6 +335,7 @@ class Syntax:
     self_closing: frozenset[str] = SELF_CLOSING
     closing: frozenset[str] = frozenset()
     must_close: frozenset[str] = frozenset()
+    tokens: Tokens = DEFAULT_TOKENS
 
 
 def default_syntax() -> Syntax:
@@ -393,6 +451,9 @@ class _Lexer:
         self.source = source
         self.syntax = syntax or default_syntax()
         self.names = self.syntax.directives
+        self.tokens = self.syntax.tokens
+        self.start, self.expression_start = start_patterns(self.tokens.var)
+        self.slurp = slurp_pattern(self.tokens.slurp)
         self.line_starts = [0]
         for match in EOL.finditer(source):
             self.line_starts.append(match.end())
@@ -430,11 +491,11 @@ class _Lexer:
         while index < len(source):
             char = source[index]
 
-            if char == "\\" and index + 1 < len(source) \
-                    and source[index + 1] in "$#":
+            escaped = self.escaped_token(index) if char == "\\" else 0
+            if escaped:
                 flush(index)
-                found.append(self.make(ESCAPE, index, index + 2))
-                index = text_from = index + 2
+                found.append(self.make(ESCAPE, index, index + 1 + escaped))
+                index = text_from = index + 1 + escaped
                 continue
 
             # A backslash in front of it means it is no PSP at all:
@@ -442,9 +503,9 @@ class _Lexer:
             # escCharLookBehind. The backslash is not removed the way
             # the one in front of a "$" is, so "a\\<%= 1 %>b" comes out
             # as itself.
-            if char == "<" and source.startswith("<%", index) \
+            if source.startswith(self.tokens.psp, index) \
                     and not (index and source[index - 1] == "\\"):
-                end = _psp_end(source, index)
+                end = _psp_end(source, index, self.tokens)
                 flush(index)
                 found.append(self.make(PSP, index, end))
                 index = text_from = end
@@ -466,7 +527,7 @@ class _Lexer:
                     index = closed
                     continue
 
-            if char == "#":
+            if self.tokens.starts_here(source, index):
                 inside = index < directive_until
                 made = self.hash_at(index, inside)
                 if made is not None:
@@ -488,11 +549,12 @@ class _Lexer:
                         # the placeholder in it never becomes a token.
                         if name == "end":
                             reach = self_closing_end(
-                                source, end, self.syntax.self_closing)
+                                source, end, self.syntax.self_closing,
+                                self.tokens)
                         elif name == "errorCatcher":
-                            reach = identifier_end(source, end)
+                            reach = identifier_end(source, end, self.tokens)
                         elif name == "arg":
-                            reach = arg_end(source, end)
+                            reach = arg_end(source, end, self.tokens)
                         else:
                             reach = None
                         directive_until = (reach if reach is not None
@@ -501,7 +563,7 @@ class _Lexer:
                         directive_until = -1
                     continue
 
-            if char == "$":
+            if source.startswith(self.tokens.var, index):
                 token = self.placeholder_at(index)
                 if token is not None:
                     flush(index)
@@ -513,6 +575,18 @@ class _Lexer:
 
         flush(len(source))
         return found
+
+    def escaped_token(self, index: int) -> int:
+        """How long the token is that a backslash here escapes, or 0.
+
+        ct3 builds the placeholder and directive patterns with a
+        look-behind for the backslash, so a backslash in front of
+        either token keeps it as text and goes away itself.
+        """
+        for token in (self.tokens.var, self.tokens.directive):
+            if self.source.startswith(token, index + 1):
+                return len(token)
+        return 0
 
     def raw_end(self, index: int) -> int:
         """Where the contents of a raw block stop.
@@ -527,7 +601,7 @@ class _Lexer:
         if index < len(source) and source[index] == ":":
             match = EOL.search(source, index)
             return len(source) if match is None else match.start()
-        stop = source.find("#end raw", index)
+        stop = source.find(self.tokens.directive + "end raw", index)
         return len(source) if stop < 0 else stop
 
     def argument_end(self, index: int) -> int:
@@ -547,8 +621,8 @@ class _Lexer:
                 if closed is not None:
                     index = closed
                     continue
-            if char == "#":
-                return index + 1
+            if source.startswith(self.tokens.directive_end, index):
+                return index + len(self.tokens.directive_end)
             index += 1
         return line_end
 
@@ -560,38 +634,46 @@ class _Lexer:
         is in a CSS file and in a colour literal.
         """
         source = self.source
-        if source.startswith("##", index):
+        tokens = self.tokens
+        end_token = tokens.directive_end
+        pair = end_token + tokens.directive
+        if inside_directive and source.startswith(pair, index) \
+                and _directive_name(source, index + len(pair), self.names):
             # Inside a directive's arguments a double hash is two
             # different things, and what follows decides which. In
             # "#if 1##for i in [1]#" the first hash closes the if and
             # the second opens a for. In "#def name: ## comment" it is
             # a comment, because "# comment" begins no directive.
-            if inside_directive and _directive_name(source, index + 2,
-                                                    self.names):
-                return DIRECTIVE_END, index + 1, ""
+            return DIRECTIVE_END, index + len(end_token), ""
+        if source.startswith(tokens.comment, index):
             match = EOL.search(source, index)
             end = len(source) if match is None else match.end()
-            return COMMENT, end, "##"
-        if source.startswith("#*", index) and not inside_directive:
+            return COMMENT, end, tokens.comment
+        if source.startswith(tokens.block_comment, index) \
+                and not inside_directive:
             # Only outside a directive's arguments. Inside them the hash
             # is the directive end token whatever follows it, because
             # _eatRestOfDirectiveTag takes it before anything looks at
             # the star: "#if 1#*<b>x</b>#end if#" writes "*<b>x</b>",
             # and SickGear writes exactly that. Read as a comment, the
             # #end if vanished into it and the #if was never closed.
-            return BLOCK_COMMENT, _end_of_block_comment(source, index), "#*"
-        name = _directive_name(source, index + 1, self.names)
+            end = _end_of_block_comment(source, index, tokens)
+            return BLOCK_COMMENT, end, tokens.block_comment
+        name = None
+        if source.startswith(tokens.directive, index):
+            name = _directive_name(source, index + len(tokens.directive),
+                                   self.names)
         if name is None:
-            if inside_directive:
+            if inside_directive and source.startswith(end_token, index):
                 # The hash that closes the directive we are inside.
-                return DIRECTIVE_END, index + 1, ""
+                return DIRECTIVE_END, index + len(end_token), ""
             # Last of all, the way ct3 orders its matchers: a directive
             # always wins over the slurp token.
-            match = SLURP.match(source, index)
+            match = self.slurp.match(source, index)
             if match is not None:
                 return EOL_SLURP, match.end(), ""
             return None
-        return DIRECTIVE, index + 1 + len(name), name
+        return DIRECTIVE, index + len(tokens.directive) + len(name), name
 
     def placeholder_at(self, index: int) -> Token | None:
         """The placeholder starting here, with what nests inside it.
@@ -600,8 +682,8 @@ class _Lexer:
         which is what a price in a text and a jQuery call both are.
         """
         source = self.source
-        match = START.match(source, index) or EXPRESSION_START.match(source,
-                                                                    index)
+        match = self.start.match(source, index) \
+            or self.expression_start.match(source, index)
         if match is None:
             return None
         opener = match.group("enclosure")[:1]
@@ -632,7 +714,7 @@ class _Lexer:
         index = start
         text_from = start
         while index < end:
-            if self.source[index] == "$":
+            if self.source.startswith(self.tokens.var, index):
                 token = self.placeholder_at(index)
                 if token is not None and token.end <= end:
                     if index > text_from:
@@ -677,7 +759,8 @@ def _directive_name(source: str, index: int,
     return None
 
 
-def _psp_end(source: str, index: int) -> int:
+def _psp_end(source: str, index: int,
+             tokens: Tokens = DEFAULT_TOKENS) -> int:
     """Past the ``%>`` that closes the PSP starting at this position.
 
     The closing token carries the same escape look-behind as the
@@ -686,17 +769,18 @@ def _psp_end(source: str, index: int) -> int:
     PSP whose body ends at the second one. Runs to the end of the
     source where nothing closes it, and the layer above refuses that.
     """
-    at = index + 2
+    at = index + len(tokens.psp)
     while True:
-        found = source.find("%>", at)
+        found = source.find(tokens.psp_end, at)
         if found < 0:
             return len(source)
         if source[found - 1] != "\\":
-            return found + 2
+            return found + len(tokens.psp_end)
         at = found + 1
 
 
-def _end_of_block_comment(source: str, index: int) -> int:
+def _end_of_block_comment(source: str, index: int,
+                          tokens: Tokens = DEFAULT_TOKENS) -> int:
     """Past the ``*#`` that closes the ``#*`` at this position.
 
     They nest, which is why the levels are counted rather than the
@@ -705,14 +789,15 @@ def _end_of_block_comment(source: str, index: int) -> int:
     """
     level = 0
     length = len(source)
+    opener, closer = tokens.block_comment, tokens.block_comment_end
     while index < length:
-        if source.startswith("#*", index):
+        if source.startswith(opener, index):
             level += 1
-            index += 2
+            index += len(opener)
             continue
-        if source.startswith("*#", index):
+        if source.startswith(closer, index):
             level -= 1
-            index += 2
+            index += len(closer)
             if not level:
                 return index
             continue

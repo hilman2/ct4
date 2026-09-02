@@ -152,12 +152,6 @@ MARKUP_ESCAPES = frozenset({markup_scan.TEXT, markup_scan.ATTRIBUTE,
 NAME = r"[A-Za-z_][A-Za-z_0-9]*"
 
 
-# The silence and cache tokens, which belong to a top-level placeholder
-# and nowhere else: ct3 raises a ParseError for "#set $a = $*x" and for
-# "#if $!x". _piece takes them off before it reads the chain behind
-# them, and every other reader here refuses them.
-MODIFIERS = re.compile(r"^\$[!*]")
-
 # ct3's identRE, asked of a token that has already been read.
 IDENT_RE = re.compile(r"[a-zA-Z_][a-zA-Z_0-9]*")
 
@@ -568,6 +562,9 @@ class _Reader:
     def __init__(self, text: str) -> None:
         self.text = text
         self.at = 0
+        # What a placeholder starts with in this template: "$" unless
+        # its settings say otherwise.
+        self.var = _tokens().var
         # ct3 turns useNameMapper off while it reads the target of a
         # "for" inside an expression, and back on after. It does that
         # with a setting rather than an argument, so it reaches every
@@ -671,7 +668,8 @@ class _Reader:
         inner.name_mapper = self.name_mapper
         at = 0
         while at < len(raw):
-            if raw[at] == "$" and lex.start_of(raw[at:]) is not None:
+            if raw.startswith(self.var, at) \
+                    and lex.start_of(raw[at:], _tokens()) is not None:
                 if run:
                     parts.append(repr(run))
                     run = ""
@@ -728,6 +726,10 @@ class _Reader:
             found.append(Chunk(name, autocall, remainder))
         return found
 
+    def at_var(self) -> bool:
+        """Whether a placeholder token starts at the cursor."""
+        return self.text.startswith(self.var, self.at)
+
     def cheetah_var(self, plain: bool = False) -> str:
         """getCheetahVar: the dollar and the chain behind it.
 
@@ -735,7 +737,7 @@ class _Reader:
         the two modifiers are a ParseError inside an expression, and
         the callers refuse them before they get here.
         """
-        self.at += 1
+        self.at += len(self.var)
         found = self.chunks()
         if not found:
             raise Unsupported("a dollar with no name behind it")
@@ -772,9 +774,9 @@ class _Reader:
             if char in " \t\f\r\n":
                 self.at += 1
                 bits.append(char)
-            elif char == "$" and self.peek(1) in lex.IDENT_START:
+            elif self.at_var() and self.peek(len(self.var)) in lex.IDENT_START:
                 bits.append(self.keyword_or_lookup())
-            elif char == "$":
+            elif self.at_var():
                 raise Unsupported("%r inside an expression"
                                   % self.text[self.at:self.at + 3])
             else:
@@ -872,9 +874,9 @@ class _Reader:
                 # part company, and a kept ending would leave a bare
                 # line break at the top level of the expression.
                 self.at += 1
-            elif char == "$" and self.peek(1) in lex.IDENT_START:
+            elif self.at_var() and self.peek(len(self.var)) in lex.IDENT_START:
                 bits.append(self.cheetah_var())
-            elif char == "$":
+            elif self.at_var():
                 raise Unsupported("%r inside an expression"
                                   % self.text[self.at:self.at + 3])
             else:
@@ -981,10 +983,12 @@ def chunks_of(text: str) -> list[Chunk]:
             That includes the enclosure forms, the two modifiers, and a
             text the chain does not reach the end of.
     """
-    if not text.startswith("$") or text[1:2] not in lex.IDENT_START:
+    var = _tokens().var
+    if not text.startswith(var) \
+            or text[len(var):len(var) + 1] not in lex.IDENT_START:
         raise Unsupported("placeholder %r" % text)
     reader = _Reader(text)
-    reader.at = 1
+    reader.at = len(var)
     found = reader.chunks()
     if not found or not reader.done():
         raise Unsupported("placeholder %r" % text)
@@ -1025,7 +1029,8 @@ def placeholder_parts(text: str,
             the enclosure, as it stood. Empty for every placeholder
             that has no comma, which is nearly all of them.
     """
-    if MODIFIERS.match(text):
+    var = _tokens().var
+    if text.startswith(var) and text[len(var):len(var) + 1] in "!*":
         raise Unsupported("placeholder %r" % text)
     reader = _Reader(text)
     if name_mapper is not None:
@@ -1370,19 +1375,26 @@ def generate(source: str, settings: Any = None,
         # on top of what Template.compile was given. The lines stay
         # as comments, so nothing below them moves.
         try:
-            cut, own = compiler_settings.head(source)
-            honoured = compiler_settings.honour(dict(settings or {}, **own))
-            if honoured.tokens:
-                # The lexer does not take its tokens from the settings
-                # yet.
+            own = compiler_settings.head(source)
+            honoured = compiler_settings.honour(
+                dict(settings or {}, **own.settings))
+            tokens = honoured.lexer_tokens()
+            if tokens != lex.DEFAULT_TOKENS and \
+                    not compiler_settings.prefix_holds_no_token(
+                        source, own, tokens):
                 raise compiler_settings.NotHonoured(
-                    "token settings: %s"
-                    % ", ".join(sorted(honoured.tokens)))
+                    "text before the token settings that the new tokens"
+                    " read differently")
         except compiler_settings.NotHonoured as refused:
             raise Unsupported(str(refused)) from None
-        if cut != source:
-            source = cut
+        if own.past > own.first or tokens != lex.DEFAULT_TOKENS:
+            # Read again: the settings lines are comments now, spelt
+            # with the comment token the settings chose, and every
+            # other token is whatever they chose too.
+            source = compiler_settings.commented(source, own, tokens.comment)
+            names = tree.syntax(registered.line, registered.block, tokens)
             root = tree.parse(source, names)
+            used = used or _registered_use(root, registered)
         if sandbox.active():
             # Before anything is generated, and for every template
             # that comes through here, an #include's as much as the
@@ -1447,11 +1459,13 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
     previous_strict = _strict()
     previous_bound = _bound()
     previous_honoured = _honoured()
+    previous_tokens = _tokens()
     _ACTIVE.catcher = Catcher(methods)
     _ACTIVE.markup = state
     _ACTIVE.plugins = registered
     _ACTIVE.strict = strict
     _ACTIVE.honoured = honoured
+    _ACTIVE.tokens = honoured.lexer_tokens()
     _ACTIVE.bound = set()
     _ACTIVE.scopes = []
     # What "#super" names: the class being generated and the method
@@ -1467,6 +1481,7 @@ def _generate(root: tree.Node, source: str, markup: bool, shift: int,
         _ACTIVE.plugins = previous_plugins
         _ACTIVE.strict = previous_strict
         _ACTIVE.honoured = previous_honoured
+        _ACTIVE.tokens = previous_tokens
         _ACTIVE.bound = previous_bound
         _ACTIVE.scopes = []
     module = ast.parse(SKELETON)
@@ -2268,7 +2283,7 @@ def _piece(node: tree.Node, source: str,
     if node.kind == lex.PLACEHOLDER:
         token = node.tokens[0]
         _refuse_a_short_token(token, source)
-        marked = lex.start_of(token.text)
+        marked = lex.start_of(token.text, _tokens())
         if marked is not None and (marked.group("silent")
                                    or marked.group("cache")):
             _modified_placeholder(node, token, marked, out)
@@ -2305,7 +2320,7 @@ def _refuse_a_short_token(token: lex.Token, source: str) -> None:
     The enclosure forms end where ct3 ends them, so they are left
     alone: ``${a}[1]`` writes the same bytes either way.
     """
-    marked = lex.start_of(token.text)
+    marked = lex.start_of(token.text, _tokens())
     if marked is not None and marked.group("enclosure"):
         return
     following = source[token.end:token.end + 1]
@@ -2337,7 +2352,7 @@ def _modified_placeholder(node: tree.Node, token: lex.Token,
     # enclosure and the blanks behind it, and "$*( aStr   )" would be
     # rebuilt as "$aStr   )", which costs 32 corpus cases.
     body = _placeholder(Written(
-        placeholder_source("$" + token.text[marked.end("cache"):]),
+        placeholder_source(_tokens().var + token.text[marked.end("cache"):]),
         token.text, node.line, node.column, token.start))
     if marked.group("silent"):
         body = [_silenced(body)]
@@ -2634,9 +2649,11 @@ def _psp_body(node: tree.Node) -> str:
             an IndexError.
     """
     text = node.tokens[0].text
-    if len(text) < 4 or not text.startswith("<%") or not text.endswith("%>"):
+    opener, closer = _tokens().psp, _tokens().psp_end
+    if len(text) < len(opener) + len(closer) or not text.startswith(opener) \
+            or not text.endswith(closer):
         raise Unsupported("a PSP that does not close")
-    body = text[2:-2].strip()
+    body = text[len(opener):-len(closer)].strip()
     if not body:
         raise Unsupported("an empty PSP")
     return body
@@ -2922,6 +2939,10 @@ def _raw_block(node: tree.Node, source: str,
                out: list[tuple[str, Any]]) -> None:
     """``#raw``: its body written out with nothing done to it.
 
+    Refused where the template changed its tokens: the scan below
+    reimplements ct3's character walk with the hash spelt out, and a
+    template that spells it otherwise is one of two in three thousand.
+
     ct3's eatRaw, with _eatRestOfDirectiveTag and _eatToThisEndDirective
     behind it. The body reaches addRawText, which is addStrConst, so
     unlike ordinary text it is not unescaped: ``\\$x`` inside a raw
@@ -2934,6 +2955,8 @@ def _raw_block(node: tree.Node, source: str,
     again, and its drop reaches back into the text that stood before
     the ``#raw``.
     """
+    if _tokens() != lex.DEFAULT_TOKENS:
+        raise Unsupported("#raw in a template with changed tokens")
     names = lex.directive_names()
     at = node.tokens[0].start
     clear = _line_is_clear(source, at)
@@ -3355,7 +3378,7 @@ def _implements_parameters(text: str | None) -> str:
     """An #implements argument list as Python, ready for the frame."""
     if text is None or not text.strip():
         return ""
-    if "$" in text:
+    if _tokens().var in text:
         # getDefArgList reads a name and a default value, and neither
         # is a placeholder there.
         raise Unsupported("a placeholder in an #implements argument list")
@@ -3538,7 +3561,9 @@ DEFINITION = re.compile(
 # A dollar in front of a parameter name or its stars. ct3 writes
 # "def show(self, x, y=1, **KWS)" for "#def show($x, $y=1)" and
 # "def show(self, *args, **KWS)" for "#def show($*args)".
-PARAM_DOLLAR = re.compile(r"\$(?=[*A-Za-z_])")
+def _param_dollar() -> re.Pattern[str]:
+    """The var token in a parameter list, which comes off the name."""
+    return re.compile(re.escape(_tokens().var) + r"(?=[*A-Za-z_])")
 
 
 def _parameter_names(arguments: str) -> set[str]:
@@ -3578,8 +3603,8 @@ def _parameters(text: str | None) -> str:
     out = []
     for part in _split_arguments(text):
         name, _, default = part.partition("=")
-        name = PARAM_DOLLAR.sub("", name.strip())
-        default = PARAM_DOLLAR.sub("", default)
+        name = _param_dollar().sub("", name.strip())
+        default = _param_dollar().sub("", default)
         out.append(name if not default else "%s=%s" % (name, default))
     return ", ".join(out) + ", "
 
@@ -3604,8 +3629,8 @@ def _super_call(text: str) -> str:
         if not part.strip():
             continue
         name, _, default = part.partition("=")
-        name = PARAM_DOLLAR.sub("", name.strip())
-        if "$" in default:
+        name = _param_dollar().sub("", name.strip())
+        if _tokens().var in default:
             raise Unsupported("a placeholder in a default value")
         parts.append(name if not default else "%s=%s" % (name, default))
     if parts and parts[0] == "self":
@@ -4526,7 +4551,9 @@ def _cache_info(node: tree.Node) -> dict[str, Any]:
         raise Unsupported("#cache with a bracketed argument list")
     for part in _split_arguments(raw):
         key, assigned, value = part.partition("=")
-        key = key.strip().lstrip("$")
+        key = key.strip()
+        while key.startswith(_tokens().var):
+            key = key[len(_tokens().var):]
         value = value.strip()
         if not assigned or not value:
             # genCacheInfoFromArgList subscripts a None default for a
@@ -5419,6 +5446,12 @@ def _strict() -> bool:
 def _honoured() -> compiler_settings.Honoured:
     found = getattr(_ACTIVE, "honoured", None)
     return found if found is not None else compiler_settings.DEFAULT
+
+
+def _tokens() -> lex.Tokens:
+    """The characters the template being generated is spelt with."""
+    found = getattr(_ACTIVE, "tokens", None)
+    return found if found is not None else lex.DEFAULT_TOKENS
 
 
 def _plain_expression(chunks: list[Chunk]) -> str:

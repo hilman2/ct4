@@ -101,14 +101,21 @@ def test_reset_and_a_block_further_down_are_refused():
         codegen.generate("#compiler-settings reset\n")
     with pytest.raises(codegen.Unsupported):
         codegen.generate("#compiler reset\n")
+    # Plain text before the block is still the head; a placeholder is
+    # output, and from there on a block is the middle of the file.
     with pytest.raises(codegen.Unsupported):
-        codegen.generate("x\n#compiler-settings\nuseAutocalling = False\n"
+        codegen.generate("$x\n#compiler-settings\nuseAutocalling = False\n"
                          "#end compiler-settings\n")
+    assert both("plain\n#compiler-settings\nuseAutocalling = False\n"
+                "#end compiler-settings\n$f\n", CONTEXT).startswith(
+        "plain\n<function")
 
 
 def test_the_head_is_read_off_the_source():
     source = "#compiler useAutocalling = False\n$f\n"
-    made, found = compiler_settings.head(source)
-    assert made == "##\n$f\n"
-    assert found == {"useAutocalling": False}
-    assert compiler_settings.head("plain\n") == ("plain\n", {})
+    found = compiler_settings.head(source)
+    assert (found.first, found.past) == (0, 1)
+    assert found.settings == {"useAutocalling": False}
+    assert compiler_settings.commented(source, found) == "##\n$f\n"
+    assert compiler_settings.commented(source, found, "//") == "//\n$f\n"
+    assert compiler_settings.head("plain\n$x\n") is compiler_settings.NO_HEAD
