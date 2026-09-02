@@ -1441,10 +1441,15 @@ der Einzug vor `#arg` Ausgabe, CallDirective.test4 sagt es) und JSON-Vorlagen.
 Der Beweis, dass die Seite dieselbe bleibt, ist ein Test, der jeden
 Render-Fall des Korpus vor und nach dem Formatieren rendert.
 
-Offen bleiben Sprachserver und tree-sitter. Der Sprachserver ist ein
-JSON-RPC-Dienst über stdio, der `ct4 check` als Diagnostik liefert; nach
-dem Muster von `ct4 mcp` ohne Abhängigkeit machbar. Eine tree-sitter-Grammatik
-ist ein eigenes Repo in einer anderen Sprache und gehört nicht in dieses.
+`ct4 lsp` ist der Sprachserver: JSON-RPC mit der Rahmung des Language Server
+Protocol über stdio, nach dem Muster von `ct4 mcp` ohne Abhängigkeit. Er
+liefert, was `ct4 check` findet, als Diagnostik bei jedem Tastendruck, mit
+Vorschlag im Text, und `ct4 fmt` als Formatierung auf Anfrage. Mehr nicht:
+kein Hover, keine Vervollständigung. Die stünden auf der Deklaration auf, und
+die ist heute genau für weewx da.
+
+Offen bleibt tree-sitter. Eine Grammatik dafür ist ein eigenes Repo in einer
+anderen Sprache und gehört nicht in dieses.
 
 Was der Kern ablehnt, in Zahlen: 27 Vorlagen mit `#compiler` oder
 `#compiler-settings`, davon 21 Testfälle aus ct3s Suite, die mitten in der

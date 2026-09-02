@@ -119,6 +119,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                          metavar="DIR", help="where the recordings go")
 
     sub.add_parser("mcp", help="speak as an MCP server over stdio")
+    sub.add_parser("lsp", help="speak the language server protocol over"
+                               " stdio: diagnostics and formatting")
 
     args = parser.parse_args(argv)
     # After parsing, so that --help still answers on a broken install.
@@ -145,6 +147,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from ct4.mcp import serve
 
         return serve()
+    if args.command == "lsp":
+        from ct4.lsp import serve as serve_lsp
+
+        return serve_lsp()
     return _declare(args)
 
 
