@@ -15,3 +15,5 @@ Existing CHEPs
    cheps/1_chep.rst
    cheps/2_import.rst
    cheps/3_super.rst
+   cheps/4_modes.rst
+   cheps/5_directives.rst

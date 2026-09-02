@@ -1813,6 +1813,19 @@ eine Aufzeichnung verlustfrei oder sagt, wo nicht, und der Benchmark-Boden aus
 Dokumentation, Migrationsleitfaden, CHEPs für die Sprachänderungen, falls
 Anschluss an das Upstream-Projekt gewünscht ist.
 
+Stand 02-Sep-2026: der Migrationsleitfaden steht als `docs/migration.rst` im
+Wurzel-Inhaltsverzeichnis der Sphinx-Doku, in der Kette vor dem User's Guide:
+was gleich bleibt, was sich ohne Zutun ändert, wie der Generator eingehängt
+wird, die Modi, `migrate`, `render`, `check`, `build`, die eigenen Direktiven,
+`fmt`. Zwei CHEPs nach dem Muster der drei vorhandenen: Nr. 4 für die
+`#mode`-Zeile und Nr. 5 für die angemeldeten Direktiven, jeweils mit
+Spezifikation, Begründung und Rückwärtsverträglichkeit. Beide sind so
+geschnitten, dass sie einreichbar bleiben, falls Entscheidung 1 in
+Abschnitt 15 auf Upstream fällt.
+
+Was zur Freigabe bleibt, sind die Entscheidungen aus Abschnitt 15, die nur
+der Eigentümer treffen kann, und ein Wheel-Lauf auf einem Tag.
+
 ---
 
 ## 14. Risiken

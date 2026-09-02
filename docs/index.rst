@@ -36,6 +36,7 @@ Contents
    news.rst
    developers.rst
    download.rst
+   migration.rst
    users_guide/index.rst
    documentation.rst
    roadmap.rst
