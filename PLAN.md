@@ -1315,6 +1315,15 @@ Stand 31-Aug-2026:
 | weewx gegen ct3 und gegen ct4 | 80 erzeugte Seiten, byte-identisch |
 | ruff, mypy strict auf `ct4` | ohne Befund |
 
+Stand 02-Sep-2026: das Repo liegt öffentlich unter `github.com/hilman2/ct4`,
+und der Wheel-Lauf hat dort zweimal gebaut. Nach dem zweiten Lauf, mit
+`cp314t-*` im Selektor, sind es 36 Wheels: je zwölf auf Linux x86-64 und
+ARM64 (manylinux und musllinux, CPython 3.10 bis 3.14 und 3.14t), je sechs
+auf macOS ARM64 und Windows, dazu die sdist. Jedes Wheel hat den Test
+bestanden, der den übersetzten C-NameMapper verlangt. Was zur Freigabe
+fehlt, ist der Pending Publisher auf PyPI und der Tag; beides steht in
+Abschnitt 15 und im Migrationsleitfaden.
+
 Der Umbau des Build-Systems hat nebenbei einen Fehler gefunden: `SetupTools.py`
 importierte `distutils` direkt, das es seit Python 3.12 nicht mehr gibt. Das ging
 nur, weil setuptools einen Ersatz einhängt. Beide Dateien sind weg, alles steht
@@ -1892,7 +1901,10 @@ der Eigentümer treffen kann, und ein Wheel-Lauf auf einem Tag.
 - **`_namemapper.c` unter free-threading.** Die Anpassung an Python 3.14t ist
   echte Arbeit. Der reine Python-Pfad (`C_VERSION = False`) muss zuerst
   abgesichert sein; seit 02-Sep-2026 läuft ct3s Testsuite in jedem Lauf ein
-  zweites Mal ohne die Erweiterung (`Test.py --namemapper-pure`).
+  zweites Mal ohne die Erweiterung (`Test.py --namemapper-pure`). Das
+  `cp314t`-Wheel baut und importiert die Erweiterung; ob sie ohne GIL unter
+  Last richtig ist, ist ungemessen, und ein Modul ohne `Py_mod_gil`-Erklärung
+  lässt Python den GIL für den Prozess wieder anschalten.
 - **Drei Modi sind drei Semantiken.** Gegenmassnahme: ein Compiler, Modus als
   Flag, jeder Testfall läuft in allen zutreffenden Modi mit erwartetem
   Unterschied.
