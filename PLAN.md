@@ -1448,8 +1448,11 @@ Vorschlag im Text, und `ct4 fmt` als Formatierung auf Anfrage. Mehr nicht:
 kein Hover, keine Vervollständigung. Die stünden auf der Deklaration auf, und
 die ist heute genau für weewx da.
 
-Offen bleibt tree-sitter. Eine Grammatik dafür ist ein eigenes Repo in einer
-anderen Sprache und gehört nicht in dieses.
+Die tree-sitter-Grammatik ist ein eigenes Repo, `tree-sitter-cheetah` neben
+diesem, in JavaScript und C: die Grammatik in `grammar.js`, ein externer
+Scanner in `src/scanner.c`, der entscheidet, ob ein Hash oder ein Dollar
+etwas beginnt, so wie Cheetah es entscheidet, dazu `queries/highlights.scm`
+und acht Korpusfälle. Nur ct3s Vorgabe-Token.
 
 Was der Kern ablehnt, in Zahlen: 15 Testfälle aus ct3s Suite, die mitten in
 der Datei die Token umschalten oder mit `reset` zurückstellen, und 9, die mit
